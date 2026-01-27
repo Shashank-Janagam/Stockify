@@ -1,0 +1,72 @@
+.home {
+  padding-top: 1.5rem; /* navbar height */
+  min-height: 100vh;
+  background: #ffffff;
+  text-align: center;
+ font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont;
+}
+
+/* HERO */
+.hero {
+  margin-top: 1rem;
+}
+
+.hero-title {
+  font-size: 5.25rem;       /* ~52px */
+  font-weight: 700;
+  color: #4e4f53;
+  margin-bottom: 1rem;
+   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont;
+
+}
+
+.hero-subtitle {
+  font-size: 2rem;
+  color: #7a7a7a;
+  margin-bottom: 2rem;
+  font-weight: 600;
+   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont;
+
+}
+
+.hero-btn {
+  background: #00b386;
+  color: #fff;
+  border: none;
+  border-radius: 0.5rem;
+
+  padding: 0.75rem 1.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hero-btn:hover {
+  background: #009f78;
+}
+
+/* ILLUSTRATION */
+.hero-illustration {
+  margin-top: 3.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.hero-illustration img {
+  max-width: 60rem;
+  width: 100%;
+  height: auto;
+  opacity: 0.9;
+}
+
+/* FOOTER TEXT */
+.hero-footer {
+  margin-top: 2.5rem;
+  color: #888;
+  font-size: 0.875rem;
+}
+
+.hero-footer p {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}

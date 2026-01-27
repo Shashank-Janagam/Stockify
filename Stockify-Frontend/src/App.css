@@ -1,0 +1,28 @@
+.page-content {
+  padding-top: 4.5rem; /* SAME as navbar height */
+}
+/* ===== Scrollbar Styling ===== */
+
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 0.6rem;              /* scrollbar width */
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;    /* clean background */
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #cfd4dc;  /* soft gray */
+  border-radius: 0.5rem;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #aeb4bd;  /* darker on hover */
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cfd4dc transparent;
+}

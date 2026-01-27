@@ -1,0 +1,305 @@
+.funds-page {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 32px;
+  padding: 40px;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont;
+
+  /* 🔥 THIS IS THE FIX */
+  justify-items: center;   /* horizontal center */
+  align-items: start;      /* keep top aligned */
+  max-width: 80rem;
+}
+.amount-wrapper {
+  text-align: center;
+}
+
+/* ₹ + input row */
+.amount-input {
+  display: inline-flex;
+  align-items: center;
+  font-size: 56px;
+  font-weight: 700;
+  color: #3f3f50;
+}
+
+/* ₹ symbol */
+.currency {
+  margin-right: 2px;
+}
+
+/* editable input */
+.amount-field {
+  font-size: inherit;
+  font-weight: inherit;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+
+  width: auto;
+  min-width: 1ch;
+  text-align: left;
+}
+
+/* remove arrows just in case */
+.amount-field::-webkit-outer-spin-button,
+.amount-field::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* quick add buttons */
+.quick-add {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.quick-add button {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+
+/* Cards */
+.card {
+    max-width: 40rem;
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  width: 100%;
+}
+
+/* Balance */
+.card-title {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.balance-amount {
+  font-size: 36px;
+  margin: 8px 0;
+}
+
+.balance-amount span {
+  font-size: 18px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+  font-size: 15px;
+}
+
+.muted {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.dashed {
+  border-bottom: 1px dashed #9ca3af;
+}
+
+.link {
+  color: #16a34a;
+  cursor: pointer;
+}
+
+.transactions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+/* Add money */
+.tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 2px solid #eee;
+  margin-bottom: 24px;
+}
+
+.tabs span {
+  padding-bottom: 10px;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.tabs .active {
+  color: #16a34a;
+  border-bottom: 2px solid #16a34a;
+}
+
+.add-amount {
+  font-size: 40px;
+  text-align: center;
+}
+
+.quick-add {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.quick-add button {
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 6px 14px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.payment-method {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.primary-btn {
+  margin-top: 20px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background: #63b18c;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.divider {
+  height: 1px;
+  background: #eee;
+  margin: 20px 0;
+}
+
+/* Add money */
+.tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 2px solid #eee;
+  margin-bottom: 24px;
+}
+
+.tabs span {
+  padding-bottom: 10px;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.tabs .active {
+  color: #16a34a;
+  border-bottom: 2px solid #16a34a;
+}
+
+.add-amount {
+  font-size: 40px;
+  text-align: center;
+}
+
+.quick-add {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.quick-add button {
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 6px 14px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.payment-method {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.primary-btn {
+  margin-top: 20px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background: #63b18c;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.divider {
+  height: 1px;
+  background: #eee;
+  margin: 20px 0;
+}
+.amount-wrapper {
+  position: relative;
+  width: fit-content;
+  margin: 24px auto;
+}
+
+.amount-display {
+    align-self: center;
+  font-size: 40px;
+  font-weight: 600;
+  color: #3d4152;
+  letter-spacing: 0.5px;
+}
+
+.rupee {
+  margin-right: 2px;
+}
+
+/* Invisible input */
+.amount-input-hidden {
+  /* position: absolute; */
+  inset: 0;
+  width: 100%;
+  font-size: 40px;
+  font-weight: 600;
+  background: transparent;
+  color: transparent;
+  caret-color: #4caf8a; /* green cursor */
+  border: none;
+  outline: none;
+}
+.amount-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 28px 0;
+}
+
+.rupee {
+  font-size: 40px;
+  font-weight: 600;
+  color: #3d4152;
+}
+
+.amount-input {
+  font-size: 40px;
+  font-weight: 600;
+  border: none;
+  outline: none;
+  background: transparent;
+  width: 180px;
+  color: #3d4152;
+  caret-color: #4caf8a;
+}

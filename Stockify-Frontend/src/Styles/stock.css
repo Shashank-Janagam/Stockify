@@ -1,0 +1,437 @@
+/* =========================
+   ROOT PAGE LAYOUT
+========================= */
+
+.market-closed {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.stock-page {
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+  background-color: #ffffff;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.stock-left {
+  flex: 3;
+  min-width: 0;
+  margin-left: 5rem;
+  max-width: 50rem;
+}
+
+/* =========================
+   HEADER (UPDATED)
+========================= */
+
+.stock-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+/* LEFT SIDE */
+.stock-left-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.stock-logo {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 12px;
+  object-fit: contain;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+}
+
+/* NAME + PRICE BLOCK */
+.stock-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px; 
+}
+
+.company-name {
+  font-size: 28px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+/* PRICE ROW */
+.price-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.price {
+  font-size: 33px;
+  font-weight: 600;
+  color: #111827;
+  font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif
+}
+
+.change {
+  font-size: 15px;
+  font-weight: 500;
+  align-self: last baseline;
+  padding-bottom: 5px;
+  font
+}
+
+.change.positive {
+  color: #16a34a;
+}
+
+.change.negative {
+  color: #dc2626;
+}
+
+.timeframe {
+   font-size: 15px;
+  font-weight: 500;
+  align-self: last baseline;
+  padding-bottom: 5px;
+  color: #6b7280;
+}
+
+/* =========================
+   HEADER ACTIONS (UPDATED)
+========================= */
+
+.stock-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.action-btn {
+  padding: 10px 14px;
+  font-size: 14px;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #374151;
+}
+
+.action-btn:hover {
+  background-color: #f9fafb;
+}
+
+.option-chain {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  color: #10b981;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+/* =========================
+   CHART
+========================= */
+
+.chart-toggle {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chart-toggle button {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.chart-toggle button.active {
+  border: 2px solid #111827;
+  font-weight: 500;
+}
+
+.chart-container {
+  height: 360px;
+  margin-top: 18px;
+  position: relative;
+  width: 50rem;
+  border-bottom: 0.5px solid #e5e7eb;
+}
+
+.chart-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, #f9fafb, #ffffff);
+  border-radius: 8px;
+}
+
+/* =========================
+   TIMEFRAME BAR
+========================= */
+
+.timeframe-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.timeframe-bar button {
+  padding: 8px 14px;
+  font-size: 14px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background-color: #ffffff;
+  cursor: pointer;
+}
+
+.timeframe-bar button.active {
+  border: 2px solid #111827;
+  font-weight: 500;
+}
+
+.timeframe-bar button:hover {
+  background-color: #f9fafb;
+}
+
+.timeframe-bar .terminal {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* =========================
+   RIGHT ORDER PANEL
+========================= */
+
+.order-panel {
+  flex: 1;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 18px;
+  background-color: #ffffff;
+}
+
+.order-panel h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.subtext {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* =========================
+   BUY / SELL TABS
+========================= */
+
+.tabs {
+  display: flex;
+  margin-top: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tabs button {
+  flex: 1;
+  padding: 10px;
+  font-size: 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.tabs button.active {
+  color: #16a34a;
+  border-bottom: 2px solid #16a34a;
+  font-weight: 500;
+}
+
+/* =========================
+   ORDER TYPE PILLS
+========================= */
+
+.pill-row {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.pill {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  color: #111827;
+}
+
+.pill.active {
+  border-color: #16a34a;
+  color: #16a34a;
+}
+
+/* =========================
+   INPUT FIELDS
+========================= */
+
+.field {
+  margin-top: 14px;
+}
+
+.field label {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.field input {
+  width: 100%;
+  padding: 10px;
+  font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+/* =========================
+   ORDER FOOTER
+========================= */
+
+.order-footer {
+  display: flex;
+  justify-content: space-between;
+  margin: 18px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* =========================
+   BUY BUTTON
+========================= */
+
+.buy-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  background-color: #16a34a;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.buy-btn:hover {
+  background-color: #15803d;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 1024px) {
+  .stock-page {
+    flex-direction: column;
+  }
+
+  .stock-left {
+    margin-left: 0;
+  }
+
+  .order-panel {
+    width: 100%;
+  }
+
+  .stock-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .stock-actions {
+    align-self: flex-start;
+  }
+}
+
+
+.stock-info-panel {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  width: 100%;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.range-block {
+  margin-bottom: 16px;
+}
+
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.range-bar {
+  position: relative;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  margin-top: 8px;
+}
+
+.marker {
+  position: absolute;
+  top: -4px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 8px solid #374151;
+}
+
+.kv-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.fundamentals-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.kv {
+  display: flex;
+  flex-direction: column;
+}
+
+.kv-label {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.kv-value {
+  font-size: 15px;
+  font-weight: 500;
+  color: #111827;
+}
