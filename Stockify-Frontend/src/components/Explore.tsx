@@ -131,7 +131,6 @@ useEffect(() => {
 
   useEffect(() => {
     if (!token) return; // 🔑 CRITICAL GUARD
-  let active = true;
 
     const source = new EventSource(
       `${HOST}/api/explore?token=${token}`
@@ -146,19 +145,16 @@ useEffect(() => {
 
     source.onerror = () => {
       console.error("SSE error or market closed");
-      active = false;
 
       source.close();
     };
 
 return () => {
-    active = false;
     source.close();
   };}, [token]);
 
  useEffect(() => {
     if (!token) return; // 🔑 CRITICAL GUARD
-      let active = false;
 
     const source = new EventSource(
       `${HOST}/api/explore/recent?token=${token}`
@@ -174,13 +170,11 @@ return () => {
 
 
       source.onerror = () => {
-          active = false;
 
           console.error("SSE error or market closed");
           source.close();
         };
 return () => {
-    active = false;
     source.close();
   };
 }, [token]);
