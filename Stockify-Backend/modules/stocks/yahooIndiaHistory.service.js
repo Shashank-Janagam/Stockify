@@ -1,6 +1,20 @@
 import YahooFinance from "yahoo-finance2";
 const yahoo = new YahooFinance();
 
+/* =========================
+   🔁 Ensure IST (No Double Shift)
+========================= */
+function ensureIST(date) {
+  // IST timezone offset = -330 minutes
+  if (date.getTimezoneOffset() === -330) {
+    return date; // already IST
+  }
+  return new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
+}
+
+/* =========================
+   📈 Yahoo India History
+========================= */
 export async function getYahooIndiaHistory(symbol, days) {
   const nowSec = Math.floor(Date.now() / 1000);
 
@@ -12,33 +26,36 @@ export async function getYahooIndiaHistory(symbol, days) {
   ========================= */
   if (days <= 1) {
     interval = "1m";
-    period1 = nowSec - 60 * 60 * 24 * 5; // wider buffer for holidays
+    period1 = nowSec - 60 * 60 * 24 * 5; // buffer for holidays
   } else if (days <= 7) {
     interval = "5m";
     period1 = nowSec - 60 * 60 * 24 * 7;
   } else if (days <= 30) {
     interval = "15m";
     period1 = nowSec - 60 * 60 * 24 * 30;
-  } else if( days <= 90) {
+  } else if (days <= 90) {
     interval = "1d";
     period1 = nowSec - 60 * 60 * 24 * 90;
-  } else if( days <= 180) {
+  } else if (days <= 180) {
     interval = "1d";
     period1 = nowSec - 60 * 60 * 24 * 180;
-  } else if( days <= 365) {
+  } else if (days <= 365) {
     interval = "1d";
     period1 = nowSec - 60 * 60 * 24 * 365;
-  }else if( days <= 1095) {
+  } else if (days <= 1095) {
     interval = "5d";
     period1 = nowSec - 60 * 60 * 24 * 1095;
-  }else if( days <= 1825) {
+  } else if (days <= 1825) {
     interval = "5d";
     period1 = nowSec - 60 * 60 * 24 * 1825;
-  }else  {
+  } else {
     interval = "5d";
-    period1 =0;
+    period1 = 0;
   }
 
+  /* =========================
+     FETCH DATA
+  ========================= */
   const result = await yahoo.chart(symbol, {
     period1,
     period2: nowSec,
@@ -46,24 +63,29 @@ export async function getYahooIndiaHistory(symbol, days) {
     includePrePost: false
   });
 
-  const raw = (result.quotes || []).filter(q => q.close != null);
+  const raw = (result.quotes || [])
+    .filter(q => q.close != null)
+    .map(q => ({
+      ...q,
+      istDate: ensureIST(q.date)
+    }));
+
   if (!raw.length) return [];
 
   /* =========================
-     ✅ FIX FOR 1D
+     ✅ FIX FOR 1D (INTRADAY)
   ========================= */
   let filtered = raw;
 
   if (days <= 1) {
-    // 1️⃣ find latest trading date (yyyy-mm-dd)
-    const lastCandle = raw[raw.length - 1].date;
-    const y = lastCandle.getFullYear();
-    const m = lastCandle.getMonth();
-    const d = lastCandle.getDate();
+    // latest trading day in IST
+    const last = raw[raw.length - 1].istDate;
+    const y = last.getFullYear();
+    const m = last.getMonth();
+    const d = last.getDate();
 
-    // 2️⃣ keep ONLY candles from that day + NSE hours
     filtered = raw.filter(q => {
-      const dt = q.date;
+      const dt = q.istDate;
 
       if (
         dt.getFullYear() !== y ||
@@ -73,16 +95,17 @@ export async function getYahooIndiaHistory(symbol, days) {
         return false;
       }
 
-      const mins = dt.getHours() * 60 + dt.getMinutes();
-      return mins >= 555 && mins <= 930; // 09:15–15:30 IST
+      // NSE hours: 09:15–15:30 IST
+      const minutes = dt.getHours() * 60 + dt.getMinutes();
+      return minutes >= 555 && minutes <= 930;
     });
   }
 
   /* =========================
-     FINAL OUTPUT
+     FINAL OUTPUT (IST)
   ========================= */
   return filtered.map(q => ({
-    x: q.date.getTime(),
+    x: q.istDate.getTime(), // 🔥 ALWAYS IST
     o: q.open,
     h: q.high,
     l: q.low,
