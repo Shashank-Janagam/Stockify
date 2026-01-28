@@ -71,7 +71,6 @@ router.get("/:symbol/history", async (req, res) => {
 router.get("/:symbol/quote", async (req, res) => {
   const { symbol } = req.params;
 
-  console.log("calling quote", symbol);
 
     const data = await getYahooIndiaQuote(symbol);
     // 🚨 Guard against empty Yahoo response
@@ -80,7 +79,6 @@ router.get("/:symbol/quote", async (req, res) => {
       return res.status(204).json({ error: "NO_DATA" });
     }
 
-    console.log(data)
     res.json(data);
  
 });
