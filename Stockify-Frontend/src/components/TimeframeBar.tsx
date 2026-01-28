@@ -1,4 +1,4 @@
-const frames = ["1D", "1W", "1M", "3M", "6M", "1Y", "All"];
+const frames = ["1D", "1W", "1M", "3M", "6M", "1Y","3Y","5Y", "All"];
 
 export default function TimeframeBar({
   active,
@@ -12,7 +12,7 @@ export default function TimeframeBar({
       {frames.map(f => (
         <button
           key={f}
-          className={active === f ? "active" : ""}
+          className={active === f ? "active" : ""}  
           onClick={() => onChange(f)}
         >
           {f}

@@ -27,6 +27,7 @@ ChartJS.register(
 
 import { Line } from "react-chartjs-2";
 import "chartjs-adapter-date-fns";
+import { useEffect, useState } from "react";
 
 
 
@@ -133,14 +134,36 @@ const growwPlugin = {
 
       /* label text */
       const priceText = `₹${Number(point.y).toFixed(2)}`;
-      const dateText = new Date(point.x).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit"
-      });
+      const timeframe =
+  chart.options.plugins?.growwPlugin?.timeframe ?? "1D";
 
-      const yText = top + 18;
+let dateText: string;
+
+if (timeframe === "1D") {
+  // Intraday
+  dateText = new Date(point.x).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+} else if (["1W", "1M"].includes(timeframe)) {
+  // Short range
+  dateText = new Date(point.x).toLocaleDateString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "short"
+  });
+} else {
+  // 1Y, 3Y, 5Y, ALL
+  dateText = new Date(point.x).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
+}
+
+
+      const yText = top +14;
 
       ctx.font = "600 14px Inter, system-ui, sans-serif";
       const pw = ctx.measureText(priceText).width;
@@ -203,33 +226,110 @@ interface Props {
   timeframe: string;
   referencePrice?: number | null;
   marketState:string;
+  percent:string
 }
 
 /* =========================
    STOCK CHART INDIA
 ========================= */
-export default function StockChartIndia({
+export function GraphSkeleton() {
+  return (
+    <div
+      className="chart-container"
+      style={{
+        height: "360px",
+        width: "100%",
+        position: "relative",
+        backgroundColor: "white",
+        borderBottom: "1px solid #e5e7eb",
+        overflow: "hidden"
+      }}
+    >
+      {/* Groww-style loading dots */}
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          display: "flex",
+          gap: "8px"
+        }}
+      >
+        <span className="groww-dot" />
+        <span className="groww-dot" />
+        <span className="groww-dot" />
+      </div>
+
+      <style>
+        {`
+          .groww-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #00b386;
+            opacity: 0.3;
+            animation: growwPulse 1.2s infinite ease-in-out;
+          }
+
+          .groww-dot:nth-child(2) {
+            animation-delay: 0.15s;
+          }
+
+          .groww-dot:nth-child(3) {
+            animation-delay: 0.3s;
+          }
+
+          @keyframes growwPulse {
+            0% {
+              transform: scale(0.8);
+              opacity: 0.3;
+            }
+            50% {
+              transform: scale(1.2);
+              opacity: 1;
+            }
+            100% {
+              transform: scale(0.8);
+              opacity: 0.3;
+            }
+          }
+        `}
+      </style>
+    </div>
+  );
+}
+
+
+
+
+
+
+export  function StockChartIndia({
   lineData,
   timeframe,
-  marketState
+  marketState,
+  referencePrice,
+  percent
 }: Props) {
   if (!lineData.length) return null;
-const firstTs = lineData[0].x;
-const baseDate = new Date(firstTs);
+const today = new Date();
 
 const marketOpen = new Date(
-  baseDate.getFullYear(),
-  baseDate.getMonth(),
-  baseDate.getDate(),
-  9, 15, 0
+  today.getFullYear(),
+  today.getMonth(),
+  today.getDate(),
+  9, 15, 0, 0
 ).getTime();
 
 const marketClose = new Date(
-  baseDate.getFullYear(),
-  baseDate.getMonth(),
-  baseDate.getDate(),
-  15, 30, 0
+  today.getFullYear(),
+  today.getMonth(),
+  today.getDate(),
+  15, 30, 0, 0
 ).getTime();
+
+
 
   currentIndex = lineData.length - 1;
   const is1D = timeframe === "1D";
@@ -239,49 +339,80 @@ const marketClose = new Date(
   const maxPrice = Math.max(...prices);
   const pad = (maxPrice - minPrice) * 0.08 || minPrice * 0.002;
   const isMarketOpen=marketState==="REGULAR"
+  const [lineColor,setLineColor]=useState("")
+  useEffect(() => {
+  const pct = Number(percent) || 0;
+
+  setLineColor(
+    pct > 0 ? "#00b386" :
+    pct < 0 ? "#f76767" :
+    "#9ca3af"
+  );
+}, [timeframe, percent]);
+
+
+console.log("market open",marketOpen)
+console.log("market close",marketClose)
+
+
+const chartData = lineData;
+currentIndex = chartData.length - 1;
+
+
+  
 console.log("market",isMarketOpen)
-  return (
-    <div className="chart-container">
+
+ return (
+  <div className="chart-container">
+    {chartData.length ? (
       <Line
         data={{
-          datasets: [
-            {
-              data: lineData,
-              borderColor: "#00b386",
-              borderWidth: 3,
-              pointRadius: 0,
-              tension: is1D ? 0.05 : 0,
-            }
-          ]
-        }}
+    datasets: [
+      {
+        data: chartData,
+        borderColor: lineColor,
+        borderWidth: 3,
+        pointRadius: 0,
+        tension: 0.05,
+        parsing: false   // important
+      }
+    ]
+  }}
         options={{
-          animation: false,
+          animation:false,
           maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            tooltip: { enabled: false }
-          },
+            tooltip: { enabled: false },
+            growwPlugin: { timeframe, referencePrice: referencePrice??0 }
+          } as any,
           interaction: {
             intersect: false,
             mode: "index"
           },
           scales: {
-x: {
-  type: "timeseries",
-  display: false,
+            x: is1D && isMarketOpen ? {
+            type: "linear",
+            display: false,
+            min: marketOpen,
+            max: marketClose,
+            ticks: {
+              stepSize: 60
+            }
+              }:{
+              type: "timeseries",
+              display: false,
 
-  min: is1D ? marketOpen : undefined,
-  max: is1D ? marketClose : undefined,
+              min:  undefined,
+              max:  undefined,
 
-  time: {
-    unit: is1D ? "minute" : "day",
-    tooltipFormat: is1D ? "HH:mm" : "dd MMM"
-  }
-}
+              time: {
+                unit: is1D ? "minute" : "day",
+                tooltipFormat: is1D ? "HH:mm" : "dd MMM"
+              }
+            },
 
 
-
-,
             y: {
               display: false,
               min: minPrice - pad,
@@ -290,6 +421,10 @@ x: {
           }
         }}
       />
-    </div>
-  );
+    ) : (
+      <div className="chart-empty">No data available</div>
+    )}
+  </div>
+);
+
 }

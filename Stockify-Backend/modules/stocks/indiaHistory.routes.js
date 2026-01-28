@@ -15,7 +15,7 @@ console.log("calling history route")
 
   try {
     const data = await getYahooIndiaHistory(symbol, days);
-    res.json(data);
+    res.json(data); 
   } catch (err) {
     console.log("Market closed------------------")
     res.status(500).json({ error: "Failed to fetch history" });

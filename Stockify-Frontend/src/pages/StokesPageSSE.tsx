@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import StockHeader from "../components/StockHeader";
-import StockChartIndia from "../components/StocksChartIndia";
+import {StockChartIndia,GraphSkeleton} from "../components/StocksChartIndia";
 import TimeframeBar from "../components/TimeframeBar";
 import OrderPanel from "../components/OrderPanel";
 // import StockCandleChartIndia from "../components/StockCandleChartIndia";
@@ -34,6 +34,8 @@ const timeframeToDays: Record<string, number | "ALL"> = {
   "3M": 90,
   "6M": 180,
   "1Y": 365,
+  "3Y": 1095,
+  "5Y": 1825,
   "All": "ALL"
 };
 
@@ -78,6 +80,10 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
   }
 
   useEffect(() => {
+    setLoading(true);
+
+  },[timeframe])
+  useEffect(() => {
   fetch(`${HOST}/api/indiaSEE/${symbol}/quote`)
     .then(res => res.json())
     .then((q: YahooQuote) => {
@@ -95,9 +101,9 @@ const exchange =
 
 setExchangeName(exchange);
 
-      setLoading(false);
+      // setLoading(false);
     });
-}, [symbol]);
+}, [symbol,timeframe]);
 
   /* =========================
      1D → SSE (MARKET OPEN)
@@ -131,6 +137,7 @@ useEffect(() => {
 
         const last = data.candles[data.candles.length - 1];
         setPrice(last.c);
+        setLoading(false);
       }
       setQuote(data.quote)
     };
@@ -150,6 +157,7 @@ useEffect(() => {
             y: d.c
           }))
         );
+        setLoading(false);
       });
   }
 
@@ -195,9 +203,7 @@ useEffect(() => {
   /* =========================
      RENDER
   ========================= */
-  if (loading) {
-    return <div style={{ height: 400 }} />;
-  }
+  
 console.log("quote:",quote)
   return (
     <div className="stock-page">
@@ -210,13 +216,14 @@ console.log("quote:",quote)
           percent={percent}
           timeframe={timeframe}
         />
-
-        <StockChartIndia
+        {loading && <GraphSkeleton />}
+        {!loading && <StockChartIndia
           lineData={lineData}
           timeframe={timeframe}
           referencePrice={baseline}
           marketState={marketState??""}
-        />
+          percent={percent.toString()}/>}
+
         <TimeframeBar
           active={timeframe}
           onChange={setTimeframe}

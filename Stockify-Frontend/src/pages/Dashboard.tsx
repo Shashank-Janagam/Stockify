@@ -19,10 +19,7 @@ export default function Dashboard() {
             </span>
           ))}
         </div>
-        <div className="top-actions">
-          <button className="pill">Terminal</button>
-          <div className="pill">915</div>
-        </div>
+       
       </header>
 
       {tab === "Explore" && <Explore />}

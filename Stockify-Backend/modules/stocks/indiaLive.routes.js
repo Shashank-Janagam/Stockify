@@ -18,6 +18,7 @@ router.get("/:symbol/stream", async (req, res) => {
   req.on("close", () => (isClosed = true));
 
   async function sendUpdate() {
+
     if (isClosed) return;
 
     try {
@@ -61,7 +62,6 @@ router.get("/:symbol/history", async (req, res) => {
 
   try {
     const data = await getYahooIndiaHistory(symbol, days);
-
     res.json(data);
   } catch (err) {
     console.log("Market closed------------------")
@@ -73,19 +73,16 @@ router.get("/:symbol/quote", async (req, res) => {
 
   console.log("calling quote", symbol);
 
-  try {
     const data = await getYahooIndiaQuote(symbol);
     // 🚨 Guard against empty Yahoo response
-    if (!data || Object.keys(data).length === 0) {
+    if (!data) {
       console.log("no data")
       return res.status(204).json({ error: "NO_DATA" });
     }
 
+    console.log(data)
     res.json(data);
-  } catch (err) {
-    console.error("Quote error:", err.message);
-    res.status(500).json({ error: "Quote fetch failed" });
-  }
+ 
 });
 
 export default router;

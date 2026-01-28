@@ -127,7 +127,7 @@ useEffect(() => {
 
 
 
-  const HOST = import.meta.env.VITE_API_HOST || "http://localhost:4000";
+  const HOST = import.meta.env.VITE_HOST_ADDRESS;
 
   useEffect(() => {
     if (!token) return; // 🔑 CRITICAL GUARD

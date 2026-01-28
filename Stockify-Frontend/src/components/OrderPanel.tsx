@@ -281,8 +281,8 @@ useEffect(() => {
 
         <div className="op-footer">
           <div className="money">
-            <p>Balance: ₹{balance?.cash ?? 0}</p>
-            <p>Approx req.: ₹{approxReq.toFixed(2)}</p>
+            <p>Balance: ₹{balance?.cash.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? 0}</p>
+            <p>Approx req.: ₹{approxReq.toLocaleString("en-IN")}</p>
           </div>
 
                   <button

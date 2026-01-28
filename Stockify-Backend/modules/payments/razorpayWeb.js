@@ -5,7 +5,7 @@ import {
   markOrderSuccess,
   incrementWalletBalance,
   addUserTransaction,
-} from "../payments/orders.js";
+} from "./orders.js";
 
 const router = express.Router();
 

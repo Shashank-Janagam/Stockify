@@ -42,7 +42,7 @@ export default function StockHeader({
 
           <div className="price-row">
             <span className="price">
-              ₹{price?.toFixed(2) ?? "--"}
+              ₹{price?.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? "--"}
             </span>
 
             <span

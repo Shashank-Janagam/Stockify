@@ -158,13 +158,39 @@
   border: 2px solid #111827;
   font-weight: 500;
 }
-
 .chart-container {
+  min-height: 360px;
   height: 360px;
+  width: 50rem;
+
   margin-top: 18px;
   position: relative;
-  width: 50rem;
+
   border-bottom: 0.5px solid #e5e7eb;
+
+  /* 🔑 CRITICAL FIXES */
+  display: block;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.chart-container > canvas,
+.chart-container canvas {
+  min-height: 360px !important;
+  height: 100% !important;
+  max-height: 360px;
+}
+
+.chart-empty {
+  position: absolute;
+  inset: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #9ca3af;
+  font-size: 14px;
+  pointer-events: none;
 }
 
 .chart-placeholder {

@@ -45,22 +45,20 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
 
 
   /* ---------- CLOSE PROFILE ON OUTSIDE CLICK ---------- */
-useEffect(() => {
-  const handleClickOutside = (e: MouseEvent) => {
-    if (
-      dropdownRef.current &&
-      !dropdownRef.current.contains(e.target as Node)
-    ) {
-      setOpenProfile(false);
-    }
-  };
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setOpenProfile(false);
+      }
+    };
 
-  document.addEventListener("click", handleClickOutside);
-  return () => {
-    document.removeEventListener("click", handleClickOutside);
-  };
-}, []);
-
+    document.addEventListener("mousedown", handleClickOutside);
+    return () =>
+      document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   /* ---------- CTRL + K SEARCH ---------- */
   useEffect(() => {
@@ -142,12 +140,9 @@ useEffect(() => {
             ) : user ? (
               <>
                 <button
-  className="profile-btn"
-  onClick={() => {
-    console.log("clicked profile");
-    setOpenProfile(p => !p);
-  }}
->
+                  className="profile-btn"
+                  onClick={() => setOpenProfile((p) => !p)}
+                >
                   {/* fallback always visible first */}
                   <div
                     className="profile-fallback"
@@ -170,9 +165,7 @@ useEffect(() => {
                 </button>
 
                 {openProfile && (
-                  <div className="profile-dropdown"
-                    
-                  >
+                  <div className="profile-dropdown">
                     <div className="profile-dropdown-header">
                       <div className="profile-dropdown-name">
                         {user.displayName ?? "User"}

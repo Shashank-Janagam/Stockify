@@ -14,7 +14,9 @@ import getBalance from "./modules/payments/getBalance.js"
 import payments from "./modules/payments/payment.js";
 import transactions from "./modules/payments/transactions.js"
 import webhooks from "./modules/payments/razorpayWeb.js";
-import multiStream from "./modules/stocks/multiStream.routes.js";
+import multiStocks from "./modules/stocks/multiStream.routes.js"
+
+
 const app = express();
 const PORT = 4000;
 app.use(
@@ -41,7 +43,7 @@ app.use("/api/getBalance",getBalance);
 app.use("/api/payments",payments);
 app.use("/api/transactions", transactions);
 app.use("/api/webhooks",webhooks)
-app.use("/api/explore",multiStream);
+app.use("/api/explore",multiStocks)
 
 // app.use("/api/indiaSEE",indiaReplay);
 async function startServer() {

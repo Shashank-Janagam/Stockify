@@ -19,9 +19,24 @@ export async function getYahooIndiaHistory(symbol, days) {
   } else if (days <= 30) {
     interval = "15m";
     period1 = nowSec - 60 * 60 * 24 * 30;
-  } else {
+  } else if( days <= 90) {
     interval = "1d";
-    period1 = nowSec - 60 * 60 * 24 * days;
+    period1 = nowSec - 60 * 60 * 24 * 90;
+  } else if( days <= 180) {
+    interval = "1d";
+    period1 = nowSec - 60 * 60 * 24 * 180;
+  } else if( days <= 365) {
+    interval = "1d";
+    period1 = nowSec - 60 * 60 * 24 * 365;
+  }else if( days <= 1095) {
+    interval = "5d";
+    period1 = nowSec - 60 * 60 * 24 * 1095;
+  }else if( days <= 1825) {
+    interval = "5d";
+    period1 = nowSec - 60 * 60 * 24 * 1825;
+  }else  {
+    interval = "5d";
+    period1 =0;
   }
 
   const result = await yahoo.chart(symbol, {
