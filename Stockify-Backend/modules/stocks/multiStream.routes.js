@@ -4,6 +4,7 @@ import { MultiStockYahoo } from "./multiStockIndia.js";
 import admin from "../../Middleware/admin.js";
 import crypto from "crypto";
 import {  getNSETopGainers} from "./multiCurrentMovers.js";
+import {db} from "../../db/sql.js";
 const router = express.Router();
 
 let clients = new Map();
@@ -70,7 +71,7 @@ const moversList = [
     "ITC.NS",
 
 ];
-
+// const moversList = await getNSETopGainers();
 console.log("most traded-------------------------:", moversList);
     const token = req.query.token;
     if (!token) return res.status(401).end();
@@ -135,6 +136,7 @@ console.log("most traded-------------------------:", moversList);
 
 
 // routes/recent.routes.js
+
 import { getDb } from "../../db/mongo.js";
 router.get("/recent", async (req, res) => {
   console.log("🟢 recent sse called");
@@ -146,64 +148,107 @@ router.get("/recent", async (req, res) => {
     const decodedToken = await admin.auth().verifyIdToken(token);
     console.log("✅ user verified for recent SSE");
 
-    /* -------------------------
-       FETCH USER RECENTS
-    ------------------------- */
-    const db = getDb();
-    const users = db.collection("users");
+    /* =========================
+       DB + USER DATA
+    ========================= */
+    const dbMongo = getDb();
+    const users = dbMongo.collection("users");
 
     const user = await users.findOne(
       { _id: decodedToken.uid },
       { projection: { recentlyViewed: 1 } }
     );
 
-    const recent = user?.recentlyViewed || [];
+    const recentlyViewed = user?.recentlyViewed || [];
 
-    // SSE headers
+    /* =========================
+       INVESTED SYMBOLS (NET QTY > 0)
+    ========================= */
+    const { rows: investedRows } = await db.query(
+      `
+      SELECT
+        symbol
+      FROM user_stocks
+      WHERE firebase_uid = $1
+        AND status = 'EXECUTED'
+      GROUP BY symbol
+      HAVING SUM(
+        CASE
+          WHEN side = 'BUY' THEN quantity
+          WHEN side = 'SELL' THEN -quantity
+        END
+      ) > 0
+      `,
+      [decodedToken.uid]
+    );
+
+    const investedSymbols = investedRows.map(r => r.symbol);
+
+    /* =========================
+       SSE HEADERS
+    ========================= */
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders?.();
 
-    // 🔥 ROUTE-LOCAL STATE (KEY FIX)
     let interval = null;
     let stopped = false;
 
     res.write(`event: connected\ndata: {}\n\n`);
 
-    // 🟡 No recents → send once & close
-    if (recent.length === 0) {
-      res.write(`data: ${JSON.stringify({ recent: [] })}\n\n`);
+    // 🟡 nothing to stream
+    if (recentlyViewed.length === 0 && investedSymbols.length === 0) {
+      res.write(
+        `data: ${JSON.stringify({
+          recentlyViewed: [],
+          invested: []
+        })}\n\n`
+      );
       res.end();
       return;
     }
 
-    const symbols = recent.map(r => r.symbol);
+    const recentSymbols = recentlyViewed.map(r => r.symbol);
+    const allSymbols = [...new Set([...recentSymbols, ...investedSymbols])];
 
+    /* =========================
+       POLLING LOOP
+    ========================= */
     interval = setInterval(async () => {
       if (stopped) return;
-
+      console.log("⏱️ Fetching recent quotes for:");
       try {
-        const quotes = await MultiStockYahoo(symbols);
+        const quotes = await MultiStockYahoo(allSymbols);
         if (!quotes || quotes.length === 0) return;
 
         const marketState = quotes[0]?.marketState;
 
-        // ❌ MARKET CLOSED → SEND ONCE & STOP
+        const recentQuotes = quotes.filter(q =>
+          recentSymbols.includes(q.symbol)
+        );
+
+        const investedQuotes = quotes.filter(q =>
+          investedSymbols.includes(q.symbol)
+        );
+
+        res.write(
+          `data: ${JSON.stringify({
+            recentlyViewed: recentQuotes,
+            invested: investedQuotes
+          })}\n\n`
+        );
+
+        // ❌ stop when market closed
         if (marketState !== "REGULAR") {
           console.log("🛑 market closed — stopping recent SSE");
-          res.write(`data: ${JSON.stringify({ recent: quotes })}\n\n`);
-          res.end();
           stopped = true;
           clearInterval(interval);
-          return;
+          res.end();
         }
 
-        // 🔄 STREAM
-        res.write(`data: ${JSON.stringify({ recent: quotes })}\n\n`);
-
       } catch (err) {
-        console.error("recent polling error:", err);
+        console.error("recent SSE error:", err);
         stopped = true;
         clearInterval(interval);
         res.end();

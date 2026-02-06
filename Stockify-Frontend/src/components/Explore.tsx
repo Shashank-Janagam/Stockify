@@ -92,7 +92,9 @@ function getStockRoute(
 }
 export default function Explore() {
   const [data, setData] = useState<any>(null);
-const [recentData, setRecentData] = useState<{ recent: any[] }>({ recent: [] });
+const [recentData, setRecentData] = useState<any[]>([]);
+const [invested, setInvested] = useState<any[]>([]);
+
   const navigate =useNavigate()
   const [token, setToken] = useState<string | null>(null);
 const [exploreReady, setExploreReady] = useState(false);
@@ -158,7 +160,6 @@ useEffect(() => {
       const parsed = JSON.parse(event.data);
       setData(parsed);
       setExploreReady(true);
-      console.log("data received:", parsed);
     };
 
     source.onerror = () => {
@@ -172,19 +173,23 @@ return () => {
   };}, [token]);
 
  useEffect(() => {
+ 
     if (!token) return; // 🔑 CRITICAL GUARD
 
     const source = new EventSource(
       `${HOST}/api/explore/recent?token=${token}`
-    );
+    );    
+
 
           source.onmessage = (event) => {
-          const parsed = JSON.parse(event.data);
-          setRecentReady(true);
+  const parsed = JSON.parse(event.data);
 
-          console.log("recent data received:", parsed);
-          setRecentData(parsed ?? { recent: [] });
-        };
+  setRecentData(parsed.recentlyViewed ?? []);
+  setInvested(parsed.invested ?? []);
+
+  setRecentReady(true);
+};
+
 
 
       source.onerror = () => {
@@ -212,30 +217,30 @@ if (loading) return <ExploreSkeleton />;
   return (
     <div className="explore-page">
       {/* RECENTLY VIEWED */}
-      <section className="section">
-        <h2>Recently viewed</h2>
-        <div className="recent-grid">
-            {recentData?.recent.map((r: any) => (
-              <div
-      key={r.symbol}
-      className="recent-item clickable"
-      onClick={() => handleStockClick(r)}
-    >
-      
-                <img  
-            src={new URL(`${getImageSrc(r.symbol)}`, import.meta.url).href}
-              // onError={(e) => (e.currentTarget.src = stockifylogo)}
-              ></img>
-                <div>{r.name.split(" ")[0]}</div>
-                <span className={r.percent > 0 ? "pos" : "neg"}>
-                  {r.percent > 0 ? "+" : ""}
-                  {r.percent}%
-                </span>
-              </div>
-            ))}
-          </div>
+<section className="section">
+  <h2>Recently viewed</h2>
 
-      </section>
+  <div className="recent-grid">
+    {recentData.map((r: any) => (
+      <div
+        key={r.symbol}
+        className="recent-item clickable"
+        onClick={() => handleStockClick(r)}
+      >
+        <img
+          src={new URL(getImageSrc(r.symbol), import.meta.url).href}
+          alt={r.name}
+        />
+        <div>{r.name.split(" ")[0]}</div>
+        <span className={r.percent > 0 ? "pos" : "neg"}>
+          {r.percent > 0 ? "+" : ""}
+          {r.percent}%
+        </span>
+      </div>
+    ))}
+  </div>
+</section>
+
 
       <div className="main-grid">
         {/* LEFT */}
@@ -319,15 +324,72 @@ if (loading) return <ExploreSkeleton />;
         </div>
 
         {/* RIGHT PANEL */}
-        <aside className="right-panel">
-          <div className="investment-box">
-            <h3>Your investments</h3>
-            <div className="empty-box">
-              You haven't invested yet
-            </div>
-          </div>
+       <aside className="right-panel">
+  <div className="investment-box">
+    <div className="investment-header">
+      <h3>Your investments</h3>
+      
+    </div>
 
-        </aside>
+    {invested?.length === 0 ? (
+      <div className="empty-box">
+        You haven't invested yet
+      </div>
+    ) : (
+      <div className="invest-list">
+        {invested.map((s: any) => (
+          <div
+  key={s.symbol}
+  className="invest-item clickable"
+  onClick={() => handleStockClick(s)}
+>
+  <div className="invest-left">
+    <img
+      className="invest-logo"
+      src={new URL(
+        `${getImageSrc(s.symbol)}`,
+        import.meta.url
+      ).href}
+      alt={s.symbol}
+      onError={(e) =>
+        (e.currentTarget.src = stockifylogo)
+      }
+    />
+
+    <div className="invest-text">
+      <strong>{s.name?.split(" ").slice(0, 2).join(" ")}</strong>
+     
+    </div>
+  </div>
+
+  <div className="invest-right">
+    <div
+      className={`invest-pnl ${
+        s.change >= 0 ? "pos" : "neg"
+      }`}
+    >
+      {s.change >= 0 ? "+" : "-"}₹
+      {Math.abs(s.change).toLocaleString("en-IN")}
+    </div>
+
+    <div
+      className={`invest-percent ${
+        s.percent >= 0 ? "pos" : "neg"
+      }`}
+    >
+      {s.percent >= 0 ? "+" : ""}
+      {s.percent}%
+    </div>
+  </div>
+</div>
+
+        ))}
+      </div>
+    )}
+  </div>
+</aside>
+
+
       </div>
     </div>
   );

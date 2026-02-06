@@ -197,20 +197,34 @@ type Trade = {
       }, [symbol,token,refresh]);
 
       useEffect(() => {
-        if(!trades) return;
-        let invested = 0;
-        let pnl = 0;
+  if (!trades || availableQty <= 0) return;
 
-        trades.forEach(t => {
-          if (t.side === "BUY") {
-            invested += t.buy_price_per_share * t.quantity;
-            pnl += (price - t.buy_price_per_share) * t.quantity;
-          }
-        });
+  let remainingQty = availableQty;
+  let invested = 0;
+  let pnl = 0;
 
-        setStockChange(pnl);
-        setStockChangePercent(invested > 0 ? (pnl / invested) * 100 : 0);
-      }, [trades, price]);
+  const buys = trades
+    .filter(t => t.side === "BUY")
+    .sort((a, b) =>
+      new Date(a.created_at).getTime() -
+      new Date(b.created_at).getTime()
+    );
+
+  for (const lot of buys) {
+    if (remainingQty <= 0) break;
+
+    const qty = Math.min(lot.quantity, remainingQty);
+    invested += qty * lot.buy_price_per_share;
+    pnl += qty * (price - lot.buy_price_per_share);
+    remainingQty -= qty;
+  }
+
+  setStockChange(pnl);
+  setStockChangePercent(
+    invested > 0 ? (pnl / invested) * 100 : 0
+  );
+}, [trades, price, availableQty]);
+
 
 
     useEffect(() => {
