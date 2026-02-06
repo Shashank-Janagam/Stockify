@@ -4,12 +4,12 @@ import StockHeader from "../components/StockHeader";
 import {StockChartIndia,GraphSkeleton} from "../components/StocksChartIndia";
 import TimeframeBar from "../components/TimeframeBar";
 import OrderPanel from "../components/OrderPanel";
-import {useContext} from "react"
-import { AuthContext } from "../auth/AuthProvider";
+// import {useContext} from "react"
+// import { AuthContext } from "../auth/AuthProvider";
 // import StockCandleChartIndia from "../components/StockCandleChartIndia";
 import "../Styles/stock.css";
 import StockPerformance from "../components/StockPerformanceFundamentals"
-import type { Stock } from "../data/stocks";
+// import type { Stock } from "../data/stocks";
 /* =========================
    TYPES
 ========================= */

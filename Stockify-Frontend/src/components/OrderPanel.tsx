@@ -1,5 +1,5 @@
   import "../Styles/orderPanel.css";
-  import { useState,useEffect, useMemo } from "react";
+  import { useState,useEffect } from "react";
   import {useContext} from "react"
   import { AuthContext } from "../auth/AuthProvider";
   import imageinvest from "../assets/imageinv.png"
@@ -55,12 +55,10 @@ type Trade = {
   const [showAddMoney, setShowAddMoney] = useState(false);
   const [loading,setLoading]=useState(false)
       const [refresh,setRefresh]=useState(0)
-      const [available,setAvailable]=useState(true)
       const {user} = useContext(AuthContext);
       const [token, setToken] = useState<string | null>(null);
       const [balance, setBalance] = useState<Balance | null>(null);
       const [warning,setWarning]=useState<string>("Market order might be subject to price fluctuation")
-      const [previousBuyPrice,setPreviousBuyPrice]=useState<number |null>(null)
       const [availableQty, setAvailableQty] = useState<number>(0);
       const [sellValue, setSellValue] = useState<number>(0);
       const [StockChange,setStockChange]=useState<number>(0)
@@ -260,10 +258,8 @@ type Trade = {
 
         if (tab === "BUY"){
             if(required > (balance?.cash ?? 0)) {
-              setAvailable(true)
               setWarning("Available amount is not enough");
             } else {
-              setAvailable(false)
               setWarning("Market order might be subject to price fluctuation");
             }
         }
