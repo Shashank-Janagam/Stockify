@@ -125,7 +125,7 @@ console.log("Final URL =", `${HOST}/api/searchUpdates/recent`);
     );
   }
 
-  const cash = balance.cash ?? 0;
+const cash = Number(balance.cash ?? 0);
   const [rupees, paise] = cash.toFixed(2).split(".");
 
   return (

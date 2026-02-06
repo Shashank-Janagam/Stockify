@@ -4,9 +4,12 @@ import StockHeader from "../components/StockHeader";
 import {StockChartIndia,GraphSkeleton} from "../components/StocksChartIndia";
 import TimeframeBar from "../components/TimeframeBar";
 import OrderPanel from "../components/OrderPanel";
+import {useContext} from "react"
+import { AuthContext } from "../auth/AuthProvider";
 // import StockCandleChartIndia from "../components/StockCandleChartIndia";
 import "../Styles/stock.css";
 import StockPerformance from "../components/StockPerformanceFundamentals"
+import type { Stock } from "../data/stocks";
 /* =========================
    TYPES
 ========================= */
@@ -78,7 +81,36 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
  if (!symbol) {
     return null; // or <Navigate /> or fallback UI
   }
+  
+    
+  //  useEffect(() => {
+  //   if (!user || typeof user.getIdToken !== "function") {
+  //     return;
+  //   }
+  
+  //   let isMounted = true;
+  //   console.log("fetching token for user:",user)
+  //   const fetchToken = async () => {
+  //     try {
+  //       const jwt = await user.getIdToken(true); // force refresh
+  //       if (isMounted) {
+  //         console.log("fetched token:",jwt)
+  //         setToken(jwt);
+  //       }
+  //     } catch (err) {
+  //       console.log("Failed to fetch token",err);
+  //     }
+  //   };
+  
+  //   fetchToken();
+  
+  //   return () => {
+  //     isMounted = false;
+  //   };
+  // });
 
+
+      
   useEffect(() => {
     setLoading(true);
 
@@ -94,12 +126,13 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
       setBaseline(q.regularMarketPreviousClose);
       setChange(q.regularMarketChange);
       setPercent(q.regularMarketChangePercent);
-const exchange =
-  q.fullExchangeName === "NSE" || q.fullExchangeName === "BSE"
-    ? q.fullExchangeName
-    : "NSE";
+      const exchange =
+        q.fullExchangeName === "NSE" || q.fullExchangeName === "BSE"
+          ? q.fullExchangeName
+          : "NSE";
 
-setExchangeName(exchange);
+      setExchangeName(exchange);
+
 
       // setLoading(false);
     });

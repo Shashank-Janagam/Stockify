@@ -3,7 +3,7 @@ import express from "express";
 import { MultiStockYahoo } from "./multiStockIndia.js";
 import admin from "../../Middleware/admin.js";
 import crypto from "crypto";
-
+import {  getNSETopGainers} from "./multiCurrentMovers.js";
 const router = express.Router();
 
 let clients = new Map();
@@ -56,19 +56,22 @@ router.get("/", async (req, res) => {
   "INFY.NS",
   "ITC.NS"
 ];
+// const moversList = await getNSETopGainers();
 const moversList = [
   "ADANIENT.NS",
-  "ADANIPORTS.NS",
   "TATAMOTORS.NS",
   "ONGC.NS",
-  "JSWSTEEL.NS",
-  "COALINDIA.NS",
-  "POWERGRID.NS",
-  "NTPC.NS",
-  "HINDALCO.NS",
-  "BPCL.NS"
+  "RELIANCE.NS",
+    "TCS.NS",
+    "INFY.NS",
+    "HDFCBANK.NS",
+    "ICICIBANK.NS",
+    "SBIN.NS",
+    "ITC.NS",
+
 ];
 
+console.log("most traded-------------------------:", moversList);
     const token = req.query.token;
     if (!token) return res.status(401).end();
     const decodedToken = await admin.auth().verifyIdToken(token);

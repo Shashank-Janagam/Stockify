@@ -1,7 +1,9 @@
 import { useContext, useEffect, useState } from "react";
 import { AuthContext } from "../auth/AuthProvider";
 import { useNavigate } from "react-router-dom";
-import googleimage from "../assets/google.png";
+import stockifylogo from "../assets/StockiftLogo.png";
+
+
 function ExploreSkeleton() {
   return (
     <div className="explore-page">
@@ -95,6 +97,23 @@ const [recentData, setRecentData] = useState<{ recent: any[] }>({ recent: [] });
   const [token, setToken] = useState<string | null>(null);
 const [exploreReady, setExploreReady] = useState(false);
 const [recentReady, setRecentReady] = useState(false);
+const images = import.meta.glob(
+  "../assets/*.{png,jpg,jpeg,svg,webp}",
+  { eager: true }
+);
+
+const getImageSrc = (symbol: string): string => {
+  const name = symbol.replace(".NS", "");
+
+  const match = Object.keys(images).find(path =>
+    path.includes(`/${name}.`)
+  );
+
+  return match
+    ? (images[match] as any).default
+    : (images["../assets/StockiftLogo.png"] as any).default;
+};
+
 
   const handleStockClick = (stock: any) => {
   navigate(getStockRoute(stock.symbol, stock.name));
@@ -131,7 +150,6 @@ useEffect(() => {
 
   useEffect(() => {
     if (!token) return; // 🔑 CRITICAL GUARD
-
     const source = new EventSource(
       `${HOST}/api/explore?token=${token}`
     );
@@ -203,11 +221,11 @@ if (loading) return <ExploreSkeleton />;
       className="recent-item clickable"
       onClick={() => handleStockClick(r)}
     >
-      <img
-    src={`https://logo.clearbit.com/${r.symbol.replace(".NS","").toLowerCase()}.com`}
-    onError={(e) => (e.currentTarget.src = googleimage)}
-    alt={r.name}
-  />
+      
+                <img  
+            src={new URL(`${getImageSrc(r.symbol)}`, import.meta.url).href}
+              // onError={(e) => (e.currentTarget.src = stockifylogo)}
+              ></img>
                 <div>{r.name.split(" ")[0]}</div>
                 <span className={r.percent > 0 ? "pos" : "neg"}>
                   {r.percent > 0 ? "+" : ""}
@@ -232,8 +250,8 @@ if (loading) return <ExploreSkeleton />;
       className="stock-card clickable"
       onClick={() => handleStockClick(s)}
     >    <img
-    src={`https://logo.clearbit.com/${s.symbol.replace(".NS","").toLowerCase()}.com`}
-    onError={(e) => (e.currentTarget.src = googleimage)}
+     src={new URL(`${getImageSrc(s.symbol)}`, import.meta.url).href}
+
     alt={s.name}
   />  <div className="name">{s.name.split(" ")[0]} {s.name.split(" ")[1] ? s.name.split(" ")[1] : " "}</div>
       <div className="price">
@@ -241,7 +259,7 @@ if (loading) return <ExploreSkeleton />;
       </div>
       <div className={s.percent > 0 ? "pos" : "neg"}>
         {s.change !== null ? (s.change > 0 ? `${s.change}` : s.change) : "—"}
-        `({s.percent > 0 ? "+" : ""} {s.percent}%)`
+          ({s.percent > 0 ? "+" : ""}{s.percent}%)
       </div>
     </div>
   ))}
@@ -254,14 +272,7 @@ if (loading) return <ExploreSkeleton />;
           <section className="section">
             <h2>Top market movers</h2>
 
-            <div className="filters">
-              <button className="filter active">Gainers</button>
-              <button className="filter">Losers</button>
-              <button className="filter">Volume shockers</button>
-              <select>
-                <option>NIFTY 100</option>
-              </select>
-            </div>
+           
 
             <div className="table-card">
               <table>
@@ -280,12 +291,12 @@ if (loading) return <ExploreSkeleton />;
       onClick={() => handleStockClick(m)}
     >      <td style={{ display: "flex", alignItems: "center", gap: "8px" }}>
     <img
-      src={`https://logo.clearbit.com/${m.symbol.replace(".NS","").toLowerCase()}.com`}
-      onError={(e) => (e.currentTarget.src = googleimage)}
+          src={new URL(`${getImageSrc(m.symbol)}`, import.meta.url).href}
+      onError={(e) => (e.currentTarget.src = stockifylogo)}
       alt={m.name}
       style={{ width: 20, height: 20 }}
     />
-    {m.name.split(" ")[0]}
+    {m.name.split(" ").slice(0, 3).join(" ")}
   </td>
       <td className={m.percent > 0 ? "pos" : "neg"} id="marketprice" >
         {m.price !== null ? `₹${m.price.toLocaleString("en-IN")}` : "—"}

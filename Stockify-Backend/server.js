@@ -15,10 +15,11 @@ import payments from "./modules/payments/payment.js";
 import transactions from "./modules/payments/transactions.js"
 import webhooks from "./modules/payments/razorpayWeb.js";
 import multiStocks from "./modules/stocks/multiStream.routes.js"
-
-
+import OrderExecution from "./modules/OrderExecution/buyStock.js";
+import portfolio from "./modules/OrderExecution/sellStock.js";
+import holdings from "./modules/OrderExecution/holdings.js";
 const app = express();
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
 app.use(
   "/api/webhooks/razorpay",
   express.raw({ type: "application/json" })
@@ -44,7 +45,9 @@ app.use("/api/payments",payments);
 app.use("/api/transactions", transactions);
 app.use("/api/webhooks",webhooks)
 app.use("/api/explore",multiStocks)
-
+app.use("/api/orderExecution",OrderExecution)
+app.use("/api/portfolio",portfolio);
+app.use("/api/holdings",holdings)
 // app.use("/api/indiaSEE",indiaReplay);
 async function startServer() {
   try {

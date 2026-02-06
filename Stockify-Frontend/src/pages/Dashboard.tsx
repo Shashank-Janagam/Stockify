@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Explore from "../components/Explore";
 import "../Styles/dashboard.css";
-
+import HoldingsPage from "../components/HoldingsPage.tsx";
 export default function Dashboard() {
   const [tab, setTab] = useState("Explore");
 
@@ -23,6 +23,7 @@ export default function Dashboard() {
       </header>
 
       {tab === "Explore" && <Explore />}
+      {tab === "Holdings" && <HoldingsPage />}
     </div>
   );
 }

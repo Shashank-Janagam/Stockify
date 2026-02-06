@@ -20,9 +20,4 @@ export const SYMBOL_GROUPS = {
   ],
 };
 
-export const TOOLS = [
-  "SIP Calculator",
-  "Brokerage Calculator",
-  "IPO",
-  "Stock Screener",
-];
+

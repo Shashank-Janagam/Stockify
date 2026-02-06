@@ -83,7 +83,7 @@ const growwPlugin = {
     /* =====================
        BASELINE (DOTTED)
     ===================== */
-    const refPrice = chart.options.plugins?.referencePrice;
+const refPrice =chart.options.plugins?.growwPlugin?.referencePrice;
     if (refPrice != null && chart.scales.y) {
       const y = chart.scales.y.getPixelForValue(refPrice);
 

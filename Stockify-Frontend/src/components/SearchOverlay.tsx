@@ -66,6 +66,7 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
   const [loading, setLoading] = useState(false);
 const [token, setToken] = useState<string | null>(null);
   const { user } = useContext(AuthContext);
+  
  useEffect(() => {
   if (!user || typeof user.getIdToken !== "function") {
     return;

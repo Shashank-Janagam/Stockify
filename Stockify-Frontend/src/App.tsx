@@ -58,7 +58,9 @@ const App = () => {
                 <Dashboard />
                 </ProtectedRoute>
             }
+
           />
+        
         </Routes>
       </div>
     </BrowserRouter>

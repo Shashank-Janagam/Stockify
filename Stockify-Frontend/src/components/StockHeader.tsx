@@ -1,3 +1,5 @@
+
+
 type StockHeaderProps = {
   companyName?: string;
   symbol: string;
@@ -6,11 +8,10 @@ type StockHeaderProps = {
   percent: number;
   timeframe: string;
 };
-import google from "../assets/google.png"
 export default function StockHeader({
 
   companyName,
-  // symbol,
+  symbol,
   price,
   change,
   percent,
@@ -19,10 +20,28 @@ export default function StockHeader({
   const isNegative = change < 0;
   // console.log("company name:",companyName)
   console.log(price);
+  const images = import.meta.glob(
+  "../assets/*.{png,jpg,jpeg,svg,webp}",
+  { eager: true }
+);
+
+const getImageSrc = (symbol: string): string => {
+  const name = symbol.replace(".NS", "");
+
+  const match = Object.keys(images).find(path =>
+    path.includes(`/${name}.`)
+  );
+
+  return match
+    ? (images[match] as any).default
+    : (images["../assets/StockiftLogo.png"] as any).default;
+};
+
   return (
     <div className="stock-header">
       <img
-        src={google}
+        src={new URL(`${getImageSrc(symbol)}`, import.meta.url).href}
+
         alt={companyName}
         className="stock-logo"
         loading="lazy"

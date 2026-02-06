@@ -14,7 +14,6 @@ export async function MultiStockYahoo(symbols = []) {
 
     // 🔥 Single Yahoo request
     const quotes = await yahooFinance.quote(symbols);
-    console.log("Yahoo quotes fetched:", quotes.length);
     // 🔄 Normalize response
     return quotes
       .filter(q => q?.symbol)

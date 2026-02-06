@@ -1,48 +1,55 @@
 import express from "express";
-import { getDb } from "../../db/mongo.js";
+import { db } from "../../db/sql.js";
 import requireAuth from "../../Middleware/requireAuth.js";
-import redis from "../../cache/redisClient.js"
+import redis from "../../cache/redisClient.js";
+
 const router = express.Router();
 
 /**
- * GET /balance
- * Returns user's balance
- * Lazy-creates balance if missing
+ * GET /getBalance
+ * Returns user's wallet balance (SQL source of truth)
  */
-
-
 router.get("/getBalance", requireAuth, async (req, res) => {
-  const userId = req.user.uid;
-  const redisKey = `wallet:balance:${userId}`;
+  try {
+    const userId = req.user.uid;
+    const redisKey = `wallet:balance:${userId}`;
 
-  // 1️⃣ Redis first
-  await redis.flushall()
-  console.log("redis frmget bal",redisKey)
+    // 1️⃣ Try Redis cache
+    const cached = await redis.get(redisKey);
+    if (cached) {
+      return res.json(JSON.parse(cached));
+    }
 
-  const cached = await redis.get(redisKey);
-  if (cached) {
-    return res.json(JSON.parse(cached));
+    // 2️⃣ Fetch from SQL
+    const result = await db.query(
+      `
+      SELECT balance
+      FROM wallets
+      WHERE firebase_uid = $1
+      `,
+      [userId]
+    );
+
+   const balance = {
+  cash: Number(result.rows[0]?.balance ?? 0),
+  blocked: 0
+};
+
+
+    // 3️⃣ Cache in Redis (5 minutes)
+    await redis.set(
+      redisKey,
+      JSON.stringify(balance),
+      "EX",
+      300
+    );
+
+    return res.json(balance);
+
+  } catch (err) {
+    console.error("getBalance error:", err);
+    res.status(500).json({ error: "Failed to fetch balance" });
   }
-
-  // 2️⃣ Fallback to Mongo
-  const wallet = await getDb()
-    .collection("wallets")
-    .findOne({ userId });
-
-  const balance = {
-    cash: wallet?.cash ?? 0,
-    blocked: wallet?.blocked ?? 0,
-  };
-  // 3️⃣ Populate Redis ONLY if empty
-  await redis.set(
-    redisKey,
-    JSON.stringify(balance),
-    "EX",
-    300
-  );
-
-  return res.json(balance);
 });
-
 
 export default router;

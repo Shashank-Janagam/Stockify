@@ -1,6 +1,6 @@
 import express from "express";
 import crypto from "crypto";
-import { getDb } from "../../db/mongo.js";
+import { db } from "../../db/sql.js";
 import {
   markOrderSuccess,
   incrementWalletBalance,
@@ -10,20 +10,16 @@ import {
 const router = express.Router();
 
 router.post("/razorpay", async (req, res) => {
-  const db = getDb();
-  const session = db.client.startSession();
-
   try {
     /* =========================
        1️⃣ VERIFY WEBHOOK SIGNATURE
     ========================= */
-    console.log("verifying from webhooks")
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers["x-razorpay-signature"];
 
     const expected = crypto
       .createHmac("sha256", webhookSecret)
-      .update(req.body) // 🔥 RAW BUFFER
+      .update(req.body) // RAW BUFFER (important)
       .digest("hex");
 
     if (expected !== signature) {
@@ -41,18 +37,31 @@ router.post("/razorpay", async (req, res) => {
     const amount = payment.amount / 100;
 
     /* =========================
-       2️⃣ START TRANSACTION
+       2️⃣ START SQL TRANSACTION
     ========================= */
-    session.startTransaction();
+    await db.query("BEGIN");
 
-    const order = await db.collection("orders").findOne(
-      { orderId },
-      { session }
+    // Fetch order (FOR UPDATE for idempotency + lock)
+    const orderRes = await db.query(
+      `
+      SELECT order_id, firebase_uid, status
+      FROM orders
+      WHERE order_id = $1
+      FOR UPDATE
+      `,
+      [orderId]
     );
 
-    // Idempotency
-    if (!order || order.status === "SUCCESS") {
-      await session.abortTransaction();
+    if (orderRes.rowCount === 0) {
+      await db.query("ROLLBACK");
+      return res.json({ ok: true });
+    }
+
+    const order = orderRes.rows[0];
+
+    // Idempotency: already processed
+    if (order.status === "SUCCESS") {
+      await db.query("ROLLBACK");
       return res.json({ ok: true });
     }
 
@@ -60,56 +69,41 @@ router.post("/razorpay", async (req, res) => {
        3️⃣ ATOMIC OPERATIONS
     ========================= */
 
-    await markOrderSuccess(
-      {
-        orderId,
-        paymentId: payment.id,
-      },
-      session
-    );
+    // Mark order success
+    await markOrderSuccess({
+      orderId,
+      paymentId: payment.id,
+    });
 
-    await incrementWalletBalance(
-      order.userId,
+    // Credit wallet
+    console.log("Crediting wallet for user:", order.firebase_uid, "amount:", amount);
+    await incrementWalletBalance(order.firebase_uid, amount);
+
+    // Add wallet transaction
+    await addUserTransaction({
+      userId: order.firebase_uid,
+      type: "CREDIT",
+      title: "Wallet Deposit",
       amount,
-      session
-    );
-
-    await addUserTransaction(
-      {
-        userId: order.userId,
-        type: "CREDIT",
-        title: "Wallet Deposit",
-        amount,
-      },
-      session
-    );
+    });
 
     /* =========================
        4️⃣ COMMIT
     ========================= */
-    await session.commitTransaction();
+    await db.query("COMMIT");
 
     /* =========================
        5️⃣ POST-COMMIT SIDE EFFECTS
     ========================= */
-    // Redis invalidation MUST be after commit
+    // (optional) Redis cache invalidation here
 
-    console.log("✅ Wallet credited via webhook");
-
+    console.log("✅ Wallet credited via Razorpay webhook");
     res.json({ success: true });
 
   } catch (err) {
-    /* =========================
-       🔥 ROLLBACK
-    ========================= */
-    if (session.inTransaction()) {
-    await session.abortTransaction(); // ✅ only abort if active
-  }
-    console.error("Webhook rollback:", err);
-
+    console.error("Webhook error:", err);
+    await db.query("ROLLBACK");
     res.status(500).json({ success: false });
-  } finally {
-    await session.endSession();
   }
 });
 

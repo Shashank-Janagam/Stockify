@@ -1,13 +1,13 @@
 import "../Styles/Transactions.css";
 
 export type Transaction = {
-  _id: string;
+  id: string;
   type: "CREDIT" | "DEBIT";
   title: string;
   amount: number;
-  balanceAfter: number;
-  createdAt: string;
+  created_at: string;
 };
+
 
 type Props = {
   transactions: Transaction[];
@@ -27,7 +27,7 @@ export default function Transactions({ transactions }: Props) {
         const isCredit = txn.type === "CREDIT";
 
         return (
-          <div key={txn._id} className="transaction-row">
+        <div key={txn.id} className="transaction-row">
             <div className="txn-left">
               <span className={`txn-icon ${isCredit ? "credit" : "debit"}`}>
                 {isCredit ? "↘" : "↖"}
@@ -35,8 +35,11 @@ export default function Transactions({ transactions }: Props) {
 
               <div>
                 <div className="txn-title">{txn.title}</div>
-                <div className="txn-date">
-                  {new Date(txn.createdAt).toLocaleString("en-IN")}
+                  <div className="txn-date">
+                  {new Date(txn.created_at).toLocaleString("en-IN", {
+                              timeZone: "Asia/Kolkata"
+                            })
+                            }
                 </div>
               </div>
             </div>

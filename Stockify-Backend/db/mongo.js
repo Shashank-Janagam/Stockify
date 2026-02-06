@@ -1,7 +1,6 @@
 import { MongoClient } from "mongodb";
 
-const uri = "mongodb+srv://shashijanagam2004_db_user:hg00fvxTmkNkOdj8@stocks.ugz3urv.mongodb.net/?appName=stocks";
-
+const uri = process.env.MONGO_URI;
 if (!uri) {
   throw new Error("❌ MONGO_URI is undefined");
 }
