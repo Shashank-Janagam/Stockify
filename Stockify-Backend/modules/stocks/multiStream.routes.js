@@ -211,49 +211,64 @@ router.get("/recent", async (req, res) => {
 
     const recentSymbols = recentlyViewed.map(r => r.symbol);
     const allSymbols = [...new Set([...recentSymbols, ...investedSymbols])];
-
     /* =========================
        POLLING LOOP
     ========================= */
-    interval = setInterval(async () => {
+    const fetchAndEmit = async () => {
       if (stopped) return;
       console.log("⏱️ Fetching recent quotes for:");
-      try {
-        const quotes = await MultiStockYahoo(allSymbols);
-        if (!quotes || quotes.length === 0) return;
 
-        const marketState = quotes[0]?.marketState;
+      const quotes = await MultiStockYahoo(allSymbols);
+      if (!quotes || quotes.length === 0) return;
 
-        const recentQuotes = quotes.filter(q =>
-          recentSymbols.includes(q.symbol)
-        );
+      const marketState = quotes.find(q => q?.marketState)?.marketState;
 
-        const investedQuotes = quotes.filter(q =>
-          investedSymbols.includes(q.symbol)
-        );
+      const recentQuotes = quotes.filter(q =>
+        recentSymbols.includes(q.symbol)
+      );
 
-        res.write(
-          `data: ${JSON.stringify({
-            recentlyViewed: recentQuotes,
-            invested: investedQuotes
-          })}\n\n`
-        );
+      const investedQuotes = quotes.filter(q =>
+        investedSymbols.includes(q.symbol)
+      );
 
-        // ❌ stop when market closed
-        if (marketState !== "REGULAR") {
-          console.log("🛑 market closed — stopping recent SSE");
-          stopped = true;
-          clearInterval(interval);
-          res.end();
-        }
+      res.write(
+        `data: ${JSON.stringify({
+          recentlyViewed: recentQuotes,
+          invested: investedQuotes
+        })}\n\n`
+      );
 
-      } catch (err) {
-        console.error("recent SSE error:", err);
+      // ❌ if market not regular, emit once and stop SSE
+      if (marketState && marketState !== "REGULAR") {
+        console.log("🛑 market not regular — sent snapshot once, stopping recent SSE");
         stopped = true;
         clearInterval(interval);
         res.end();
       }
-    }, 1000);
+    };
+
+    try {
+      await fetchAndEmit();
+    } catch (err) {
+      console.error("recent SSE error:", err);
+      stopped = true;
+      clearInterval(interval);
+      res.end();
+      return;
+    }
+
+    if (!stopped) {
+      interval = setInterval(async () => {
+        try {
+          await fetchAndEmit();
+        } catch (err) {
+          console.error("recent SSE error:", err);
+          stopped = true;
+          clearInterval(interval);
+          res.end();
+        }
+      }, 1000);
+    }
 
     req.on("close", () => {
       console.log("❌ recent client disconnected");
