@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import NavBar from "./components/Navbar.tsx";
 import LoginModal from "./components/LoginModule.tsx";
@@ -9,6 +9,27 @@ import Dashboard from "./pages/Dashboard.tsx";
 // import StockPageIndia from "./pages/StockPageIndia.tsx"
 import StockPageSSE from "./pages/StokesPageSSE.tsx";
 import FundsPage from "./pages/FundsPage.tsx";
+
+const RouteTitleManager = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.pathname.startsWith("/indiaSEE/")) {
+      document.title = "Stockify | Stock Details";
+      return;
+    }
+
+    const routeTitles: Record<string, string> = {
+      "/": "Stockify | Home",
+      "/dashboard": "Stockify | Dashboard",
+      "/user/balance": "Stockify | Funds",
+    };
+
+    document.title = routeTitles[location.pathname] ?? "Stockify";
+  }, [location.pathname]);
+
+  return null;
+};
 
 const App = () => {
   const [showLogin, setShowLogin] = useState(false);
@@ -31,6 +52,7 @@ const App = () => {
 
   return (
     <BrowserRouter>
+      <RouteTitleManager />
       <NavBar onLoginClick={() => setShowLogin(true)} />
 
       {/* Login modal */}
