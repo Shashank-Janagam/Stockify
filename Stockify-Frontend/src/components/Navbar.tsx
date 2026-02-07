@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import "../Styles/Navbar.css";
-import logo from "../assets/stock.png";
+import logo from "../assets/StockiftLogo.png";
 import { AuthContext } from "../auth/AuthProvider";
 import { useContext, useEffect, useRef, useState } from "react";
 import type { User } from "firebase/auth";
