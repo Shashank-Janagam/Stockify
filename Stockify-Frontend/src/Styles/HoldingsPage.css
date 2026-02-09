@@ -38,6 +38,12 @@
 .right-card {
   height: 520px;
 }
+.percent{
+  display: flex;
+}
+.down{
+  align-self: last baseline;
+}
 
 /* =========================
    SUMMARY CARD
@@ -46,6 +52,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 60%;
 }
 
 .summary-card > div {

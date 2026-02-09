@@ -237,7 +237,7 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
               </>
             ) : (
               <button className="login-btn" onClick={onLoginClick}>
-                Login / Sign up
+                Login / Signup
               </button>
             )}
           </div>

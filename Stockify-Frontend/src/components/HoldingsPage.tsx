@@ -78,26 +78,31 @@ const navigate = useNavigate();
           ) : (
             <>
               <div>
-                <p className="label">Current value</p>
-                <h2>₹{summary!.currentValue.toLocaleString("en-IN")}</h2>
-                <span className={summary!.totalReturns >= 0 ? "positive" : "negative"}>
-                  {summary!.totalReturns >= 0 ? "+" : ""}
-                  {summary!.totalReturnsPercent.toFixed(2)}%
-                </span>
+                <p className="label " >Current value</p>
+                <h2 className={summary!.totalReturns >= 0 ? "positive" : "negative"}>₹{summary!.currentValue.toLocaleString("en-IN")}</h2>
+                
               </div>
 
               <div>
                 <p className="label">Invested value</p>
-                <h3>₹{summary!.investedValue.toLocaleString("en-IN")}</h3>
+                <h2>₹{summary!.investedValue.toLocaleString("en-IN")}</h2>
               </div>
 
               <div>
                 <p className="label">Total returns</p>
-                <h3 className={summary!.totalReturns >= 0 ? "positive" : "negative"}>
+                <div className="percent">
+                <h2 className={summary!.totalReturns >= 0 ? "positive" : "negative"}>
                   {summary!.totalReturns >= 0 ? "+" : ""}
                   ₹{summary!.totalReturns.toLocaleString("en-IN")}
-                </h3>
+                  
+                </h2>
+                <span className={summary!.totalReturns >= 0 ? "positive down" : "negative down"}>
+                  {summary!.totalReturns >= 0 ? "+" : ""}
+                  {summary!.totalReturnsPercent.toFixed(2)}%
+                </span>
               </div>
+              </div>
+             
             </>
           )}
         </div>

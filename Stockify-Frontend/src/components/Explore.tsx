@@ -2,9 +2,12 @@ import { useContext, useEffect, useState } from "react";
 import { AuthContext } from "../auth/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import stockifylogo from "../assets/StockiftLogo.png";
+import { useExploreSSE } from "../context/ExploreSSEContext";
 
 
 function ExploreSkeleton() {
+
+  
   return (
     <div className="explore-page">
       <section className="section">
@@ -91,14 +94,16 @@ function getStockRoute(
   return `/us/${symbol1}/${slug}`;
 }
 export default function Explore() {
-  const [data, setData] = useState<any>(null);
-const [recentData, setRecentData] = useState<any[]>([]);
-const [invested, setInvested] = useState<any[]>([]);
+  const { data, recentData, invested, ready } = useExploreSSE();
+
+  // const [data, setData] = useState<any>(null);
+// const [recentData, setRecentData] = useState<any[]>([]);
+// const [invested, setInvested] = useState<any[]>([]);
 
   const navigate =useNavigate()
-  const [token, setToken] = useState<string | null>(null);
-const [exploreReady, setExploreReady] = useState(false);
-const [recentReady, setRecentReady] = useState(false);
+  // const [token, setToken] = useState<string | null>(null);
+// const [exploreReady, setExploreReady] = useState(false);
+// const [recentReady, setRecentReady] = useState(false);
 const images = import.meta.glob(
   "../assets/*.{png,jpg,jpeg,svg,webp}",
   { eager: true }
@@ -122,97 +127,96 @@ const getImageSrc = (symbol: string): string => {
 };
 
     const { user } = useContext(AuthContext);
-useEffect(() => {
-  if (!user) return;
+// useEffect(() => {
+//   if (!user) return;
 
-  let cancelled = false;
+//   let cancelled = false;
 
-  const fetchToken = async () => {
-    try {
-      const jwt = await user.getIdToken(); // no force refresh needed
-      if (!cancelled) {
-        setToken(jwt);
-        // console.log(token)
-      }
-    } catch (err) {
-      console.error("Failed to fetch token", err);
-    }
-  };
+//   const fetchToken = async () => {
+//     try {
+//       const jwt = await user.getIdToken(); // no force refresh needed
+//       if (!cancelled) {
+//         setToken(jwt);
+//         // console.log(token)
+//       }
+//     } catch (err) {
+//       console.error("Failed to fetch token", err);
+//     }
+//   };
 
-  fetchToken();
+//   fetchToken();
 
-  return () => {
-    cancelled = true;
-  };
-}, [user]);
+//   return () => {
+//     cancelled = true;
+//   };
+// }, [user]);
 
 
 
-  const HOST = import.meta.env.VITE_HOST_ADDRESS;
+//   const HOST = import.meta.env.VITE_HOST_ADDRESS;
 
-  useEffect(() => {
-    if (!token) return; // 🔑 CRITICAL GUARD
-    const source = new EventSource(
-      `${HOST}/api/explore?token=${token}`
-    );
+//   useEffect(() => {
+//     if (!token) return; // 🔑 CRITICAL GUARD
+//     const source = new EventSource(
+//       `${HOST}/api/explore?token=${token}`
+//     );
 
-    source.onmessage = (event) => {
-      const parsed = JSON.parse(event.data);
-      setData(parsed);
-      setExploreReady(true);
-    };
+//     source.onmessage = (event) => {
+//       const parsed = JSON.parse(event.data);
+//       setData(parsed);
+//       setExploreReady(true);
+//     };
 
-    source.onerror = () => {
-      console.error("SSE error or market closed");
+//     source.onerror = () => {
+//       console.error("SSE error or market closed");
 
-      source.close();
-    };
+//       source.close();
+//     };
 
-return () => {
-    source.close();
-  };}, [token]);
+// return () => {
+//     source.close();
+//   };}, [token]);
 
- useEffect(() => {
+//  useEffect(() => {
  
-    if (!token) return; // 🔑 CRITICAL GUARD
+//     if (!token) return; // 🔑 CRITICAL GUARD
 
-    const source = new EventSource(
-      `${HOST}/api/explore/recent?token=${token}`
-    );    
-
-
-          source.onmessage = (event) => {
-  const parsed = JSON.parse(event.data);
-
-  setRecentData(parsed.recentlyViewed ?? []);
-  setInvested(parsed.invested ?? []);
-
-  setRecentReady(true);
-};
+//     const source = new EventSource(
+//       `${HOST}/api/explore/recent?token=${token}`
+//     );    
 
 
+//           source.onmessage = (event) => {
+//   const parsed = JSON.parse(event.data);
 
-      source.onerror = () => {
+//   setRecentData(parsed.recentlyViewed ?? []);
+//   setInvested(parsed.invested ?? []);
 
-          console.error("SSE error or market closed");
-          source.close();
-        };
-return () => {
-    source.close();
-  };
-}, [token]);
+//   setRecentReady(true);
+// };
 
-const loading = !(exploreReady && recentReady);
 
-if (loading) return <ExploreSkeleton />;
 
-  if (loading) {
-    return <ExploreSkeleton />;
-  }
+//       source.onerror = () => {
+
+//           console.error("SSE error or market closed");
+//           source.close();
+//         };
+// return () => {
+//     source.close();
+//   };
+// }, [token]);
+
+// const loading = !(exploreReady && recentReady);
+
+// if (loading) return <ExploreSkeleton />;
+
+if (!ready) return <ExploreSkeleton />;
+
 
   const { mostTraded, movers } = data;
-  console.log("most traded",mostTraded)
-  console.log("movers",movers)
+//   console.log("most traded",mostTraded)
+//   console.log("movers",movers)
 
   return (
     <div className="explore-page">
@@ -247,7 +251,7 @@ if (loading) return <ExploreSkeleton />;
         <div>
           {/* MOST TRADED */}
           <section className="section">
-            <h2>Most traded stocks on Groww</h2>
+            <h2>Most traded stocks on Stockify</h2>
            <div className="card-grid">
   {mostTraded.map((s: any) => (
 <div
@@ -327,7 +331,7 @@ if (loading) return <ExploreSkeleton />;
        <aside className="right-panel">
   <div className="investment-box">
     <div className="investment-header">
-      <h3>Your investments</h3>
+      <h3>Your Investments</h3>
       
     </div>
 

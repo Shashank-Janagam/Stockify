@@ -1,9 +1,24 @@
 import "../Styles/HomePage.css"
 import homeimage from "../assets/homepage.png"
-interface HomePageProps {
+import {useContext} from "react"
+import { useNavigate } from "react-router-dom";
+
+import { AuthContext } from "../auth/AuthProvider";interface HomePageProps {
   onLoginClick: () => void;
 }
 const HomePage=({ onLoginClick }: HomePageProps)=>{
+  // const [token, setToken] = useState<string | null>(null);
+    const { user } = useContext(AuthContext);
+    const navigate=useNavigate()
+    
+    function getStarted(){
+      if(user){
+        navigate("/dashboard");
+      }else{
+        onLoginClick();
+      }
+    }
+  
   
  return (
  <main className="home">
@@ -12,7 +27,7 @@ const HomePage=({ onLoginClick }: HomePageProps)=>{
         <h1 className="hero-title">Trade. Learn. Repeat.</h1>
         <p className="hero-subtitle">Virtual trading with real market experience</p>
 
-        <button className="hero-btn" onClick={onLoginClick}>Get started</button>
+        <button className="hero-btn" onClick={getStarted}>Get started</button>
       </section>
 
       {/* ILLUSTRATION SECTION */}

@@ -296,3 +296,123 @@
   object-fit: cover;
   transition: opacity 0.2s ease;
 }
+
+
+
+
+
+
+
+/* ======================================
+   MOBILE NAVBAR (≤ 768px)
+====================================== */
+@media (max-width: 768px) {
+
+  /* NAVBAR HEIGHT */
+  .groww-navbar {
+    height: 3.75rem; /* 60px */
+    gap: 0;
+  }
+
+  /* INNER CONTAINER */
+  .nav-inner {
+    padding: 0 14px;
+  }
+
+  /* LEFT SECTION */
+  .nav-left {
+    width: auto;
+    gap: 10px;
+  }
+
+  /* LOGO */
+  .logo-text {
+    font-size: 1.1rem;
+  }
+
+  .logo-icon {
+    width: 28px;
+  }
+
+  /* 🔥 HIDE MAIN TABS (MOBILE UX RULE) */
+  .main-tabs {
+    display: none;
+  }
+
+  /* RIGHT SECTION */
+  .nav-right {
+    gap: 10px;
+  }
+
+  /* 🔥 COLLAPSE SEARCH */
+  .search-box {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .search-box input,
+  .shortcut {
+    display: none;
+  }
+
+  /* LOGIN BUTTON */
+  .login-btn {
+    height: 36px;
+    padding: 0 14px;
+    width: auto;
+    font-size: 13px;
+  }
+
+  /* PROFILE */
+  .profile-img,
+  .profile-fallback {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* PROFILE DROPDOWN */
+  .profile-dropdown {
+    width: calc(100vw - 20px);
+    right: -10px;
+    border-radius: 14px;
+  }
+
+  .profile-dropdown-name {
+    font-size: 18px;
+  }
+
+  .profile-dropdown-email {
+    font-size: 14px;
+  }
+
+  .profile-item {
+    font-size: 15px;
+  }
+}
+
+/* ======================================
+   SMALL MOBILE (≤ 480px)
+====================================== */
+@media (max-width: 480px) {
+
+  .groww-navbar {
+    height: 3.5rem;
+  }
+
+  .logo-text {
+    font-size: 1rem;
+  }
+
+  .login-btn {
+    font-size: 12px;
+    padding: 0 12px;
+  }
+
+  .profile-dropdown {
+    width: calc(100vw - 12px);
+    right: -6px;
+  }
+}

@@ -41,7 +41,7 @@ const handleForgotPassword = async () => {
     try{
       const exist=await checkEmailExists(email);
       console.log("email",exist)
-      setIsExist(!exist);
+      // setIsExist(exist);
       // setStep("password")
 
       setWithEmail(true); 
@@ -62,13 +62,9 @@ const handleForgotPassword = async () => {
 
   setIsloading(true);
   try {
-    if (isExist) {
       // 🔐 LOGIN FLOW
       await loginWithEmail(email, password);
-    } else {
-      // 🆕 SIGNUP FLOW
-      await signupWithEmail(email, password);
-    }
+   
     navigate("/dashboard");
     handleClose();
   } catch (error: any) {
@@ -79,7 +75,7 @@ const handleForgotPassword = async () => {
     } else if (error.code === "auth/email-already-in-use") {
       alert("Account already exists. Please login.");
     } else {
-      alert(error.message || "Authentication failed");
+      alert("Authentication failed! Create Account Using Google ");
     }
   } finally {
     setIsloading(false);
@@ -117,6 +113,7 @@ const handleForgotPassword = async () => {
   }, []);
 
   const handleClose = () => {
+    setIsloading(false); // stop any spinner on close
     setVisible(false); // trigger exit animation
     setTimeout(onClose, 250); // match CSS duration
   };
@@ -178,7 +175,7 @@ const handleForgotPassword = async () => {
           >
             {isLoading ? (
               <span className="btn-loader">
-                <span className="spinner" /> Loading...
+                <span className="spinner" />
               </span>
             ) : (
               "Continue"
@@ -215,6 +212,7 @@ const handleForgotPassword = async () => {
         onClick={() => {
           setWithEmail(false);
           setPassword("");
+          setIsloading(false);
         }}
       >
         Edit
@@ -227,16 +225,14 @@ const handleForgotPassword = async () => {
         type="password"
         className="email-input"
         placeholder={
-          isExist
-            ? "Enter your password"
-            : "Create a password"
+            "Enter your password"
         }
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
     </div>
 
-     {isExist && (
+     {withEmail && (
         <button
           type="button"
           className="forgot-password-btn"
@@ -258,10 +254,10 @@ const handleForgotPassword = async () => {
 >
   {isLoading ? (
     <span className="btn-loader">
-      <span className="spinner" /> Loading...
+      <span className="spinner" /> 
     </span>
   ) : (
-    isExist ? "Login" : "Create account"
+    "Login"
   )}
 </button>
 

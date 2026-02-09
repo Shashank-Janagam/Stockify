@@ -36,7 +36,6 @@ app.use(
 
 app.use(express.json());
 app.set("trust proxy", true);
-
 app.use("/api/indiaSEE", indiaLiveRoutes);
 app.use("/api/search", searchResults);
 app.use("/api/searchUpdates", searchUpdates);

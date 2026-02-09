@@ -1,10 +1,16 @@
-import { useState } from "react";
+import { useState,useEffect } from "react";
 import Explore from "../components/Explore";
 import "../Styles/dashboard.css";
 import HoldingsPage from "../components/HoldingsPage.tsx";
-export default function Dashboard() {
-  const [tab, setTab] = useState("Explore");
 
+export default function Dashboard() {
+const [tab, setTab] = useState<string>(() => {
+    // 🔥 restore previous tab
+    return sessionStorage.getItem("CurrentDashboard") || "Explore";
+  });  
+ useEffect(() => {
+    sessionStorage.setItem("CurrentDashboard", tab);
+  }, [tab]);
   return (
     <div className="app">
       <header className="top-nav">
