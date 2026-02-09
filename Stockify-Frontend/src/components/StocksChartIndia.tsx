@@ -308,29 +308,10 @@ export function GraphSkeleton() {
 export  function StockChartIndia({
   lineData,
   timeframe,
-  marketState,
   referencePrice,
   percent
 }: Props) {
   if (!lineData.length) return null;
-const today = new Date();
-
-const marketOpen = new Date(
-  today.getFullYear(),
-  today.getMonth(),
-  today.getDate(),
-  9, 15, 0, 0
-).getTime();
-
-const marketClose = new Date(
-  today.getFullYear(),
-  today.getMonth(),
-  today.getDate(),
-  15, 30, 0, 0
-).getTime();
-
-
-
   currentIndex = lineData.length - 1;
   const is1D = timeframe === "1D";
 
@@ -338,7 +319,6 @@ const marketClose = new Date(
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
   const pad = (maxPrice - minPrice) * 0.08 || minPrice * 0.002;
-  const isMarketOpen=marketState==="REGULAR"
   const [lineColor,setLineColor]=useState("")
   useEffect(() => {
   const pct = Number(percent) || 0;
@@ -351,16 +331,8 @@ const marketClose = new Date(
 }, [timeframe, percent]);
 
 
-console.log("market open",marketOpen)
-console.log("market close",marketClose)
-
-
 const chartData = lineData;
 currentIndex = chartData.length - 1;
-
-
-  
-console.log("market",isMarketOpen)
 
  return (
   <div className="chart-container">
@@ -391,21 +363,9 @@ console.log("market",isMarketOpen)
             mode: "index"
           },
           scales: {
-            x: is1D && isMarketOpen ? {
-            type: "linear",
-            display: false,
-            min: marketOpen,
-            max: marketClose,
-            ticks: {
-              stepSize: 60
-            }
-              }:{
+            x: {
               type: "timeseries",
               display: false,
-
-              min:  undefined,
-              max:  undefined,
-
               time: {
                 unit: is1D ? "minute" : "day",
                 tooltipFormat: is1D ? "HH:mm" : "dd MMM"
