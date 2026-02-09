@@ -1,10 +1,11 @@
 // routes/payment.routes.js
 import express from "express";
+import crypto from "crypto";
 import { razorpay } from "./razorpay.js";
 import requireAuth from "../../Middleware/requireAuth.js";
 const router = express.Router();
 // modules/payments/payment.js
-import { createOrderRecord ,incrementWalletBalance,markOrderSuccess,addUserTransaction} from "./orders.js";
+import { createOrderRecord } from "./orders.js";
 
 router.post("/create-order",requireAuth, async (req, res) => {
   const { amount } = req.body;
@@ -26,65 +27,47 @@ router.post("/create-order",requireAuth, async (req, res) => {
   res.json(order);
 });
 
-router.post("/verify", requireAuth,async (req, res) => {
+router.post("/verify", requireAuth, async (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    } = req.body;
 
-  
-  res.json({ success: true });
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, error: "Missing payment fields" });
+    }
 
-//   const session =getDb().client.startSession();
+    if (!process.env.RAZORPAY_KEY_SECRET) {
+      console.error("RAZORPAY_KEY_SECRET is not configured");
+      return res.status(500).json({ success: false, error: "Payment config error" });
+    }
 
-//   try{
-//     session.startTransaction();
-//   const {
-//     razorpay_order_id,
-//     razorpay_payment_id,
-//     razorpay_signature,
-//   } = req.body;
+    const body = `${razorpay_order_id}|${razorpay_payment_id}`;
 
-//   const body = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body)
+      .digest("hex");
 
-//   const expectedSignature = createHmac(
-//     "sha256",
-//     process.env.RAZORPAY_KEY_SECRET
-//   )
-//     .update(body)
-//     .digest("hex");
+    const expectedBuffer = Buffer.from(expectedSignature);
+    const receivedBuffer = Buffer.from(razorpay_signature);
 
-//   if (expectedSignature !== razorpay_signature) {
-//     return res.status(400).json({ success: false });
-//   }
+    if (
+      expectedBuffer.length !== receivedBuffer.length ||
+      !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
+    ) {
+      return res.status(400).json({ success: false, error: "Invalid signature" });
+    }
 
-//  const order = await markOrderSuccess({
-//   orderId: razorpay_order_id,
-//   paymentId: razorpay_payment_id,
-// });
-
-
-
-//  if (!order) {
-//   return res.status(400).json({ success: false });
-// }
-//   await incrementWalletBalance(order.userId, order.amount);
-//   await addUserTransaction({
-//     userId: order.userId,
-//     type: "CREDIT",
-//     title: "Wallet Deposit",
-//     amount: order.amount,
-//   });
-
-
-//   return res.json({ success: true });
-
-
-//   }catch(err){
-//     await session.abortTransaction();
-//     console.error("Payment rollback:", err);
-//     res.status(500).json({ success: false });
-
-//   }finally {
-//     await session.endSession();
-//   }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Payment verify error:", err);
+    return res.status(500).json({ success: false });
+  }
 });
+
 
 
 export default router;

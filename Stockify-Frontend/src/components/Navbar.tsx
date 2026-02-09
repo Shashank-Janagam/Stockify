@@ -1,4 +1,4 @@
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import "../Styles/Navbar.css";
 import logo from "../assets/stock.png";
 import { AuthContext } from "../auth/AuthProvider";
@@ -18,7 +18,6 @@ interface NavbarProps {
 
 /* ------------------ COMPONENT ------------------ */
 const NavBar = ({ onLoginClick }: NavbarProps) => {
-  const location = useLocation();
   const navigate = useNavigate();
   const { user, loading } = useContext(AuthContext);
 
@@ -28,7 +27,6 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
-  const isHome = location.pathname === "/";
   const getProfilePhoto = (user: User | null): string | null => {
   if (!user) return null;
   if (user.photoURL) return user.photoURL;
@@ -100,22 +98,15 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
           </div>
 
           <div className="main-tabs">
-            {isHome && (
-              <>
-                <NavLink to="/" className="tab">
-                  Stocks
-                </NavLink>
-                <NavLink to="/fno" className="tab">
-                  F&O
-                </NavLink>
-                <NavLink to="/mutual-funds" className="tab">
-                  Mutual Funds
-                </NavLink>
-                <NavLink to="/more" className="tab">
-                  More
-                </NavLink>
-              </>
-            )}
+            <NavLink to="/" className="tab" end>
+              Home
+            </NavLink>
+            <NavLink to="/dashboard" className="tab">
+              Dashboard
+            </NavLink>
+            <NavLink to="/user/balance" className="tab">
+              Funds
+            </NavLink>
           </div>
         </div>
 
