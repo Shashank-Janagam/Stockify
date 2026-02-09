@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "../Styles/LoginModule.css"
 import google from "../assets/google.png";
-import { loginWithEmail,loginWithGoogle,signupWithEmail ,checkEmailExists} from "../auth/login";
+import { loginWithEmail,loginWithGoogle ,checkEmailExists} from "../auth/login";
 // import { useNavigate } from "react-router-dom";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase"; // adjust path if needed
@@ -16,7 +16,6 @@ function LoginModal({ onClose }: LoginModalProps) {
   const [password,setPassword]=useState("");
 
   // const [step,setStep]=useState<"email"|"password">("email");
-  const [isExist,setIsExist]=useState(false)
   const [isLoading,setIsloading]=useState(false);
   const [withEmail,setWithEmail]=useState(false);
   const navigate=useNavigate();
@@ -195,7 +194,7 @@ const handleForgotPassword = async () => {
     <button className="close-btn" onClick={handleClose}>×</button>
 
     <div className="title">
-      {isExist ? "Login to Stockify" : "Join Stockify"}
+      { "Login to Stockify"}
     </div>
 
     {/* EMAIL (READ ONLY) */}

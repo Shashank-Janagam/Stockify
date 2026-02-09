@@ -1,5 +1,5 @@
-import { useContext, useEffect, useState } from "react";
-import { AuthContext } from "../auth/AuthProvider";
+// import { useContext } from "react";
+// import { AuthContext } from "../auth/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import stockifylogo from "../assets/StockiftLogo.png";
 import { useExploreSSE } from "../context/ExploreSSEContext";
@@ -126,7 +126,7 @@ const getImageSrc = (symbol: string): string => {
   navigate(getStockRoute(stock.symbol, stock.name));
 };
 
-    const { user } = useContext(AuthContext);
+    // const { user } = useContext(AuthContext);
 // useEffect(() => {
 //   if (!user) return;
 
