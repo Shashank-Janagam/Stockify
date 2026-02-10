@@ -29,6 +29,12 @@ import { Line } from "react-chartjs-2";
 import "chartjs-adapter-date-fns";
 import { useEffect, useState } from "react";
 
+type Trade = {
+  side: "BUY" | "SELL";
+  quantity: number;
+  buy_price_per_share: number;
+  created_at: string;
+};
 
 
 /* =========================
@@ -95,6 +101,63 @@ const refPrice =chart.options.plugins?.growwPlugin?.referencePrice;
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.setLineDash([]);
+    }
+
+    /* =====================
+       TRADE MARKERS
+    ===================== */
+    const trades = (chart.options.plugins?.growwPlugin?.trades ?? []) as Trade[];
+    if (trades.length > 0) {
+      const dataPoints = chart.data.datasets[0]?.data as Array<{ x: number; y: number }>;
+
+      if (Array.isArray(dataPoints) && dataPoints.length > 0) {
+        const markerOffsetByIndex = new Map<number, number>();
+
+        for (const trade of trades) {
+          const tradeTime = new Date(trade.created_at).getTime();
+          if (!Number.isFinite(tradeTime)) continue;
+
+          let nearestIndex = -1;
+          let nearestDelta = Number.POSITIVE_INFINITY;
+
+          for (let i = 0; i < dataPoints.length; i++) {
+            const pointTime = Number(dataPoints[i]?.x);
+            if (!Number.isFinite(pointTime)) continue;
+
+            const delta = Math.abs(pointTime - tradeTime);
+            if (delta < nearestDelta) {
+              nearestDelta = delta;
+              nearestIndex = i;
+            }
+          }
+
+          if (nearestIndex < 0) continue;
+
+          const visualPoint = meta.data[nearestIndex];
+          if (!visualPoint) continue;
+
+          const stackedOffset = markerOffsetByIndex.get(nearestIndex) ?? 0;
+          markerOffsetByIndex.set(nearestIndex, stackedOffset + 1);
+
+          const markerX = visualPoint.x;
+          const markerY = visualPoint.y - 14 - stackedOffset * 14;
+          const isBuy = trade.side === "BUY";
+
+          ctx.beginPath();
+          ctx.arc(markerX, markerY, 7, 0, Math.PI * 2);
+          ctx.fillStyle = isBuy ? "#16a34a" : "#dc2626";
+          ctx.fill();
+
+          ctx.font = "700 9px Inter, system-ui, sans-serif";
+          ctx.fillStyle = "#ffffff";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(isBuy ? "B" : "S", markerX, markerY + 0.5);
+        }
+
+        ctx.textAlign = "start";
+        ctx.textBaseline = "alphabetic";
+      }
     }
 
     /* =====================
@@ -226,7 +289,8 @@ interface Props {
   timeframe: string;
   referencePrice?: number | null;
   marketState:string;
-  percent:string
+  percent:string;
+  trades?: Trade[];
 }
 
 /* =========================
@@ -310,7 +374,8 @@ export  function StockChartIndia({
   timeframe,
   marketState,
   referencePrice,
-  percent
+  percent,
+  trades = []
 }: Props) {
   if (!lineData.length) return null;
 const today = new Date();
@@ -351,16 +416,8 @@ const marketClose = new Date(
 }, [timeframe, percent]);
 
 
-console.log("market open",marketOpen)
-console.log("market close",marketClose)
-
-
 const chartData = lineData;
 currentIndex = chartData.length - 1;
-
-
-  
-console.log("market",isMarketOpen)
 
  return (
   <div className="chart-container">
@@ -384,7 +441,7 @@ console.log("market",isMarketOpen)
           plugins: {
             legend: { display: false },
             tooltip: { enabled: false },
-            growwPlugin: { timeframe, referencePrice: referencePrice??0 }
+            growwPlugin: { timeframe, referencePrice: referencePrice??0, trades }
           } as any,
           interaction: {
             intersect: false,
