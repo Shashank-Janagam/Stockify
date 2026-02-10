@@ -57,20 +57,20 @@ router.get("/", async (req, res) => {
   "INFY.NS",
   "ITC.NS"
 ];
-const moversList = await getNSETopGainers();
-// const moversList = [
-//   "ADANIENT.NS",
-//   "TATAMOTORS.NS",
-//   "ONGC.NS",
-//   "RELIANCE.NS",
-//     "TCS.NS",
-//     "INFY.NS",
-//     "HDFCBANK.NS",
-//     "ICICIBANK.NS",
-//     "SBIN.NS",
-//     "ITC.NS",
+// const moversList = await getNSETopGainers();
+const moversList = [
+  "ADANIENT.NS",
+  "TATAMOTORS.NS",
+  "ONGC.NS",
+  "RELIANCE.NS",
+    "TCS.NS",
+    "INFY.NS",
+    "HDFCBANK.NS",
+    "ICICIBANK.NS",
+    "SBIN.NS",
+    "ITC.NS",
 
-// ];
+];
 // const moversList = await getNSETopGainers();
     const token = req.query.token;
     if (!token) return res.status(401).end();
