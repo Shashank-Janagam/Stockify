@@ -94,7 +94,7 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
     const {user} = useContext(AuthContext);
     const [token, setToken] = useState<string | null>(null);
    useEffect(() => {
-    if (!user || typeof user.getIdToken !== "function") {
+    if (!user) {
       return;
     }
   
@@ -117,7 +117,7 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
     return () => {
       isMounted = false;
     };
-  });
+  }); 
 
    const [trades, setTrades] = useState<Trade[]>([]);
       const [availableQty, setAvailableQty] = useState<number>(0);
@@ -136,7 +136,7 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
               setTrades(data.trades);
               setAvailableQty(data.totalQuantity);
             });
-        }, [symbol,token]);
+        }, [symbol,token,refresh]);
   
 
 

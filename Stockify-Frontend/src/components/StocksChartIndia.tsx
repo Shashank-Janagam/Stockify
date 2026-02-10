@@ -233,22 +233,9 @@ trades.forEach((trade: Trade) => {
   if (!Number.isFinite(tradeTime)) return;
 
   /* ── FIND NEAREST PRICE POINT ── */
-  let nearestIndex = -1;
-  let minDelta = Infinity;
+  const x = xScale.getPixelForValue(tradeTime);
+const y = yScale.getPixelForValue(trade.pricePerShare);
 
-  for (let i = 0; i < dataPoints.length; i++) {
-    const delta = Math.abs(dataPoints[i].x - tradeTime);
-    if (delta < minDelta) {
-      minDelta = delta;
-      nearestIndex = i;
-    }
-  }
-
-  if (nearestIndex === -1) return;
-
-  const pricePoint = dataPoints[nearestIndex];
-  const x = xScale.getPixelForValue(pricePoint.x);
-  const y = yScale.getPixelForValue(pricePoint.y);
 
   if (!Number.isFinite(x) || !Number.isFinite(y)) return;
 
@@ -422,18 +409,28 @@ export  function StockChartIndia({
 }: Props) {
   if (!lineData.length) return null;
 // const today = new Date();
-function getNseMarketWindowUTC(date = new Date()) {
-  const y = date.getUTCFullYear();
-  const m = date.getUTCMonth();
-  const d = date.getUTCDate();
+function getNseMarketWindowUTC(anchorTs: number) {
+  const d = new Date(anchorTs);
 
   return {
-    marketOpen: Date.UTC(y, m, d, 3, 45, 0), // 09:15 IST
-    marketClose: Date.UTC(y, m, d, 10, 0, 0) // 15:30 IST
+    marketOpen: Date.UTC(
+      d.getUTCFullYear(),
+      d.getUTCMonth(),
+      d.getUTCDate(),
+      3, 45, 0   // 09:15 IST
+    ),
+    marketClose: Date.UTC(
+      d.getUTCFullYear(),
+      d.getUTCMonth(),
+      d.getUTCDate(),
+      10, 0, 0   // 15:30 IST
+    )
   };
 }
 
-const { marketOpen, marketClose } = getNseMarketWindowUTC();
+const lastCandleTs = lineData[lineData.length - 1].x;
+
+const { marketOpen, marketClose } = getNseMarketWindowUTC(lastCandleTs);
 
 
 const tradePoints = trades.map(t => ({
