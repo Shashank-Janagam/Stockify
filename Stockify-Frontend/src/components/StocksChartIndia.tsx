@@ -15,7 +15,9 @@ import {
   LineElement,
   PointElement,
   Tooltip,
-  ScatterController   // 👈 ADD THIS
+  ScatterController,
+    LineController,      // ✅ ADD THIS
+   // 👈 ADD THIS
 
 } from "chart.js";
 ChartJS.register(
@@ -23,6 +25,8 @@ ChartJS.register(
   TimeScale,
   TimeSeriesScale,
   LineElement,
+    LineController,      // ✅ ADD THIS
+
   PointElement,
   Tooltip,
     ScatterController, // 👈 ADD THIS
@@ -308,6 +312,8 @@ ChartJS.register(
   LineElement,
   PointElement,
   Tooltip,
+    LineController,      // ✅ ADD THIS
+
   growwPlugin,
     ScatterController, // 👈 ADD THIS
 
