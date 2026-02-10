@@ -26,6 +26,7 @@ async function getCurrentPrice(symbol) {
 router.get("/holding/:symbol", requireAuth, async (req, res) => {
   try {
     const firebaseUid = req.user.uid;
+
     const symbol = req.params.symbol.endsWith(".NS")
       ? req.params.symbol
       : `${req.params.symbol}.NS`;
@@ -53,15 +54,18 @@ router.get("/holding/:symbol", requireAuth, async (req, res) => {
     const totalQuantity = Number(qtyRows[0].total_quantity);
 
     /* =========================
-       2️⃣ RAW EXECUTED TRADES
+       2️⃣ ALL BUY & SELL TRADES
     ========================= */
     const { rows: trades } = await db.query(
       `
       SELECT
+        id,
         side,
         quantity,
-        buy_price_per_share,
-        created_at
+        buy_price_per_share AS price_per_share,
+        total_price,
+        created_at,
+        created_at AT TIME ZONE 'Asia/Kolkata' AS created_at_ist
       FROM user_stocks
       WHERE firebase_uid = $1
         AND symbol = $2
@@ -74,7 +78,15 @@ router.get("/holding/:symbol", requireAuth, async (req, res) => {
     res.json({
       symbol,
       totalQuantity,
-      trades
+      trades: trades.map(t => ({
+        id: t.id,
+        side: t.side,
+        quantity: Number(t.quantity),
+        pricePerShare: Number(t.price_per_share),
+        totalPrice: Number(t.total_price),
+        createdAt: t.created_at,        // UTC
+        createdAtIST: t.created_at_ist  // IST (for UI)
+      }))
     });
 
   } catch (err) {
@@ -82,7 +94,6 @@ router.get("/holding/:symbol", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Failed to fetch holding" });
   }
 });
-
 
 router.post("/sell", requireAuth, async (req, res) => {
   const client = await db.connect();
@@ -100,15 +111,16 @@ router.post("/sell", requireAuth, async (req, res) => {
     /* =========================
        1️⃣ CHECK AVAILABLE QTY
     ========================= */
-    const { rows } = await client.query(
+    const qtyRes = await client.query(
       `
-      SELECT
-        COALESCE(SUM(
+      SELECT COALESCE(
+        SUM(
           CASE
             WHEN side = 'BUY' THEN quantity
             WHEN side = 'SELL' THEN -quantity
           END
-        ), 0) AS total_quantity
+        ), 0
+      ) AS available_qty
       FROM user_stocks
       WHERE firebase_uid = $1
         AND symbol = $2
@@ -117,7 +129,7 @@ router.post("/sell", requireAuth, async (req, res) => {
       [firebaseUid, symbol]
     );
 
-    const availableQty = Number(rows[0].total_quantity);
+    const availableQty = Number(qtyRes.rows[0].available_qty);
 
     if (quantity > availableQty) {
       await client.query("ROLLBACK");
@@ -129,83 +141,119 @@ router.post("/sell", requireAuth, async (req, res) => {
     /* =========================
        2️⃣ LIVE PRICE
     ========================= */
-    const {pricePerShare: sellPricePerShare,name} = await getCurrentPrice(symbol);
+    const {
+      symbol: finalSymbol,
+      pricePerShare: sellPricePerShare,
+      name,
+      datetime
+    } = await getCurrentPrice(symbol);
 
     if (!sellPricePerShare) {
       await client.query("ROLLBACK");
       return res.status(400).json({ error: "Price unavailable" });
     }
 
-    const totalSellValue = sellPricePerShare * quantity;
+    const totalSellValue = Number(sellPricePerShare) * quantity;
 
     /* =========================
-       3️⃣ INSERT SELL TRADE
+       3️⃣ LOCK WALLET
     ========================= */
-    await client.query(
+    const walletRes = await client.query(
       `
-      INSERT INTO user_stocks
-      (
-        id,
-        firebase_uid,
-        symbol,
-        side,
-        buy_price_per_share,
-        quantity,
-        total_price,
-        status,
-        source
-      )
-      VALUES ($1,$2,$3,'SELL',$4,$5,$6,'EXECUTED','MANUAL')
+      SELECT balance
+      FROM wallets
+      WHERE firebase_uid = $1
+      FOR UPDATE
       `,
-      [
-        uuid(),
-        firebaseUid,
-        symbol,
-        sellPricePerShare,
-        quantity,
-        totalSellValue
-      ]
+      [firebaseUid]
     );
 
+    const balance = Number(walletRes.rows[0]?.balance ?? 0);
+    const newBalance = balance + totalSellValue;
+
     /* =========================
-       4️⃣ CREDIT WALLET
+       4️⃣ INSERT SELL TRADE
+    ========================= */
+    await client.query(
+  `
+  INSERT INTO user_stocks
+  (
+    id,
+    firebase_uid,
+    symbol,
+    side,
+    buy_price_per_share,
+    quantity,
+    total_price,
+    status,
+    source
+  )
+  VALUES ($1,$2,$3,'SELL',$4,$5,$6,'EXECUTED','MANUAL')
+  `,
+  [
+    uuid(),
+    firebaseUid,
+    symbol,
+    sellPricePerShare,
+    quantity,
+    totalSellValue
+  ]
+);
+
+
+    /* =========================
+       5️⃣ UPDATE WALLET
     ========================= */
     await client.query(
       `
       UPDATE wallets
-      SET balance = balance + $1,
+      SET balance = $1,
           updated_at = NOW()
       WHERE firebase_uid = $2
       `,
-      [totalSellValue, firebaseUid]
+      [newBalance, firebaseUid]
     );
 
     /* =========================
-       5️⃣ WALLET TRANSACTION
+       6️⃣ WALLET TRANSACTION
     ========================= */
     await client.query(
       `
       INSERT INTO wallet_transactions
-      (id, firebase_uid, type, title, amount)
-      VALUES ($1,$2,'CREDIT',$3,$4)
+      (
+        id,
+        firebase_uid,
+        type,
+        title,
+        amount,
+        balance_after
+      )
+      VALUES ($1,$2,'CREDIT',$3,$4,$5)
       `,
-      [uuid(), firebaseUid,`Sold ${name} ${quantity} shares` ,totalSellValue]
+      [
+        uuid(),
+        firebaseUid,
+        `Sold ${name} ${quantity} shares`,
+        totalSellValue,
+        newBalance
+      ]
     );
 
     await client.query("COMMIT");
 
     /* =========================
-       6️⃣ REDIS INVALIDATION
+       7️⃣ REDIS INVALIDATION
     ========================= */
     await redis.del(`wallet:balance:${firebaseUid}`);
 
     res.json({
       status: "EXECUTED",
       side: "SELL",
-      symbol,
+      symbol: finalSymbol,
       quantity,
       sellPricePerShare: Number(sellPricePerShare),
-      totalValue: Number(totalSellValue.toFixed(2))
+      totalValue: Number(totalSellValue.toFixed(2)),
+      walletBalance: newBalance
     });
 
   } catch (err) {
@@ -216,6 +264,5 @@ router.post("/sell", requireAuth, async (req, res) => {
     client.release();
   }
 });
-
 
 export default router;

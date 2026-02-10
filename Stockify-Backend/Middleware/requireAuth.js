@@ -13,7 +13,7 @@ export default async function requireAuth(req, res, next) {
       return res.status(401).json({ error: "Missing auth token" });
     }
 
-    console.log("verified user")
+    // console.log("verified user")
 
     const token = authHeader.split("Bearer ")[1].trim();
 
@@ -25,7 +25,7 @@ export default async function requireAuth(req, res, next) {
       email: decoded.email
     };
 
-    console.log("authorised", decoded.name);
+    // console.log("authorised", decoded.name);
 
     next();
   } catch (err) {

@@ -9,7 +9,8 @@ import OrderPanel from "../components/OrderPanel";
 // import StockCandleChartIndia from "../components/StockCandleChartIndia";
 import "../Styles/stock.css";
 import StockPerformance from "../components/StockPerformanceFundamentals"
-// import type { Stock } from "../data/stocks";
+import {useContext} from "react"
+  import { AuthContext } from "../auth/AuthProvider";// import type { Stock } from "../data/stocks";
 /* =========================
    TYPES
 ========================= */
@@ -17,7 +18,12 @@ type Candle = {
   x: number;
   c: number;
 };
-
+type Trade = {
+  side: "BUY" | "SELL";
+  quantity: number;
+  pricePerShare: number;
+  createdAtIST: string;
+};
 type YahooQuote = {
   regularMarketPrice: number;
   regularMarketPreviousClose: number;
@@ -68,7 +74,10 @@ export default function StockPageSSE({onLoginClick}:{onLoginClick:()=>void}) {
 const [marketState, setMarketState] = useState<string | null>(null);
 
 const HOST=import.meta.env.VITE_HOST_ADDRESS
-
+  const [refresh,setRefresh]=useState(0)
+  function rerefresh(){
+    setRefresh(refresh+1);
+  }
   const [price, setPrice] = useState<number | null>(null);
   const [baseline, setBaseline] = useState<number | null>(null);
   const [change, setChange] = useState<number>(0);
@@ -82,32 +91,53 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
     return null; // or <Navigate /> or fallback UI
   }
   
-    
-  //  useEffect(() => {
-  //   if (!user || typeof user.getIdToken !== "function") {
-  //     return;
-  //   }
+    const {user} = useContext(AuthContext);
+    const [token, setToken] = useState<string | null>(null);
+   useEffect(() => {
+    if (!user || typeof user.getIdToken !== "function") {
+      return;
+    }
   
-  //   let isMounted = true;
-  //   console.log("fetching token for user:",user)
-  //   const fetchToken = async () => {
-  //     try {
-  //       const jwt = await user.getIdToken(true); // force refresh
-  //       if (isMounted) {
-  //         console.log("fetched token:",jwt)
-  //         setToken(jwt);
-  //       }
-  //     } catch (err) {
-  //       console.log("Failed to fetch token",err);
-  //     }
-  //   };
+    let isMounted = true;
+    console.log("fetching token for user:",user)
+    const fetchToken = async () => {
+      try {
+        const jwt = await user.getIdToken(true); // force refresh
+        if (isMounted) {
+          console.log("fetched token:",jwt)
+          setToken(jwt);
+        }
+      } catch (err) {
+        console.log("Failed to fetch token",err);
+      }
+    };
   
-  //   fetchToken();
+    fetchToken();
   
-  //   return () => {
-  //     isMounted = false;
-  //   };
-  // });
+    return () => {
+      isMounted = false;
+    };
+  });
+
+   const [trades, setTrades] = useState<Trade[]>([]);
+      const [availableQty, setAvailableQty] = useState<number>(0);
+
+        useEffect(() => {
+          if(!token) return;
+          fetch(`${HOST}/api/portfolio/holding/${symbol}`,{
+            method:"GET", 
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`
+            }
+          })
+            .then(res => res.json())
+            .then(data => {
+              setTrades(data.trades);
+              setAvailableQty(data.totalQuantity);
+            });
+        }, [symbol,token]);
+  
 
 
       
@@ -255,6 +285,8 @@ console.log("quote:",quote)
           timeframe={timeframe}
           referencePrice={baseline}
           marketState={marketState??""}
+          trades={trades}
+
           percent={percent.toString()}/>}
 
         <TimeframeBar
@@ -271,6 +303,12 @@ console.log("quote:",quote)
             changePercent={percent}
             fullExchangeName={exchangeName??"NSE"}
             onLoginClick={onLoginClick}
+            trades={trades}
+            availableQty={availableQty}
+            refresh={refresh}
+            rerefresh={rerefresh}
+            
+
             
           />
       </div>

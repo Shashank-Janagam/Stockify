@@ -57,22 +57,21 @@ router.get("/", async (req, res) => {
   "INFY.NS",
   "ITC.NS"
 ];
-// const moversList = await getNSETopGainers();
-const moversList = [
-  "ADANIENT.NS",
-  "TATAMOTORS.NS",
-  "ONGC.NS",
-  "RELIANCE.NS",
-    "TCS.NS",
-    "INFY.NS",
-    "HDFCBANK.NS",
-    "ICICIBANK.NS",
-    "SBIN.NS",
-    "ITC.NS",
+const moversList = await getNSETopGainers();
+// const moversList = [
+//   "ADANIENT.NS",
+//   "TATAMOTORS.NS",
+//   "ONGC.NS",
+//   "RELIANCE.NS",
+//     "TCS.NS",
+//     "INFY.NS",
+//     "HDFCBANK.NS",
+//     "ICICIBANK.NS",
+//     "SBIN.NS",
+//     "ITC.NS",
 
-];
+// ];
 // const moversList = await getNSETopGainers();
-console.log("most traded-------------------------:", moversList);
     const token = req.query.token;
     if (!token) return res.status(401).end();
     const decodedToken = await admin.auth().verifyIdToken(token);
@@ -216,7 +215,6 @@ router.get("/recent", async (req, res) => {
     ========================= */
     const fetchAndEmit = async () => {
       if (stopped) return;
-      console.log("⏱️ Fetching recent quotes for:");
 
       const quotes = await MultiStockYahoo(allSymbols);
       if (!quotes || quotes.length === 0) return;

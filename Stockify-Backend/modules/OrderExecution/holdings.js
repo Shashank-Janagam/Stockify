@@ -5,6 +5,7 @@ import YahooFinance from "yahoo-finance2";
 
 const router = express.Router();
 const yahoo = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
+
 router.get("/stocks", requireAuth, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -51,14 +52,15 @@ router.get("/stocks", requireAuth, async (req, res) => {
     const symbols = netRows.map(r => r.symbol);
 
     /* =========================
-       2️⃣ ALL BUY LOTS (ONCE)
+       2️⃣ ALL BUY LOTS (FIFO)
     ========================= */
     const { rows: buyRows } = await db.query(
       `
       SELECT
         symbol,
         buy_price_per_share,
-        quantity
+        quantity,
+        created_at_ist
       FROM user_stocks
       WHERE firebase_uid = $1
         AND side = 'BUY'
@@ -106,6 +108,10 @@ router.get("/stocks", requireAuth, async (req, res) => {
 
       const buys = buysBySymbol[symbol] || [];
 
+      // ✅ FIRST BUY DATE (IST)
+      const firstBuy = buys[0];
+      const datetime = firstBuy ? firstBuy.created_at_ist : null;
+
       let remainingQty = totalQuantity;
       let invested = 0;
       let pnl = 0;
@@ -127,11 +133,11 @@ router.get("/stocks", requireAuth, async (req, res) => {
       currentValue += current;
 
       holdings.push({
-        symbol: symbol,
+        symbol,
         name,
+        datetime, // 🔥 FIXED
         quantity: totalQuantity,
         currentPrice,
-
         dayChangePercent: Number(dayChangePercent.toFixed(2)),
         invested: Number(invested.toFixed(2)),
         current: Number(current.toFixed(2)),
@@ -163,6 +169,5 @@ router.get("/stocks", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Failed to load holdings" });
   }
 });
-
 
 export default router;

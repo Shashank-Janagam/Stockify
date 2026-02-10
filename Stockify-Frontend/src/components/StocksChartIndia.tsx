@@ -14,7 +14,9 @@ import {
   TimeSeriesScale,
   LineElement,
   PointElement,
-  Tooltip
+  Tooltip,
+  ScatterController   // 👈 ADD THIS
+
 } from "chart.js";
 ChartJS.register(
   LinearScale,
@@ -22,13 +24,21 @@ ChartJS.register(
   TimeSeriesScale,
   LineElement,
   PointElement,
-  Tooltip
+  Tooltip,
+    ScatterController, // 👈 ADD THIS
+
 );
 
-import { Line } from "react-chartjs-2";
+import { Chart } from "react-chartjs-2";
 import "chartjs-adapter-date-fns";
 import { useEffect, useState } from "react";
 
+type Trade = {
+  side: "BUY" | "SELL";
+  quantity: number;
+  pricePerShare: number;
+  createdAtIST: string;
+};
 
 
 /* =========================
@@ -195,6 +205,94 @@ if (timeframe === "1D") {
       ctx.fillStyle = "#6b7280";
       ctx.fillText(dateText, startX + pw + 6, yText);
     }
+    /* =====================
+   TRADE VERTICAL LINES
+===================== */
+/* =====================
+   TRADE MARKERS ON PRICE
+===================== */
+const trades =
+  chart.options.plugins?.growwPlugin?.trades ?? [];
+
+const xScale = chart.scales.x;
+const yScale = chart.scales.y;
+
+const dataPoints = chart.data.datasets[0]?.data as {
+  x: number;
+  y: number;
+}[];
+
+if (!Array.isArray(dataPoints) || !dataPoints.length) return;
+
+trades.forEach((trade: Trade) => {
+  const tradeTime = new Date(trade.createdAtIST).getTime();
+  if (!Number.isFinite(tradeTime)) return;
+
+  /* ── FIND NEAREST PRICE POINT ── */
+  let nearestIndex = -1;
+  let minDelta = Infinity;
+
+  for (let i = 0; i < dataPoints.length; i++) {
+    const delta = Math.abs(dataPoints[i].x - tradeTime);
+    if (delta < minDelta) {
+      minDelta = delta;
+      nearestIndex = i;
+    }
+  }
+
+  if (nearestIndex === -1) return;
+
+  const pricePoint = dataPoints[nearestIndex];
+  const x = xScale.getPixelForValue(pricePoint.x);
+  const y = yScale.getPixelForValue(pricePoint.y);
+
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+  const isBuy = trade.side === "BUY";
+  const color = isBuy ? "#16a34a" : "#dc2626";
+
+  /* ── VERTICAL FADE LINE ── */
+  const gradient = ctx.createLinearGradient(0, top, 0, bottom);
+  gradient.addColorStop(0, `${color}00`);
+  gradient.addColorStop(0.4, `${color}55`);
+  gradient.addColorStop(1, `${color}00`);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(x, top);
+  ctx.lineTo(x, bottom);
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 1;
+ctx.setLineDash([]);          // 🔥 solid line
+ctx.lineWidth = 1.5;          // modern thickness
+  ctx.stroke();
+  ctx.restore();
+
+  /* ── PRICE-LEVEL MARKER ── */
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, 6, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+  ctx.fill();
+
+  /* ── LETTER INSIDE MARKER ── */
+ const qtyText = String(trade.quantity);
+
+ctx.font =
+  trade.quantity >= 100
+    ? "700 8px Inter, system-ui"
+    : "700 9px Inter, system-ui";
+
+ctx.fillStyle = "#ffffff";
+ctx.textAlign = "center";
+ctx.textBaseline = "middle";
+ctx.fillText(qtyText, x, y + 0.5);
+
+  ctx.restore();
+});
+
 
     ctx.restore();
   }
@@ -210,7 +308,9 @@ ChartJS.register(
   LineElement,
   PointElement,
   Tooltip,
-  growwPlugin
+  growwPlugin,
+    ScatterController, // 👈 ADD THIS
+
 );
 
 /* =========================
@@ -227,6 +327,7 @@ interface Props {
   referencePrice?: number | null;
   marketState:string;
   percent:string
+  trades:Trade[]
 }
 
 /* =========================
@@ -310,11 +411,11 @@ export  function StockChartIndia({
   timeframe,
   marketState,
   referencePrice,
-  percent
+  percent,
+  trades
 }: Props) {
   if (!lineData.length) return null;
 const today = new Date();
-
 const marketOpen = new Date(
   today.getFullYear(),
   today.getMonth(),
@@ -329,12 +430,26 @@ const marketClose = new Date(
   15, 30, 0, 0
 ).getTime();
 
+const tradePoints = trades.map(t => {
+  const ts = new Date(t.createdAtIST).getTime();   // ✅ FIXED
+  return {
+    x: ts,
+    y: t.pricePerShare,                        // ✅ FIXED
+    side: t.side
+  };
+});
+
+
+
 
 
   currentIndex = lineData.length - 1;
   const is1D = timeframe === "1D";
 
-  const prices = lineData.map(d => d.y);
+const prices = [
+  ...lineData.map(d => d.y),
+  ...tradePoints.map(t => t.y)
+];
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
   const pad = (maxPrice - minPrice) * 0.08 || minPrice * 0.002;
@@ -357,7 +472,7 @@ console.log("market close",marketClose)
 
 const chartData = lineData;
 currentIndex = chartData.length - 1;
-
+console.log("trading points are-----",tradePoints)
 
   
 console.log("market",isMarketOpen)
@@ -365,18 +480,22 @@ console.log("market",isMarketOpen)
  return (
   <div className="chart-container">
     {chartData.length ? (
-      <Line
+      <Chart
+        key={`${timeframe}-${marketState}`}
+
+        type="line"
         data={{
     datasets: [
-      {
-        data: chartData,
-        borderColor: lineColor,
-        borderWidth: 3,
-        pointRadius: 0,
-        tension: 0.05,
-        parsing: false   // important
-      }
-    ]
+  {
+    data: chartData,
+    borderColor: lineColor,
+    borderWidth: 3,
+    pointRadius: 0,
+    tension: 0.05,
+    parsing: false
+  }
+]
+
   }}
         options={{
           animation:false,
@@ -384,7 +503,7 @@ console.log("market",isMarketOpen)
           plugins: {
             legend: { display: false },
             tooltip: { enabled: false },
-            growwPlugin: { timeframe, referencePrice: referencePrice??0 }
+            growwPlugin: { timeframe, referencePrice: referencePrice??0,trades }
           } as any,
           interaction: {
             intersect: false,

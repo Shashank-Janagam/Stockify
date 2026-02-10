@@ -11,6 +11,10 @@
     changePercent: number;
     fullExchangeName: "NSE" | "BSE";
     onLoginClick:()=>void;
+    rerefresh:()=>void;
+    trades: Trade[];
+  availableQty:number;
+  refresh:number;
   
 
     onBuySellChange?: (type: "BUY" | "SELL") => void;
@@ -29,12 +33,14 @@
 type Trade = {
   side: "BUY" | "SELL";
   quantity: number;
-  buy_price_per_share: number;
-  created_at: string;
+  pricePerShare: number;
+  createdAtIST: string;
 };
 
 
+
   export default function OrderPanel({
+    trades,
     symbol,
     price,
     companyName,
@@ -44,7 +50,10 @@ type Trade = {
     onBuySellChange,
     onModeChange,
     onQtyChange,
-    onSubmit
+    onSubmit,
+    availableQty,
+    refresh,
+    rerefresh
   }: OrderPanelProps) {
     const [tab, setTab] = useState<"BUY" | "SELL">("BUY");
     const [mode, setMode] = useState<"Delivery" | "Intraday">("Delivery");
@@ -54,12 +63,10 @@ type Trade = {
 
   const [showAddMoney, setShowAddMoney] = useState(false);
   const [loading,setLoading]=useState(false)
-      const [refresh,setRefresh]=useState(0)
       const {user} = useContext(AuthContext);
       const [token, setToken] = useState<string | null>(null);
       const [balance, setBalance] = useState<Balance | null>(null);
       const [warning,setWarning]=useState<string>("Market order might be subject to price fluctuation")
-      const [availableQty, setAvailableQty] = useState<number>(0);
       const [sellValue, setSellValue] = useState<number>(0);
       const [StockChange,setStockChange]=useState<number>(0)
       const [StockChangePercent,setStockChangePercent]=useState<number>(0)
@@ -104,8 +111,8 @@ type Trade = {
       console.error("Failed to place order", err);
     } finally {
       setLoading(false);
-      setRefresh(prev => prev + 1);
       setQty("")
+      rerefresh();
 
     }
   }
@@ -148,8 +155,8 @@ type Trade = {
       console.error("Failed to place order", err);
     } finally {
       setLoading(false);
-      setRefresh(prev => prev + 1);
-      setQty("")
+      setQty("");
+      rerefresh();
 
     }
   }
@@ -177,27 +184,13 @@ type Trade = {
       }, [user]);
      
 
-    const [trades, setTrades] = useState<Trade[]>([]);
-
-
-      useEffect(() => {
-        if(!token) return;
-        fetch(`${HOST}/api/portfolio/holding/${symbol}`,{
-          method:"GET", 
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          }
-        })
-          .then(res => res.json())
-          .then(data => {
-            setTrades(data.trades);
-            setAvailableQty(data.totalQuantity);
-          });
-      }, [symbol,token,refresh]);
+   
 
       useEffect(() => {
-  if (!trades || availableQty <= 0) return;
+  
+  if (!trades || availableQty<=0 ) return;
+
+
 
   let remainingQty = availableQty;
   let invested = 0;
@@ -206,16 +199,16 @@ type Trade = {
   const buys = trades
     .filter(t => t.side === "BUY")
     .sort((a, b) =>
-      new Date(a.created_at).getTime() -
-      new Date(b.created_at).getTime()
+      new Date(a.createdAtIST).getTime() -
+      new Date(b.createdAtIST).getTime()
     );
 
   for (const lot of buys) {
     if (remainingQty <= 0) break;
 
     const qty = Math.min(lot.quantity, remainingQty);
-    invested += qty * lot.buy_price_per_share;
-    pnl += qty * (price - lot.buy_price_per_share);
+    invested += qty * lot.pricePerShare;
+    pnl += qty * (price - lot.pricePerShare);
     remainingQty -= qty;
   }
 
@@ -325,7 +318,7 @@ type Trade = {
     initialAmount={approxReq - (balance?.cash ?? 0)}
     onPaymentSuccess={() => {
       setShowAddMoney(false);
-      setRefresh(prev => prev + 1);
+      rerefresh();
     }}
   />
       );

@@ -9,5 +9,6 @@ export async function getYahooIndiaQuote(symbol) {
     : `${symbol}.NS`;
 
   const quote = await yahoo.quote(finalSymbol);
+  // console.log(quote)
   return quote; // 🔒 PASS THROUGH ENTIRE OBJECT
 }

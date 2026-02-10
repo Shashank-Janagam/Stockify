@@ -12,6 +12,7 @@ type Holding = {
   current: number;
   pnl: number;
   pnlPercent: number;
+  datetime:string
 };
 
 type Summary = {
@@ -58,10 +59,10 @@ const navigate = useNavigate();
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-
       setHoldings(data.holdings);
       setSummary(data.summary);
       setLoading(false);
+      
     };
 
     fetchHoldings();

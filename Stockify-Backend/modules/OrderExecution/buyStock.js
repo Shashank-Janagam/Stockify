@@ -10,7 +10,6 @@ const router = express.Router();
 const yahoo = new YahooFinance({
   suppressNotices: ["yahooSurvey"]
 });
-
 async function getCurrentPrice(symbol) {
   const finalSymbol = symbol.endsWith(".NS")
     ? symbol
@@ -18,12 +17,28 @@ async function getCurrentPrice(symbol) {
 
   const quote = await yahoo.quote(finalSymbol);
 
+  let createdAt;
+
+  if (
+    typeof quote.regularMarketTime === "number" &&
+    quote.regularMarketTime > 0 &&
+    quote.regularMarketTime < 4102444800 // year 2100 safeguard
+  ) {
+    // ✅ Yahoo gives SECONDS → convert once
+    createdAt = new Date(quote.regularMarketTime * 1000).toISOString();
+  } else {
+    // ✅ Absolute fallback (never breaks DB)
+    createdAt = new Date().toISOString();
+  }
+
   return {
     symbol: finalSymbol,
     pricePerShare: quote.regularMarketPrice,
-    name: quote.shortName || quote.longName || finalSymbol
+    name: quote.shortName || quote.longName || finalSymbol,
+    createdAt
   };
 }
+
 
 router.post("/buy", requireAuth, async (req, res) => {
   const client = await db.connect();
@@ -39,22 +54,23 @@ router.post("/buy", requireAuth, async (req, res) => {
     /* =========================
        1️⃣ LIVE PRICE
     ========================= */
-    const { symbol: finalSymbol, pricePerShare, name } =
-      await getCurrentPrice(symbol);
+    const {
+      symbol: finalSymbol,
+      pricePerShare,
+      name,
+      createdAt
+    } = await getCurrentPrice(symbol);
 
     if (!pricePerShare) {
       return res.status(400).json({ error: "Price unavailable" });
     }
 
-    const totalPrice = Number(pricePerShare) * quantity;
+    const totalPrice = pricePerShare * quantity;
 
-    /* =========================
-       2️⃣ START TRANSACTION
-    ========================= */
     await client.query("BEGIN");
 
     /* =========================
-       3️⃣ LOCK + CHECK WALLET
+       2️⃣ LOCK WALLET
     ========================= */
     const walletRes = await client.query(
       `
@@ -70,15 +86,13 @@ router.post("/buy", requireAuth, async (req, res) => {
 
     if (balance < totalPrice) {
       await client.query("ROLLBACK");
-      return res.status(400).json({
-        error: "Insufficient wallet balance"
-      });
+      return res.status(400).json({ error: "Insufficient wallet balance" });
     }
 
     const newBalance = balance - totalPrice;
 
     /* =========================
-       4️⃣ UPDATE WALLET
+       3️⃣ UPDATE WALLET
     ========================= */
     await client.query(
       `
@@ -91,7 +105,7 @@ router.post("/buy", requireAuth, async (req, res) => {
     );
 
     /* =========================
-       5️⃣ WALLET TRANSACTION (DEBIT)
+       4️⃣ WALLET TRANSACTION
     ========================= */
     await client.query(
       `
@@ -116,7 +130,7 @@ router.post("/buy", requireAuth, async (req, res) => {
     );
 
     /* =========================
-       6️⃣ ENSURE STOCK EXISTS
+       5️⃣ ENSURE STOCK
     ========================= */
     await client.query(
       `
@@ -128,7 +142,7 @@ router.post("/buy", requireAuth, async (req, res) => {
     );
 
     /* =========================
-       7️⃣ INSERT BUY TRADE
+       6️⃣ INSERT BUY TRADE ✅
     ========================= */
     await client.query(
       `
@@ -142,9 +156,10 @@ router.post("/buy", requireAuth, async (req, res) => {
         quantity,
         total_price,
         status,
-        source
+        source,
+        created_at
       )
-      VALUES ($1,$2,$3,'BUY',$4,$5,$6,'EXECUTED','MANUAL')
+      VALUES ($1,$2,$3,'BUY',$4,$5,$6,'EXECUTED','MANUAL',$7)
       `,
       [
         uuid(),
@@ -152,18 +167,13 @@ router.post("/buy", requireAuth, async (req, res) => {
         finalSymbol,
         pricePerShare,
         quantity,
-        totalPrice
+        totalPrice,
+        createdAt // ✅ ISO UTC
       ]
     );
 
-    /* =========================
-       8️⃣ COMMIT
-    ========================= */
     await client.query("COMMIT");
 
-    /* =========================
-       9️⃣ REDIS INVALIDATION
-    ========================= */
     await redis.del(`wallet:balance:${firebaseUid}`);
 
     res.json({
@@ -171,8 +181,8 @@ router.post("/buy", requireAuth, async (req, res) => {
       side: "BUY",
       symbol: finalSymbol,
       quantity,
-      buyPricePerShare: Number(pricePerShare),
-      totalPrice: Number(totalPrice),
+      buyPricePerShare: pricePerShare,
+      totalPrice,
       walletBalance: newBalance
     });
 
