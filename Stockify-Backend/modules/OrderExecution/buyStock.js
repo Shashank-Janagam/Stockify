@@ -6,6 +6,26 @@ import YahooFinance from "yahoo-finance2";
 import redis from "../../cache/redisClient.js";
 
 const router = express.Router();
+function normalizeYahooTime(t) {
+  // ISO string (e.g. "2024-06-10T09:15:00.000Z")
+  if (typeof t === "string") {
+    const d = new Date(t);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+
+  // seconds since epoch
+  if (typeof t === "number" && t > 0 && t < 1e12) {
+    return new Date(t * 1000).toISOString();
+  }
+
+  // milliseconds since epoch
+  if (typeof t === "number" && t >= 1e12) {
+    return new Date(t).toISOString();
+  }
+
+  // 🚨 FINAL GUARANTEE (never return null)
+  return new Date().toISOString();
+}
 
 const yahoo = new YahooFinance({
   suppressNotices: ["yahooSurvey"]
@@ -17,19 +37,9 @@ async function getCurrentPrice(symbol) {
 
   const quote = await yahoo.quote(finalSymbol);
 
-  let createdAt;
+const createdAt = normalizeYahooTime(quote.regularMarketTime);
 
-  if (
-    typeof quote.regularMarketTime === "number" &&
-    quote.regularMarketTime > 0 &&
-    quote.regularMarketTime < 4102444800 // year 2100 safeguard
-  ) {
-    // ✅ Yahoo gives SECONDS → convert once
-    createdAt = new Date(quote.regularMarketTime * 1000).toISOString();
-  } else {
-    // ✅ Absolute fallback (never breaks DB)
-    createdAt = new Date().toISOString();
-  }
+  
 
   return {
     symbol: finalSymbol,

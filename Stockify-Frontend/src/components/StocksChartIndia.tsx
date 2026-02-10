@@ -421,29 +421,27 @@ export  function StockChartIndia({
   trades
 }: Props) {
   if (!lineData.length) return null;
-const today = new Date();
-const marketOpen = new Date(
-  today.getFullYear(),
-  today.getMonth(),
-  today.getDate(),
-  9, 15, 0, 0
-).getTime();
+// const today = new Date();
+function getNseMarketWindowUTC(date = new Date()) {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth();
+  const d = date.getUTCDate();
 
-const marketClose = new Date(
-  today.getFullYear(),
-  today.getMonth(),
-  today.getDate(),
-  15, 30, 0, 0
-).getTime();
-
-const tradePoints = trades.map(t => {
-  const ts = new Date(t.createdAtIST).getTime();   // ✅ FIXED
   return {
-    x: ts,
-    y: t.pricePerShare,                        // ✅ FIXED
-    side: t.side
+    marketOpen: Date.UTC(y, m, d, 3, 45, 0), // 09:15 IST
+    marketClose: Date.UTC(y, m, d, 10, 0, 0) // 15:30 IST
   };
-});
+}
+
+const { marketOpen, marketClose } = getNseMarketWindowUTC();
+
+
+const tradePoints = trades.map(t => ({
+  x: new Date(t.createdAtIST).getTime(), // UTC
+  y: t.pricePerShare,
+  side: t.side
+}));
+
 
 
 
