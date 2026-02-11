@@ -104,6 +104,9 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
             <NavLink to="/dashboard" className="tab">
               Dashboard
             </NavLink>
+            <NavLink to="/portfolio" className="tab">
+              Portfolio
+            </NavLink>
             <NavLink to="/user/balance" className="tab">
               Funds
             </NavLink>

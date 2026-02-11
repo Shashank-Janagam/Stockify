@@ -1,0 +1,401 @@
+/* ===============================
+   PREMIUM PORTFOLIO STYLES
+================================ */
+:root {
+  --primary: #00b386;
+  --primary-dark: #008f6b;
+  --bg-color: #f9fafb; /* Match dashboard bg */
+  --card-bg: #ffffff; /* Solid white */
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --border-color: #e5e7eb;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* Dashboard shadow */
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --radius-lg: 12px; /* Match dashboard radius */
+  --radius-xl: 16px;
+  
+  --pos-color: #16a34a; /* Match dashboard pos */
+  --neg-color: #ef4444;
+}
+
+.portfolio-page {
+  padding: 32px 6%;
+  background: var(--bg-color);
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif; /* Match dashboard font */
+  color: var(--text-main);
+  animation: fadeIn 0.6s ease-out;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* HEADER */
+.portfolio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 32px;
+}
+
+.portfolio-title {
+  font-size: 24px; /* Dashboard H2 size approx */
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text-main);
+  background: none;
+  -webkit-text-fill-color: initial;
+}
+
+.portfolio-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.portfolio-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.action-btn {
+  padding: 10px 20px;
+  border-radius: 8px; /* Match dashboard button radius */
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: normal;
+}
+
+.action-btn.primary {
+  background: var(--primary);
+  color: white;
+  border: 1px solid var(--primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.action-btn.primary:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.action-btn.secondary {
+  background: white;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+}
+
+.action-btn.secondary:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+/* SUMMARY GRID */
+.portfolio-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.summary-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+
+.main-card {
+  background: white;
+  position: relative;
+}
+
+/* Removed gradient strip to match dashboard clean look */
+.main-card::before {
+  content: none;
+}
+
+.card-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 8px;
+  text-transform: capitalize; /* Dashboard uses normal case mostly, but let's keep it clean */
+  letter-spacing: normal;
+}
+
+.card-value-lg {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #111827;
+  letter-spacing: -0.5px;
+}
+
+.card-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin-top: 4px;
+  letter-spacing: -0.5px;
+}
+
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 0;
+}
+
+.meta-label {
+  color: var(--text-muted);
+}
+
+.meta-value {
+  font-weight: 600;
+  padding: 0;
+  border-radius: 0;
+}
+
+.meta-value.pnl-green {
+  background: none;
+  color: var(--pos-color);
+}
+
+.card-icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  font-size: 18px;
+  transition: none;
+}
+
+.summary-card:hover .card-icon-wrapper {
+  transform: none;
+}
+
+.blue-bg { background: #eff6ff; color: #3b82f6; }
+.purple-bg { background: #f5f3ff; color: #8b5cf6; }
+
+.mini-link {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  opacity: 1;
+}
+.mini-link:hover { text-decoration: underline; }
+
+/* CONTENT LAYOUT */
+.portfolio-content-layout {
+  display: block;
+}
+
+.portfolio-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* SHARED CARD STYLES */
+.card-container {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: none;
+}
+
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  letter-spacing: normal;
+}
+
+
+/* CHART SECTION */
+.time-toggles {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.time-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+
+.time-btn.active {
+  background: white;
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.chart-wrapper-line {
+  height: 400px; /* Increased height */
+  width: 100%;
+}
+
+/* TABLE STYLES */
+.view-all-btn {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.holdings-table-enhanced {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.holdings-table-enhanced th {
+  text-align: right;
+  padding: 16px 24px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.holdings-table-enhanced th:first-child {
+  text-align: left;
+}
+
+.holdings-table-enhanced td {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 15px;
+  color: var(--text-main);
+  text-align: right;
+  vertical-align: middle;
+  transition: background 0.2s;
+}
+
+.holdings-table-enhanced td:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+.holdings-table-enhanced tr:last-child td {
+  border-bottom: none;
+}
+
+.holdings-table-enhanced tr:hover td {
+  background: #f8fafc;
+}
+
+.stock-info-enhanced {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stock-logo-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.03);
+}
+
+.stock-symbol {
+  font-weight: 600;
+  color: #111827;
+}
+
+.stock-name {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.font-num {
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.font-num.strong {
+  font-weight: 600;
+  color: #111827;
+}
+
+.price-change {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.pnl-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.pnl-val {
+  font-weight: 600;
+}
+
+.pnl-pct {
+  font-size: 11px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 1024px) {
+  .portfolio-summary-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .portfolio-content-layout {
+    grid-template-columns: 1fr;
+  }
+}
