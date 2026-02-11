@@ -10,6 +10,8 @@ import StockPageSSE from "./pages/StokesPageSSE.tsx";
 import FundsPage from "./pages/FundsPage.tsx";
 import { ExploreSSEProvider } from "./context/ExploreSSEContext";
 
+import Portfolio from "./pages/Portfolio.tsx";
+
 /* ---------------- TITLE MANAGER ---------------- */
 
 const RouteTitleManager = () => {
@@ -82,6 +84,14 @@ const App = () => {
               }
             />
 
+            <Route
+              path="/portfolio"
+              element={
+                <ProtectedRoute>
+                  <Portfolio />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/dashboard"
               element={
