@@ -20,6 +20,7 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
   const [recentData, setRecentData] = useState<any[]>([]);
   const [invested, setInvested] = useState<any[]>([]);
   const [ready, setReady] = useState(false);
+  
 
   const HOST = import.meta.env.VITE_HOST_ADDRESS;
 
@@ -40,6 +41,18 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
         if (!active) return;
         setData(JSON.parse(e.data));
         setReady(true);
+
+
+         const marketState = JSON.parse(e.data)?.mostTraded?.[0]?.marketState;
+
+        if (marketState && marketState !== "REGULAR") {
+          console.log("🛑 Market closed — stopping explore SSE");
+
+          exploreSource.current?.close();
+          exploreSource.current = null;
+          }else{
+            console.log("live..............",JSON.parse(e.data))
+          }
       };
 
       // 🔥 RECENT SSE
@@ -49,10 +62,25 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
 
       recentSource.current.onmessage = (e) => {
         if (!active) return;
+
         const parsed = JSON.parse(e.data);
+
         setRecentData(parsed.recentlyViewed ?? []);
         setInvested(parsed.invested ?? []);
+
+        // ⭐ stop when market closed
+        const marketState =
+          parsed?.recentlyViewed?.[0]?.marketState ||
+          parsed?.invested?.[0]?.marketState;
+
+        if (marketState && marketState !== "REGULAR") {
+          console.log("🛑 Market closed — stopping recent SSE");
+
+          recentSource.current?.close();
+          recentSource.current = null;
+        }
       };
+
     };
 
     init();
