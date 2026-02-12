@@ -70,11 +70,16 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
-
+  const HOST=import.meta.env.VITE_HOST_ADDRESS
   /* ---------- LOGOUT ---------- */
   const handleLogout = async () => {
     try {
+      await fetch(`${HOST}/api/login/logout`, {
+      method: "POST",
+      credentials: "include"
+    });
       await signOut(auth);
+
       setOpenProfile(false);
       
       navigate("/", { replace: true });

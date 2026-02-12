@@ -17,7 +17,7 @@ let isStopped = false; // 🔒 GUARD FLAG
 function stopSSE(finalData = null) {
   isStopped = true;
 
-  console.log("🛑 Stopping SSE completely");
+  // console.log("🛑 Stopping SSE completely");
 
   for (const [, res] of clients) {
     try {
@@ -40,7 +40,7 @@ function stopSSE(finalData = null) {
     pollingInterval = null;
   }
 
-  console.log("✅ SSE fully stopped");
+  // console.log("✅ SSE fully stopped");
 }
 
 
@@ -49,7 +49,7 @@ function stopSSE(finalData = null) {
 ------------------------- */
 router.get("/", async (req, res) => {
     isStopped = false
-    console.log("explore sse called")
+    // console.log("explore sse called")
 
  const mostTradedList = [
   "HDFCBANK.NS",
@@ -77,7 +77,7 @@ const moversList = [
     const decodedToken = await admin.auth().verifyIdToken(token);
 
   try {
-    console.log("user verified for explore sse")
+    // console.log("user verified for explore sse")
     // SSE headers
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -86,7 +86,7 @@ const moversList = [
 
     const clientId = crypto.randomUUID();
     clients.set(clientId, res);
-    console.log("🟢 Client connected:", clientId);
+    // console.log("🟢 Client connected:", clientId);
 
 
     if (!pollingInterval && !isStopped) {
@@ -105,7 +105,7 @@ const moversList = [
           // ❌ MARKET CLOSED → SEND ONCE & STOP
           if (marketState !== "REGULAR") {
 
-            console.log("🛑 Market closed — stopping SSE");
+            // console.log("🛑 Market closed — stopping SSE");
             stopSSE(payload);
             return;
           }
@@ -123,7 +123,7 @@ const moversList = [
 
     req.on("close", () => {
       clients.delete(clientId);
-      console.log("❌ Client disconnected:", clientId);
+      // console.log("❌ Client disconnected:", clientId);
 
       if (clients.size === 0) stopSSE();
     });
@@ -138,14 +138,14 @@ const moversList = [
 
 import { getDb } from "../../db/mongo.js";
 router.get("/recent", async (req, res) => {
-  console.log("🟢 recent sse called");
+  // console.log("🟢 recent sse called");
 
   const token = req.query.token;
   if (!token) return res.status(401).end();
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
-    console.log("✅ user verified for recent SSE");
+    // console.log("✅ user verified for recent SSE");
 
     /* =========================
        DB + USER DATA
@@ -238,7 +238,7 @@ router.get("/recent", async (req, res) => {
 
       // ❌ if market not regular, emit once and stop SSE
       if (marketState && marketState !== "REGULAR") {
-        console.log("🛑 market not regular — sent snapshot once, stopping recent SSE");
+        // console.log("🛑 market not regular — sent snapshot once, stopping recent SSE");
         stopped = true;
         clearInterval(interval);
         res.end();
@@ -269,7 +269,7 @@ router.get("/recent", async (req, res) => {
     }
 
     req.on("close", () => {
-      console.log("❌ recent client disconnected");
+      // console.log("❌ recent client disconnected");
       stopped = true;
       clearInterval(interval);
     });

@@ -68,8 +68,9 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
       `${HOST}/api/payments/create-order`,
       {
         method: "POST",
+        credentials:"include",
+
         headers: { "Content-Type": "application/json",
-                          Authorization: `Bearer ${token}`
 
          },
         body: JSON.stringify({ amount }),

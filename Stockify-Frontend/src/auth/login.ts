@@ -5,7 +5,7 @@ import {auth} from "../firebase";
 
 export async function loginWithGoogle(){
     const provider=new GoogleAuthProvider();
-    await signInWithPopup(auth,provider);
+    return await  signInWithPopup(auth,provider);
 }
 export async function checkEmailExists(email:string):Promise<boolean>{
     const methods=await fetchSignInMethodsForEmail(auth,email);
@@ -14,7 +14,7 @@ export async function checkEmailExists(email:string):Promise<boolean>{
 }
 export async function loginWithEmail(
     email:string,password:string){
-        await signInWithEmailAndPassword(auth,email,password);
+        return await signInWithEmailAndPassword(auth,email,password);
     }
 
 export async function signupWithEmail(

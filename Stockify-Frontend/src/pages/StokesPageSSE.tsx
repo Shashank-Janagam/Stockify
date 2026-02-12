@@ -126,10 +126,8 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
           if(!token) return;
           fetch(`${HOST}/api/portfolio/holding/${symbol}`,{
             method:"GET", 
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`
-            }
+            credentials:"include"
+
           })
             .then(res => res.json())
             .then(data => {

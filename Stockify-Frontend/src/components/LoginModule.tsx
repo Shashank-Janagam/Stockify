@@ -62,8 +62,17 @@ const handleForgotPassword = async () => {
   setIsloading(true);
   try {
       // 🔐 LOGIN FLOW
-      await loginWithEmail(email, password);
-   
+      const userCredentials=await loginWithEmail(email,password);
+      const idToken=await userCredentials.user.getIdToken()
+
+      await fetch(`${HOST}/api/login`,{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        credentials:"include",
+        body:JSON.stringify({token:idToken})
+      });   
     navigate("/dashboard");
     handleClose();
   } catch (error: any) {
@@ -80,12 +89,22 @@ const handleForgotPassword = async () => {
     setIsloading(false);
   }
 };
-
+const HOST=import.meta.env.VITE_HOST_ADDRESS
 
   const handleWithgoogle=async ()=>{
     try{
       setIsloading(true)
-      await loginWithGoogle();
+      const userCredentials=await loginWithGoogle();
+      const idToken=await userCredentials.user.getIdToken()
+
+      await fetch(`${HOST}/api/login`,{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        credentials:"include",
+        body:JSON.stringify({token:idToken})
+      });
       navigate("/dashboard");
       handleClose();
     }catch(error){

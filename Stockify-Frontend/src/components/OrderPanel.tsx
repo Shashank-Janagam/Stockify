@@ -89,9 +89,9 @@ type Trade = {
         `${HOST}/api/orderExecution/buy`,
         {
           method: "POST",
+          credentials:"include",
           headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
+            "Content-Type": "application/json" // ⭐ REQUIRED
           },
           body: JSON.stringify({
             symbol: symbol,          // e.g. "TCS.NS"
@@ -133,10 +133,10 @@ type Trade = {
         `${HOST}/api/portfolio/sell`,
         {
           method: "POST",
+          credentials:"include",
           headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
+    "Content-Type": "application/json" // ⭐ REQUIRED
+  },
           body: JSON.stringify({
             symbol: symbol,          // e.g. "TCS.NS"
             quantity: finalQty    // 🔥 MATCH BACKEND
@@ -233,11 +233,7 @@ type Trade = {
             `${HOST}/api/getBalance/getBalance`,
             {
               method: "GET",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`
-              },
-              credentials: "include"
+              credentials:"include",
             }
           );
 

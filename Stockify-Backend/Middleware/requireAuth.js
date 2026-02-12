@@ -1,35 +1,22 @@
 import admin from "./admin.js";
-
 export default async function requireAuth(req, res, next) {
   try {
-    // ✅ Allow CORS preflight
-    if (req.method === "OPTIONS") {
-      return next();
+    const sessionCookie = req.cookies.session;
+
+    if (!sessionCookie) {
+      return res.status(401).send("Unauthorized");
     }
 
-    const authHeader = req.headers.authorization;
+    const decoded = await admin
+      .auth()
+      .verifySessionCookie(sessionCookie, true);
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Missing auth token" });
-    }
-
-    // console.log("verified user")
-
-    const token = authHeader.split("Bearer ")[1].trim();
-
-    const decoded = await admin.auth().verifyIdToken(token);
-
-    req.user = {
-      uid: decoded.uid,
-      name: decoded.name,
-      email: decoded.email
-    };
-
-    // console.log("authorised", decoded.name);
-
+    req.user = decoded;
     next();
-  } catch (err) {
-    console.error("Auth error:", err.message);
-    return res.status(401).json({ error: "Unauthorized" });
+
+  } catch(err) {
+    console.log("Unauthorised-------------------------------------",err)
+    res.status(401).send("Unauthorized");
   }
 }
+

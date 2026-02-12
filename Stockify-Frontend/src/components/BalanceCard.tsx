@@ -51,12 +51,9 @@ console.log("Final URL =", `${HOST}/api/searchUpdates/recent`);
   useEffect(() => {
   if (!token) return;
 
-  fetch(`${HOST}/api/transactions`, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  })
+  fetch(`${HOST}/api/transactions`,  {
+          credentials: "include",
+        })
     .then((res) => res.json())
     .then(setTransactions)
     .catch(console.error);
@@ -74,14 +71,9 @@ console.log("Final URL =", `${HOST}/api/searchUpdates/recent`);
     const fetchBalance = async () => {
       try {
         const res = await fetch( `${HOST}/api/getBalance/getBalance`,
-          {
-            // method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`
-            },
-            // credentials: "include"
-          }
+           {
+          credentials: "include",
+        }
         );
 
         if (!res.ok) throw new Error("Failed to fetch balance");
