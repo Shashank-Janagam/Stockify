@@ -54,9 +54,8 @@ const navigate = useNavigate();
     if (!user) return;
 
     const fetchHoldings = async () => {
-      const token = await user.getIdToken();
       const res = await fetch(`${HOST}/api/holdings/stocks`, {
-        headers: { Authorization: `Bearer ${token}` }
+          credentials:"include",
       });
       const data = await res.json();
       setHoldings(data.holdings);

@@ -115,9 +115,7 @@ useEffect(() => {
       const res = await fetch(
          `${HOST}/api/searchUpdates/recent`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          credentials: "include",
         }
       );
 

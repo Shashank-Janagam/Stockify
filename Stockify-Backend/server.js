@@ -4,7 +4,7 @@ import express from "express";
 import cors from "cors";
 import http from "http";
 import { WebSocketServer } from "ws";
-
+import cookieParser from "cookie-parser";
 import { connectMongo } from "./db/mongo.js";
 
 import indiaLiveRoutes from "./modules/stocks/indiaLive.routes.js"
@@ -18,6 +18,7 @@ import multiStocks from "./modules/stocks/multiStream.routes.js"
 import OrderExecution from "./modules/OrderExecution/buyStock.js";
 import portfolio from "./modules/OrderExecution/sellStock.js";
 import holdings from "./modules/OrderExecution/holdings.js";
+import login from "./Middleware/login.js"
 const app = express();
 const PORT = process.env.PORT || 4000;
 app.use(
@@ -33,9 +34,11 @@ app.use(
   credentials: true
   }),
 );
+app.use(cookieParser()); // ⭐ THIS FIXES YOUR ERROR
 
 app.use(express.json());
 app.set("trust proxy", true);
+app.use("/api/login",login);
 app.use("/api/indiaSEE", indiaLiveRoutes);
 app.use("/api/search", searchResults);
 app.use("/api/searchUpdates", searchUpdates);
