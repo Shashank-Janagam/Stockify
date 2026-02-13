@@ -4,22 +4,18 @@ import logo from "../assets/StockiftLogo.png";
 import { AuthContext } from "../auth/AuthProvider";
 import { useContext, useEffect, useRef, useState } from "react";
 import type { User } from "firebase/auth";
-import {  signOut } from "firebase/auth";
-import { auth } from "../firebase";
+import {  } from "firebase/auth";
+
 import SearchOverlay from "./SearchOverlay";
 
-/* ------------------ TYPES ------------------ */
 interface NavbarProps {
   onLoginClick: () => void;
 }
 
-/* ------------------ HELPERS ------------------ */
 
-
-/* ------------------ COMPONENT ------------------ */
 const NavBar = ({ onLoginClick }: NavbarProps) => {
   const navigate = useNavigate();
-  const { user, loading } = useContext(AuthContext);
+  const { user, loading, logout } = useContext(AuthContext);
 
   const [openSearch, setOpenSearch] = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
@@ -70,18 +66,12 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
-  const HOST=import.meta.env.VITE_HOST_ADDRESS
+
   /* ---------- LOGOUT ---------- */
   const handleLogout = async () => {
     try {
-      await fetch(`${HOST}/api/login/logout`, {
-      method: "POST",
-      credentials: "include"
-    });
-      await signOut(auth);
-
+      await logout();
       setOpenProfile(false);
-      
       navigate("/", { replace: true });
     } catch (err) {
       console.log("Logout error:", err);
@@ -103,18 +93,22 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
           </div>
 
           <div className="main-tabs">
-            <NavLink to="/" className="tab" end>
-              Home
-            </NavLink>
-            <NavLink to="/dashboard" className="tab">
-              Dashboard
-            </NavLink>
-            <NavLink to="/portfolio" className="tab">
-              Portfolio
-            </NavLink>
-            <NavLink to="/user/balance" className="tab">
-              Funds
-            </NavLink>
+            {user && (
+              <>
+                <NavLink to="/" className="tab" end>
+                  Home
+                </NavLink>
+                <NavLink to="/dashboard" className="tab">
+                  Dashboard
+                </NavLink>
+                <NavLink to="/portfolio" className="tab">
+                  Portfolio
+                </NavLink>
+                <NavLink to="/user/balance" className="tab">
+                  Funds
+                </NavLink>
+              </>
+            )}
           </div>
         </div>
 

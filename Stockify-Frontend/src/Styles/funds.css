@@ -309,3 +309,46 @@
   color: #3d4152;
   caret-color: #4caf8a;
 }
+/* =========================
+   SKELTON LOADER
+========================= */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f3f4f6 25%,
+    #e5e7eb 37%,
+    #f3f4f6 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 6px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 100% 0 }
+  100% { background-position: -100% 0 }
+}
+
+.sk-title {
+  height: 14px;
+  width: 120px;
+  margin-bottom: 12px;
+}
+
+.sk-balance {
+  height: 48px;
+  width: 200px;
+  margin-bottom: 24px;
+}
+
+.sk-row {
+  height: 20px;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.sk-transactions {
+  margin-top: 24px;
+  height: 40px;
+  width: 100%;
+}

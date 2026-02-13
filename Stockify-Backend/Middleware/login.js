@@ -9,7 +9,7 @@ router.post("/", async (req, res) => {
 
     console.log("token received:", token ? "YES" : "NO");
 
-    const expiresIn = 60 * 60 * 1000;
+    const expiresIn = 5000*60;
 
     const sessionCookie = await admin
       .auth()
@@ -56,8 +56,24 @@ router.post("/logout", async (req, res) => {
     console.log("Logout error:", err);
 
     // still clear cookie even if verification fails
+
     res.clearCookie("session");
     res.send({ status: "Logged out" });
   }
 });
+
+router.get("/status", async (req, res) => {
+  console.log("status called")
+  const sessionCookie = req.cookies.session || "";
+  if (!sessionCookie) {
+    return res.status(401).json({ status: "inactive" });
+  }
+  try {
+    const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
+    res.json({ status: "active", user: decodedClaims });
+  } catch (error) {
+    res.status(401).json({ status: "inactive" });
+  }
+});
+
 export default router

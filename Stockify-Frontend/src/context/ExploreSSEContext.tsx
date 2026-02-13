@@ -25,69 +25,98 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
   const HOST = import.meta.env.VITE_HOST_ADDRESS;
 
   useEffect(() => {
-    if (!user || exploreSource.current) return;
+    if (!user) {
+        setReady(false);
+        setData(null);
+        setRecentData([]);
+        setInvested([]);
+        return;
+    }
+
+    // Cancel existing connections if any (defensive)
+    if (exploreSource.current) exploreSource.current.close();
+    if (recentSource.current) recentSource.current.close();
 
     let active = true;
 
     const init = async () => {
-      const token = await user.getIdToken();
-
-      // 🔥 EXPLORE SSE (ONCE PER TAB)
-      exploreSource.current = new EventSource(
-        `${HOST}/api/explore?token=${token}`
-      );
-
-      exploreSource.current.onmessage = (e) => {
-        if (!active) return;
-        setData(JSON.parse(e.data));
-        setReady(true);
-
-
-         const marketState = JSON.parse(e.data)?.mostTraded?.[0]?.marketState;
-
-        if (marketState && marketState !== "REGULAR") {
-          console.log("🛑 Market closed — stopping explore SSE");
-
-          exploreSource.current?.close();
-          exploreSource.current = null;
-          }else{
-            console.log("live..............",JSON.parse(e.data))
-          }
-      };
-
-      // 🔥 RECENT SSE
-      recentSource.current = new EventSource(
-        `${HOST}/api/explore/recent?token=${token}`
-      );
-
-      recentSource.current.onmessage = (e) => {
+      try {
+        const token = await user.getIdToken();
         if (!active) return;
 
-        const parsed = JSON.parse(e.data);
+        // 🔥 EXPLORE SSE
+        exploreSource.current = new EventSource(
+            `${HOST}/api/explore?token=${token}`
+        );
 
-        setRecentData(parsed.recentlyViewed ?? []);
-        setInvested(parsed.invested ?? []);
+        exploreSource.current.onmessage = (e) => {
+            if (!active) return;
+            try {
+                const parsed = JSON.parse(e.data);
+                setData(parsed);
+                setReady(true);
+                // console.log("explore update", parsed);
 
-        // ⭐ stop when market closed
-        const marketState =
-          parsed?.recentlyViewed?.[0]?.marketState ||
-          parsed?.invested?.[0]?.marketState;
+                const marketState = parsed?.mostTraded?.[0]?.marketState;
+                if (marketState && marketState !== "REGULAR") {
+                    console.log("🛑 Market closed — stopping explore SSE");
+                    exploreSource.current?.close();
+                    exploreSource.current = null;
+                }
+            } catch (err) {
+                console.error("Explore SSE parse error:", err);
+            }
+        };
 
-        if (marketState && marketState !== "REGULAR") {
-          console.log("🛑 Market closed — stopping recent SSE");
+        exploreSource.current.onerror = (e) => {
+            console.error("Explore SSE error", e);
+            exploreSource.current?.close();
+        };
 
-          recentSource.current?.close();
-          recentSource.current = null;
-        }
-      };
+        // 🔥 RECENT SSE
+        recentSource.current = new EventSource(
+            `${HOST}/api/explore/recent?token=${token}`
+        );
 
+        recentSource.current.onmessage = (e) => {
+            if (!active) return;
+            try {
+                const parsed = JSON.parse(e.data);
+                setRecentData(parsed.recentlyViewed ?? []);
+                setInvested(parsed.invested ?? []);
+
+                const marketState =
+                parsed?.recentlyViewed?.[0]?.marketState ||
+                parsed?.invested?.[0]?.marketState;
+
+                if (marketState && marketState !== "REGULAR") {
+                    console.log("🛑 Market closed — stopping recent SSE");
+                    recentSource.current?.close();
+                    recentSource.current = null;
+                }
+            } catch (err) {
+                 console.error("Recent SSE parse error:", err);
+            }
+        };
+
+         recentSource.current.onerror = (e) => {
+            console.error("Recent SSE error", e);
+            recentSource.current?.close();
+        };
+
+      } catch (err) {
+        console.error("Failed to init SSE:", err);
+      }
     };
 
     init();
 
-    // ❌ DO NOT CLOSE ON ROUTE CHANGE
     return () => {
       active = false;
+      exploreSource.current?.close();
+      recentSource.current?.close();
+      exploreSource.current = null;
+      recentSource.current = null;
     };
   }, [user]);
 
