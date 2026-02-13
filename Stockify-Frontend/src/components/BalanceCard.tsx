@@ -102,8 +102,11 @@ console.log("Final URL =", `${HOST}/api/searchUpdates/recent`);
   if (loading) {
     return (
       <div className="card balance-card">
-        <p className="card-title">Stocks, F&O balance</p>
-        <h1 className="balance-amount">₹—</h1>
+        <div className="skeleton sk-title" />
+        <div className="skeleton sk-balance" />
+        <div className="divider" />
+        <div className="skeleton sk-row" />
+        <div className="skeleton sk-transactions" />
       </div>
     );
   }

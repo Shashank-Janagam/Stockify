@@ -91,6 +91,7 @@ div{
 ================================ */
 .explore-page {
   padding: 28px;
+  animation: fadeIn 0.4s ease-out;
 }
 .clickable {
   cursor: pointer;
@@ -281,8 +282,7 @@ div{
 
 
 }
-.recent-item:hover{
-}
+
 
 .recent-item img {
   width: 36px;
