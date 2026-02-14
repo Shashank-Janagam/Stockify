@@ -118,6 +118,24 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
       isMounted = false;
     };
   }); 
+  useEffect(() => {
+    const updateRecent = async () => {
+      if (!companyName || !symbol) return;
+
+      try {
+        await fetch(`${HOST}/api/searchUpdates/hit`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbol, name: companyName })
+        });
+      } catch (e) {
+        // ignore safely
+      }
+    };
+
+    updateRecent();
+  }, [symbol, companyName]);
 
    const [trades, setTrades] = useState<Trade[]>([]);
       const [availableQty, setAvailableQty] = useState<number>(0);

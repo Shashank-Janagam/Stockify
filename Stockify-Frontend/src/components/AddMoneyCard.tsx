@@ -45,12 +45,15 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
     setValue(raw);
   };
 
-  const handlePay = async () => {
+  const [loading, setLoading] = useState(false);
 
-            if (!token) {
+  const handlePay = async () => {
+    if (loading) return;
+
+    if (!token) {
         alert("Please login to add money");
         return;
-        }
+    }
 
     if (!window.Razorpay) {
       alert("Razorpay not loaded");
@@ -63,73 +66,81 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
       return;
     }
 
-    // 1️⃣ Create order from backend
-    const res = await fetch(
-      `${HOST}/api/payments/create-order`,
-      {
-        method: "POST",
-        credentials:"include",
+    try {
+        setLoading(true);
 
-        headers: { "Content-Type": "application/json",
-
-         },
-        body: JSON.stringify({ amount }),
-      }
-    );
-
-    const order = await res.json();
-
-    // 2️⃣ Razorpay options
-    const options = {
-      key: "rzp_test_S85ZxvSHIvbK0f", // 🔑 ONLY key_id
-      amount: order.amount,
-      currency: "INR",
-      name: "Stockify Wallet",
-      description: "Add Money",
-      order_id: order.id,
-
-      handler: async (response: any) => {
-        const verify = await fetch(
-           `${HOST}/api/payments/verify`,
-          {
+        // 1️⃣ Create order from backend
+        const res = await fetch(
+        `${HOST}/api/payments/create-order`,
+        {
             method: "POST",
-            credentials:"include",
-            headers: { "Content-Type": "application/json"
-             },
-            body: JSON.stringify(response),
-          }
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount }),
+        }
         );
 
-        const result = await verify.json();
-        console.log('💳 Payment verification result:', result);
+        if (!res.ok) {
+            throw new Error("Failed to create order");
+        }
 
-        if (result.success) {
-            // 🔄 Trigger refresh multiple times to catch webhook processing
-            console.log('✅ Payment successful, triggering balance refreshes...');
-            onPaymentSuccess(); // Immediate refresh
-            setTimeout(() => {
-              console.log('🔄 Refresh after 1s');
-              onPaymentSuccess();
-            }, 1000);
-            setTimeout(() => {
-              console.log('🔄 Refresh after 2.5s');
-              onPaymentSuccess();
-            }, 2500);
-            setTimeout(() => {
-              console.log('🔄 Refresh after 5s');
-              onPaymentSuccess();
-            }, 5000);
-        } 
-      },
+        const order = await res.json();
 
-      theme: {
-        color: "#4caf8a",
-      },
-    };
+        // 2️⃣ Razorpay options
+        const options = {
+        key: "rzp_test_S85ZxvSHIvbK0f", // 🔑 ONLY key_id
+        amount: order.amount,
+        currency: "INR",
+        name: "Stockify Wallet",
+        description: "Add Money",
+        order_id: order.id,
 
-    // 3️⃣ Open Razorpay
-    const rzp = new window.Razorpay(options);
-    rzp.open();
+        handler: async (response: any) => {
+            try {
+                const verify = await fetch(
+                `${HOST}/api/payments/verify`,
+                {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(response),
+                }
+                );
+
+                const result = await verify.json();
+                console.log('💳 Payment verification result:', result);
+
+                if (result.success) {
+                    console.log('✅ Payment successful, triggering balance refreshes...');
+                    onPaymentSuccess(); 
+                    setTimeout(() => onPaymentSuccess(), 1000);
+                    setTimeout(() => onPaymentSuccess(), 2500);
+                    setValue(""); // Clear input
+                }
+            } catch (error) {
+                console.error("Verification failed", error);
+            } finally {
+                setLoading(false);
+            }
+        },
+        modal: {
+            ondismiss: function() {
+                setLoading(false);
+            }
+        },
+        theme: {
+            color: "#4caf8a",
+        },
+        };
+
+        // 3️⃣ Open Razorpay
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+    } catch (err) {
+        console.error("Payment error:", err);
+        setLoading(false);
+        alert("Failed to initiate payment");
+    }
   };
 
   return (
@@ -164,8 +175,34 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
       </div>
 
       {/* ✅ Razorpay only opens on click */}
-      <button className="primary-btn" onClick={handlePay}>
-        Add money
+      <button 
+        className={`primary-btn ${loading ? "btn-loading" : ""}`} 
+        onClick={handlePay}
+        disabled={loading}
+        style={{ position: 'relative', overflow: 'hidden' }}
+      >
+        {loading ? (
+            <>
+                <span className="spinner-border" style={{ 
+                    width: '1em', 
+                    height: '1em', 
+                    border: '2px solid transparent', 
+                    borderTopColor: 'currentColor', 
+                    borderRadius: '50%', 
+                    display: 'inline-block', 
+                    animation: 'spin 0.6s linear infinite',
+                    marginRight: '8px',
+                    verticalAlign: 'middle'
+                }}></span>
+                Processing...
+                <style>{`
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `}</style>
+            </>
+        ) : "Add money"}
       </button>
     </div>
   );

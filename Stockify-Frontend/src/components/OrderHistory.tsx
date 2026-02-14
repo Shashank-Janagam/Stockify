@@ -11,7 +11,8 @@ type Order = {
   total_price: number;
   status: string;
   created_at_ist: string;
-  name:string
+  name:string;
+  realized_pnl?: string | number;
 };
 
 export default function OrderHistory() {
@@ -47,7 +48,7 @@ export default function OrderHistory() {
     const fetchOrders = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${HOST}/api/holdings/orders?page=${page}&limit=10`, {
+        const res = await fetch(`${HOST}/api/holdings/orders?page=${page}&limit=20`, {
           method: "GET",
           credentials: "include",
         });
@@ -57,9 +58,10 @@ export default function OrderHistory() {
         }
 
         const data = await res.json();
+        console.log(data)
         if (isMounted) {
           setOrders(prev => page === 1 ? data : [...prev, ...data]);
-          setHasMore(data.length === 10); // Assume more if we got full page
+          setHasMore(data.length === 20); // Assume more if we got full page
           setLoading(false);
         }
       } catch (err) {
@@ -93,6 +95,7 @@ export default function OrderHistory() {
       <td><div className="sk-block sk-w-40"></div></td>
       <td><div className="sk-block sk-w-60"></div></td>
       <td><div className="sk-block sk-w-60"></div></td>
+      <td><div className="sk-block sk-w-40"></div></td>
       <td><div className="sk-block sk-badge"></div></td>
     </tr>
   );
@@ -108,18 +111,19 @@ export default function OrderHistory() {
         {orders.length === 0 && !loading && !error ? (
           <p className="no-orders">No orders found.</p>
         ) : (
-          <table>
-            <thead>
+          <table className="order-history-table">
+            <thead className="order-history-thead">
               <tr>
                 <th>Company</th>
                 <th>Side</th>
                 <th>Qty</th>
                 <th>Price</th>
                 <th>Total Value</th>
+                <th>PnL</th>
                 <th>Status</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="order-history-tbody">
               {/* REAL DATA */}
               {orders.map((order, index) => {
                 const isLast = index === orders.length - 1;
@@ -145,29 +149,39 @@ export default function OrderHistory() {
                     </td>
                     <td>
                       <span
-                        className={`badge ${
+                        className={`order-history-badge ${
                           order.side === "BUY" ? "buy" : "sell"
                         }`}
                       >
                         {order.side}
                       </span>
                     </td>
-                    <td>{order.quantity}</td>
-                    <td className="price">
+                    <td className="order-qty-cell">{order.quantity}</td>
+                    <td className="order-price">
                       ₹
                       {Number(order.price).toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
                       })}
                     </td>
-                    <td className="amount">
+                    <td className="order-amount">
                       ₹
                       {Number(order.total_price).toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
                       })}
                     </td>
+                    <td className="order-amount">
+                       {order.side === 'SELL' && order.realized_pnl != null ? (
+                          <span style={{ color: Number(order.realized_pnl) >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                              {Number(order.realized_pnl) >= 0 ? "+" : ""}
+                              ₹{Number(order.realized_pnl).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </span>
+                      ) : (
+                          <span style={{ color: '#9ca3af' }}>-</span>
+                      )}
+                    </td>
                     <td>
                       <span
-                        className={`status-badge ${order.status.toLowerCase()}`}
+                        className={`order-status-badge ${order.status.toLowerCase()}`}
                       >
                         {order.status}
                       </span>

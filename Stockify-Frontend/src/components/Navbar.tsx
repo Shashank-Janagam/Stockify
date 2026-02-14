@@ -95,16 +95,16 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
           <div className="main-tabs">
             {user && (
               <>
-                <NavLink to="/" className="tab" end>
+                <NavLink to="/" className="tab1" end>
                   Home
                 </NavLink>
-                <NavLink to="/dashboard" className="tab">
+                <NavLink to="/dashboard" className="tab1">
                   Dashboard
                 </NavLink>
-                <NavLink to="/portfolio" className="tab">
+                <NavLink to="/portfolio" className="tab1">
                   Portfolio
                 </NavLink>
-                <NavLink to="/user/balance" className="tab">
+                <NavLink to="/user/balance" className="tab1">
                   Funds
                 </NavLink>
               </>

@@ -116,8 +116,8 @@ router.post("/buy", requireAuth, async (req, res) => {
     // 5️⃣ Insert Order
     const orderRes = await client.query(
         `INSERT INTO orders 
-         (user_id, stock_id, side, order_type, quantity, price, stop_trigger_price, status, executed_at)
-         VALUES ($1, $2, 'BUY', 'MARKET', $3, $4, $5, 'EXECUTED', NOW() AT TIME ZONE 'Asia/Kolkata')
+         (user_id, stock_id, side, order_type, quantity, price, stop_trigger_price, status, executed_at, created_at)
+         VALUES ($1, $2, 'BUY', 'MARKET', $3, $4, $5, 'EXECUTED', NOW() AT TIME ZONE 'Asia/Kolkata', NOW() AT TIME ZONE 'Asia/Kolkata')
          RETURNING id`,
         [userId, stockId, quantity, pricePerShare, sl_enabled ? sl_price : null]
     );
@@ -134,14 +134,15 @@ router.post("/buy", requireAuth, async (req, res) => {
     const tradeId = tradeRes.rows[0].id;
 
     // Ledger (DEBIT) - Moved after Trade
+    // Ledger (DEBIT) - Moved after Trade
     await client.query(
         `INSERT INTO wallet_transactions 
-         (user_id, reference_type, reference_id, transaction_type, amount, balance_after)
-         VALUES ($1, 'TRADE', $2, 'BUY', $3, $4)`,
+         (user_id, reference_type, reference_id, transaction_type, amount, balance_after, created_at)
+         VALUES ($1, 'TRADE', $2, 'BUY', $3, $4, NOW() AT TIME ZONE 'Asia/Kolkata')`,
         [userId, tradeId, totalPrice, newBalance]
     );
 
-
+    
     // 7️⃣ Create Position (FIFO Open Lot)
     await client.query(
         `INSERT INTO positions

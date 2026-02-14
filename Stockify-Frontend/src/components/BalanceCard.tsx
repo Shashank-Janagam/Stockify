@@ -1,6 +1,6 @@
 import { useEffect, useState, useContext } from "react";
 import { AuthContext } from "../auth/AuthProvider";
-import Transactions from "./Transactions";
+import Transactions, { type Transaction } from "./Transactions";
 
 type Balance = {
   cash: number;
@@ -14,73 +14,51 @@ export default function BalanceCard({
 }) {
   const { user } = useContext(AuthContext);
 
-  const [token, setToken] = useState<string | null>(null);
   const [balance, setBalance] = useState<Balance | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-const [transactions, setTransactions] = useState<any[]>([]);
-const HOST=import.meta.env.VITE_HOST_ADDRESS
-  /* =========================
-     FETCH TOKEN
-  ========================= */
-  console.log("HOST =", HOST);
-console.log("Final URL =", `${HOST}/api/searchUpdates/recent`);
-
-  useEffect(() => {
-    if (!user || typeof user.getIdToken !== "function") return;
-
-    let mounted = true;
-
-    const fetchToken = async () => {
-      try {
-        const jwt = await user.getIdToken(true);
-        if (mounted) setToken(jwt);
-      } catch (err) {
-        console.error("Failed to fetch token", err);
-        if (mounted) setError("Authentication failed");
-      }
-    };
-
-    fetchToken();
-
-    return () => {
-      mounted = false;
-    };
-  }, [user,refreshKey]);
-
-  useEffect(() => {
-  if (!token) return;
-
-  fetch(`${HOST}/api/transactions`,  {
-          credentials: "include",
-        })
-    .then((res) => res.json())
-    .then(setTransactions)
-    .catch(console.error);
-}, [token, refreshKey]); // 🔥 refresh when payment happens
-
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const HOST = import.meta.env.VITE_HOST_ADDRESS;
 
   /* =========================
-     FETCH BALANCE (AFTER TOKEN)
+     FETCH TRANSACTIONS
   ========================= */
   useEffect(() => {
-    if (!token) return; // 🔥 wait for token
+    if (!user) return;
 
-    console.log('🔄 BalanceCard: Fetching balance, refreshKey:', refreshKey);
+    fetch(`${HOST}/api/transactions`, {
+      credentials: "include",
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch transactions");
+        return res.json();
+      })
+      .then((data: Transaction[]) => {
+        setTransactions(data);
+      })
+      .catch((err) => {
+        console.error("Error fetching transactions:", err);
+        setTransactions([]);
+      });
+  }, [user, refreshKey, HOST]);
+
+  /* =========================
+     FETCH BALANCE
+  ========================= */
+  useEffect(() => {
+    if (!user) return;
+
     let mounted = true;
 
     const fetchBalance = async () => {
       try {
-        const res = await fetch( `${HOST}/api/getBalance/getBalance`,
-           {
+        const res = await fetch(`${HOST}/api/getBalance/getBalance`, {
           credentials: "include",
-        }
-        );
+        });
 
         if (!res.ok) throw new Error("Failed to fetch balance");
 
         const data = await res.json();
-        console.log('✅ BalanceCard: Balance fetched:', data);
         if (mounted) setBalance(data);
       } catch (err) {
         console.error(err);
@@ -95,7 +73,7 @@ console.log("Final URL =", `${HOST}/api/searchUpdates/recent`);
     return () => {
       mounted = false;
     };
-  }, [token, refreshKey]); // 🔥 DEPENDS ON TOKEN AND REFRESH KEY
+  }, [user, refreshKey, HOST]);
 
   /* =========================
      UI STATES
@@ -103,11 +81,11 @@ console.log("Final URL =", `${HOST}/api/searchUpdates/recent`);
   if (loading) {
     return (
       <div className="card balance-card">
-        <div className="skeleton sk-title" />
-        <div className="skeleton sk-balance" />
+        <div className="funds-skeleton f-sk-title" />
+        <div className="funds-skeleton f-sk-balance" />
         <div className="divider" />
-        <div className="skeleton sk-row" />
-        <div className="skeleton sk-transactions" />
+        <div className="funds-skeleton f-sk-row" />
+        <div className="funds-skeleton f-sk-transactions" />
       </div>
     );
   }
@@ -121,7 +99,7 @@ console.log("Final URL =", `${HOST}/api/searchUpdates/recent`);
     );
   }
 
-const cash = Number(balance.cash ?? 0);
+  const cash = Number(balance.cash ?? 0);
   const [rupees, paise] = cash.toFixed(2).split(".");
 
   return (
@@ -135,17 +113,14 @@ const cash = Number(balance.cash ?? 0);
 
       <div className="divider" />
 
-      <div className="row">
+      <div className="balance-row">
         <span>Cash</span>
         <span className="dashed">
           ₹{cash.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
         </span>
       </div>
 
-      
-
       <Transactions transactions={transactions} />
-
     </div>
   );
 }

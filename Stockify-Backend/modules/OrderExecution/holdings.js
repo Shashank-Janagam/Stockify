@@ -149,9 +149,11 @@ router.get("/orders", requireAuth, async (req, res) => {
         o.quantity,
         o.price,
         o.status,
-        o.created_at
+        o.created_at,
+        t.realized_pnl
       FROM orders o
       JOIN stocks s ON o.stock_id = s.id
+      LEFT JOIN trades t ON o.id = t.order_id
       WHERE o.user_id = $1
       ORDER BY o.created_at DESC
       LIMIT $2 OFFSET $3

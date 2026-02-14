@@ -98,7 +98,7 @@
   font-size: 18px;
 }
 
-.row {
+.balance-row {
   display: flex;
   justify-content: space-between;
   margin-top: 16px;
@@ -312,7 +312,7 @@
 /* =========================
    SKELTON LOADER
 ========================= */
-.skeleton {
+.funds-skeleton {
   background: linear-gradient(
     90deg,
     #f3f4f6 25%,
@@ -320,34 +320,35 @@
     #f3f4f6 63%
   );
   background-size: 400% 100%;
-  animation: shimmer 1.4s ease infinite;
+  animation: funds-shimmer 1.4s ease infinite;
   border-radius: 6px;
+  display: block; /* Ensure block layout */
 }
 
-@keyframes shimmer {
+@keyframes funds-shimmer {
   0% { background-position: 100% 0 }
   100% { background-position: -100% 0 }
 }
 
-.sk-title {
+.f-sk-title {
   height: 14px;
   width: 120px;
   margin-bottom: 12px;
 }
 
-.sk-balance {
+.f-sk-balance {
   height: 48px;
   width: 200px;
   margin-bottom: 24px;
 }
 
-.sk-row {
+.f-sk-row {
   height: 20px;
   width: 100%;
   margin-bottom: 16px;
 }
 
-.sk-transactions {
+.f-sk-transactions {
   margin-top: 24px;
   height: 40px;
   width: 100%;
