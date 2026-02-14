@@ -96,8 +96,8 @@ const updateSearch=(stock: Stock) => {
                     // ✅ 1. increase popularity
                     fetch( `${HOST}/api/searchUpdates/hit`, {
                       method: "POST",
-                      headers: { "Content-Type": "application/json",
-                        Authorization:`Bearer ${token}`
+                      credentials:"include",
+                      headers: { "Content-Type": "application/json"
                        },
                       body: JSON.stringify({ symbol: stock.symbol,name:stock.name })
                     }).catch(() => {}); // ignore failure safely

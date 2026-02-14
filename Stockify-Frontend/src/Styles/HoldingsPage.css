@@ -156,7 +156,10 @@ td .negative {
 /* =========================
    SKELETON LOADING
 ========================= */
-.skeleton {
+/* =========================
+   SKELETON LOADING
+========================= */
+.holdings-skeleton {
   background: linear-gradient(
     90deg,
     #f0f0f0 25%,
@@ -164,31 +167,38 @@ td .negative {
     #f0f0f0 63%
   );
   background-size: 400% 100%;
-  animation: shimmer 1.4s ease infinite;
+  animation: holdings-shimmer 1.4s ease infinite;
   border-radius: 8px;
+  display: block;
 }
 
 /* Summary skeleton */
-.summary-skeleton {
+.holdings-sk-summary {
   height: 90px;
   width: 100%;
 }
 
-/* Table row skeleton */
-.row-skeleton {
-  height: 42px;
-  width: 100%;
+/* Table cell skeleton */
+.holdings-sk-cell {
+  height: 20px;
+  margin: 4px 0;
 }
 
+.h-w-40 { width: 40%; }
+.h-w-60 { width: 60%; }
+.h-w-80 { width: 80%; }
+.h-w-100 { width: 100%; }
+
+
 /* Right panel skeleton */
-.right-card.skeleton {
+.right-card.holdings-skeleton {
   width: 100%;
 }
 
 /* =========================
    SHIMMER ANIMATION
 ========================= */
-@keyframes shimmer {
+@keyframes holdings-shimmer {
   0% {
     background-position: 100% 0;
   }

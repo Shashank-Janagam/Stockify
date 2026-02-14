@@ -30,11 +30,11 @@ export default function Dashboard() {
   return (
     <div className="app">
       <header className="top-nav">
-        <div className="tabs">
+        <div className="tabbs">
           {["Explore", "Holdings", "Positions", "Orders", "Watchlist"].map(t => (
             <span
               key={t}
-              className={tab === t ? "tab active" : "tab"}
+              className={tab === t ? "tabbs active" : "tabbs"}
               onClick={() => setTab(t)}
             >
               {t}
@@ -43,6 +43,7 @@ export default function Dashboard() {
         </div>
        
       </header>
+      <div className="app2">
 
       {tab === "Explore" && <Explore />}
       {tab === "Holdings" && <HoldingsPage />}
@@ -53,6 +54,7 @@ export default function Dashboard() {
       )}
 
 
+    </div>
     </div>
   );
 }

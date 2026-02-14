@@ -168,8 +168,8 @@ router.post("/sell", requireAuth, async (req, res) => {
 
     // Ledger (SELL CREDIT) - Moved after Trade
     await client.query(
-        `INSERT INTO wallet_transactions (user_id, reference_type, reference_id, transaction_type, amount, balance_after)
-         VALUES ($1, 'TRADE', $2, 'SELL', $3, $4)`,
+        `INSERT INTO wallet_transactions (user_id, reference_type, reference_id, transaction_type, amount, balance_after, created_at)
+         VALUES ($1, 'TRADE', $2, 'SELL', $3, $4, NOW() AT TIME ZONE 'Asia/Kolkata')`,
         [userId, tradeId, sellValue, newBalance]
     );
 

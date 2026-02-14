@@ -48,13 +48,13 @@
   border: 1px solid #f3f4f6;
 }
 
-table {
+.order-history-table {
   width: 100%;
   border-collapse: collapse; /* Cleaner look */
   border-spacing: 0;
 }
 
-thead th {
+.order-history-thead th {
   text-align: left;
   font-size: 12px;
   font-weight: 600;
@@ -66,7 +66,7 @@ thead th {
   letter-spacing: 0.05em;
 }
 
-tbody td {
+.order-history-tbody td {
   padding: 18px 24px;
   border-bottom: 1px solid #f3f4f6;
   vertical-align: middle;
@@ -75,11 +75,11 @@ tbody td {
   color: #374151;
 }
 
-tbody tr:hover td {
+.order-history-tbody tr:hover td {
   background: #f8fafc; /* Subtle hover effect */
 }
 
-tbody tr:last-child td {
+.order-history-tbody tr:last-child td {
   border-bottom: none;
 }
 
@@ -108,7 +108,7 @@ tbody tr:last-child td {
 /* =========================
    BADGES
 ========================= */
-.badge {
+.order-history-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -121,17 +121,17 @@ tbody tr:last-child td {
   min-width: 60px;
 }
 
-.badge.buy {
+.order-history-badge.buy {
   background: #ecfdf5; /* Softer green bg */
   color: #059669;      /* Stronger green text */
 }
 
-.badge.sell {
+.order-history-badge.sell {
   background: #fef2f2; /* Softer red bg */
   color: #dc2626;      /* Stronger red text */
 }
 
-.status-badge {
+.order-status-badge {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
@@ -141,13 +141,13 @@ tbody tr:last-child td {
   text-transform: capitalize;
 }
 
-.status-badge.executed {
+.order-status-badge.executed {
   background: #f0fdf4;
   color: #166534;
   /* border: 1px solid #bbf7d0; Remove heavy border */
 }
 
-.status-badge.rejected {
+.order-status-badge.rejected {
   background: #fef2f2;
   color: #991b1b;
   /* border: 1px solid #fecaca; */
@@ -156,20 +156,20 @@ tbody tr:last-child td {
 /* =========================
    NUMERICAL DATA
 ========================= */
-.price {
+.order-price {
   font-weight: 600;
   font-size: medium;
   color: #111827;
   font-variant-numeric: tabular-nums; /* Better number alignment */
 }
 
-.amount {
+.order-amount {
   color: #4b5563;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
-.qty-cell {
+.order-qty-cell {
   font-weight: 500;
   color: #374151;
 }
@@ -225,18 +225,18 @@ tbody tr:last-child td {
     border-radius: 12px;
   }
   
-  thead {
+  .order-history-thead {
     display: none; /* Hide headers on mobile if needed, or adjust */
   }
 
-  tbody td {
+  .order-history-tbody td {
     display: block;
     padding: 10px 16px;
     text-align: right;
     border-bottom: none;
   }
   
-  tbody td::before {
+  .order-history-tbody td::before {
     content: attr(data-label);
     float: left;
     font-weight: 600;
@@ -245,7 +245,7 @@ tbody tr:last-child td {
     text-transform: uppercase;
   }
 
-  tbody tr {
+  .order-history-tbody tr {
     display: block;
     border-bottom: 1px solid #e5e7eb;
     padding: 12px 0;

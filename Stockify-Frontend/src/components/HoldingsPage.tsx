@@ -74,7 +74,7 @@ const navigate = useNavigate();
         {/* SUMMARY */}
         <div className="summary-card">
           {loading ? (
-            <div className="summary-skeleton skeleton" />
+            <div className="holdings-skeleton holdings-sk-summary" />
           ) : (
             <>
               <div>
@@ -120,10 +120,22 @@ const navigate = useNavigate();
             </thead>
             <tbody>
               {loading
-                ? Array.from({ length: 4 }).map((_, i) => (
+                ? Array.from({ length: 6 }).map((_, i) => (
                     <tr key={i}>
-                      <td colSpan={4}>
-                        <div className="row-skeleton skeleton" />
+                      <td>
+                        <div className="holdings-skeleton holdings-sk-cell h-w-60" />
+                        <div className="holdings-skeleton holdings-sk-cell h-w-40" style={{ marginTop: 6, height: 14 }} />
+                      </td>
+                      <td>
+                        <div className="holdings-skeleton holdings-sk-cell h-w-40" />
+                        <div className="holdings-skeleton holdings-sk-cell h-w-40" style={{ marginTop: 6, height: 14 }} />
+                      </td>
+                      <td>
+                        <div className="holdings-skeleton holdings-sk-cell h-w-40" />
+                      </td>
+                      <td>
+                        <div className="holdings-skeleton holdings-sk-cell h-w-60" />
+                        <div className="holdings-skeleton holdings-sk-cell h-w-40" style={{ marginTop: 6, height: 14 }} />
                       </td>
                     </tr>
                   ))
