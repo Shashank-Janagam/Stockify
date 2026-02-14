@@ -1,98 +1,63 @@
-import { getDb } from "../../db/mongo.js";
-import  redis  from "../../cache/redisClient.js"
-import { ObjectId } from "mongodb";
 import { db } from "../../db/sql.js";
+import redis from "../../cache/redisClient.js";
 
 export async function createOrderRecord({ orderId, userId, amount }) {
   await db.query(
     `
-    INSERT INTO orders
-    (order_id, firebase_uid, amount, status)
+    INSERT INTO payment_orders (order_id, user_id, amount, status)
     VALUES ($1, $2, $3, 'CREATED')
     `,
     [orderId, userId, amount]
   );
 }
+
 export async function markOrderSuccess({ orderId, paymentId }) {
   const res = await db.query(
     `
-    UPDATE orders
+    UPDATE payment_orders
     SET status = 'SUCCESS',
         payment_id = $2,
         updated_at = NOW()
     WHERE order_id = $1
-    AND status != 'SUCCESS'
+      AND status != 'SUCCESS'
     RETURNING *
     `,
     [orderId, paymentId]
   );
-
   return res.rows[0] || null;
 }
 
 export async function incrementWalletBalance(userId, amount) {
-  const redisKey = `wallet:balance:${userId}`;
-
-  await db.query("BEGIN");
-  console.log(
-    "Incrementing wallet balance for user:",
-    userId,
-    "by amount:",
-    amount
-  );
-
-  // 1️⃣ Ensure wallet exists
+  // 1️⃣ Update Balance (wallet_accounts)
+  console.log("Crediting wallet for user:", userId, "amount:", amount);
   await db.query(
-    `
-    INSERT INTO wallets (firebase_uid, balance)
-    VALUES ($1, 0)
-    ON CONFLICT (firebase_uid) DO NOTHING
-    `,
-    [userId]
-  );
-
-  // 2️⃣ Update balance
-  await db.query(
-    `
-    UPDATE wallets
-    SET balance = balance + $1,
-        updated_at = NOW()
-    WHERE firebase_uid = $2
-    `,
+    `UPDATE wallet_accounts SET available_balance = available_balance + $1, updated_at = NOW() AT TIME ZONE 'Asia/Kolkata' WHERE user_id = $2`,
     [amount, userId]
   );
 
-  await db.query("COMMIT");
-
-  // 3️⃣ 🔥 Invalidate Redis cache (AFTER COMMIT)
-  await redis.del(redisKey);
-  console.log("🧹 Redis cache cleared:", redisKey);
+  // 2️⃣ Invalidate Redis Cache (using UID)
+  const userRes = await db.query(`SELECT uid FROM users WHERE id=$1`, [userId]);
+  if (userRes.rows.length > 0) {
+      const uid = userRes.rows[0].uid;
+      await redis.del(`wallet:balance:${uid}`);
+      console.log(`✅ Invalidated cache for uid: ${uid}`);
+  }
 }
-
-import { v4 as uuid } from "uuid";
 
 export async function addUserTransaction({
   userId,
-  type,
-  title,
+  type, // 'DEPOSIT' usually
+  title, // 'Wallet Deposit'
   amount
 }) {
-  const txnId = uuid();
-
+  // Use wallet_transactions schema with explicit UTC timestamp
   await db.query(
     `
     INSERT INTO wallet_transactions
-    (id, firebase_uid, type, title, amount)
-    VALUES ($1, $2, $3, $4, $5)
+    (user_id, reference_type, transaction_type, amount, balance_after, created_at)
+    VALUES 
+    ($1, 'DEPOSIT', 'DEPOSIT', $2, (SELECT available_balance FROM wallet_accounts WHERE user_id=$1), NOW() AT TIME ZONE 'Asia/Kolkata')
     `,
-    [txnId, userId, type, title, amount]
+    [userId, amount]
   );
-
-  return {
-    id: txnId,
-    userId,
-    type,
-    title,
-    amount
-  };
 }

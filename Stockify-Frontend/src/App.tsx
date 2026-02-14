@@ -12,6 +12,9 @@ import { ExploreSSEProvider } from "./context/ExploreSSEContext";
 
 import Portfolio from "./pages/Portfolio.tsx";
 
+
+
+
 /* ---------------- TITLE MANAGER ---------------- */
 
 const RouteTitleManager = () => {
@@ -27,6 +30,8 @@ const RouteTitleManager = () => {
       "/": "Stockify | Home",
       "/dashboard": "Stockify | Dashboard",
       "/user/balance": "Stockify | Funds",
+
+
     };
 
     document.title = routeTitles[location.pathname] ?? "Stockify";
@@ -100,6 +105,7 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
+
           </Routes>
         </div>
       </ExploreSSEProvider>

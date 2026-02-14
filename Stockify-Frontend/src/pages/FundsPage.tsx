@@ -8,7 +8,10 @@ export default function FundsPage() {
   return (
     <div className="funds-page">
       <BalanceCard refreshKey={refreshKey}/>
-      <AddMoneyCard  onPaymentSuccess={() => setRefreshKey((k) => k + 1) } initialAmount={100}/>
+      <AddMoneyCard  onPaymentSuccess={() => {
+        console.log('🔑 FundsPage: Incrementing refreshKey from', refreshKey, 'to', refreshKey + 1);
+        setRefreshKey((k) => k + 1);
+      }} initialAmount={100}/>
     </div>
   );
 }

@@ -66,6 +66,7 @@ console.log("Final URL =", `${HOST}/api/searchUpdates/recent`);
   useEffect(() => {
     if (!token) return; // 🔥 wait for token
 
+    console.log('🔄 BalanceCard: Fetching balance, refreshKey:', refreshKey);
     let mounted = true;
 
     const fetchBalance = async () => {
@@ -79,7 +80,7 @@ console.log("Final URL =", `${HOST}/api/searchUpdates/recent`);
         if (!res.ok) throw new Error("Failed to fetch balance");
 
         const data = await res.json();
-        console.log(data)
+        console.log('✅ BalanceCard: Balance fetched:', data);
         if (mounted) setBalance(data);
       } catch (err) {
         console.error(err);
@@ -94,7 +95,7 @@ console.log("Final URL =", `${HOST}/api/searchUpdates/recent`);
     return () => {
       mounted = false;
     };
-  }, [token]); // 🔥 DEPENDS ON TOKEN
+  }, [token, refreshKey]); // 🔥 DEPENDS ON TOKEN AND REFRESH KEY
 
   /* =========================
      UI STATES

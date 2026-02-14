@@ -163,23 +163,37 @@ router.get("/recent", async (req, res) => {
     /* =========================
        INVESTED SYMBOLS (NET QTY > 0)
     ========================= */
+    /* =========================
+       RESOLVE USER ID (INT)
+    ========================= */
+    const userRes = await db.query(`SELECT id FROM users WHERE uid=$1`, [decodedToken.uid]);
+    let userId;
+    if (userRes.rows.length === 0) {
+       // Insert minimal user if missing (rare case for SSE but possible)
+       const ins = await db.query(`INSERT INTO users (uid, email, name) VALUES ($1, $2, 'User') RETURNING id`, [decodedToken.uid, decodedToken.email]);
+       userId = ins.rows[0].id;
+       await db.query(`INSERT INTO wallet_accounts (user_id) VALUES ($1)`, [userId]);
+    } else {
+       userId = userRes.rows[0].id;
+    }
+
+    /* =========================
+       INVESTED SYMBOLS (NET QTY > 0)
+    ========================= */
     const { rows: investedRows } = await db.query(
       `
-      SELECT
-        symbol
-      FROM user_stocks
-      WHERE firebase_uid = $1
-        AND status = 'EXECUTED'
-      GROUP BY symbol
-      HAVING SUM(
-        CASE
-          WHEN side = 'BUY' THEN quantity
-          WHEN side = 'SELL' THEN -quantity
-        END
-      ) > 0
+      SELECT symbol
+      FROM positions p
+      JOIN stocks s ON p.stock_id = s.id
+      WHERE p.user_id = $1
+        AND p.status = 'OPEN'
+      GROUP BY s.symbol
+      HAVING SUM(p.remaining_quantity) > 0
       `,
-      [decodedToken.uid]
+      [userId]
     );
+
+
 
     const investedSymbols = investedRows.map(r => r.symbol);
 

@@ -44,8 +44,8 @@ router.post("/razorpay", async (req, res) => {
     // Fetch order (FOR UPDATE for idempotency + lock)
     const orderRes = await db.query(
       `
-      SELECT order_id, firebase_uid, status
-      FROM orders
+      SELECT order_id, user_id, status
+      FROM payment_orders
       WHERE order_id = $1
       FOR UPDATE
       `,
@@ -76,12 +76,12 @@ router.post("/razorpay", async (req, res) => {
     });
 
     // Credit wallet
-    console.log("Crediting wallet for user:", order.firebase_uid, "amount:", amount);
-    await incrementWalletBalance(order.firebase_uid, amount);
+    console.log("Crediting wallet for user:", order.user_id, "amount:", amount);
+    await incrementWalletBalance(order.user_id, amount);
 
     // Add wallet transaction
     await addUserTransaction({
-      userId: order.firebase_uid,
+      userId: order.user_id,
       type: "CREDIT",
       title: "Wallet Deposit",
       amount,
