@@ -124,7 +124,7 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
 
         useEffect(() => {
           if(!token) return;
-          fetch(`${HOST}/api/portfolio/holding/${symbol}`,{
+          fetch(`${HOST}/api/sellstock/holding/${symbol}`,{
             method:"GET", 
             credentials:"include"
 
@@ -135,6 +135,8 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
               setAvailableQty(data.totalQuantity);
             });
         }, [symbol,token,refresh]);
+
+
   
 
 

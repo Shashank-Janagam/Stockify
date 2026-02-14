@@ -130,7 +130,7 @@ const navigate = useNavigate();
                 : holdings.map(h => (
                     <tr key={h.symbol} onClick={() => navigate(getStockRoute(h.symbol, h.name))} className="clickable">
                       <td>
-                        <strong>{h.symbol}</strong>
+                        <strong>{h.name}</strong>
                         <div className="muted">{h.quantity} shares</div>
                       </td>
 
@@ -163,10 +163,7 @@ const navigate = useNavigate();
         </div>
       </div>
 
-      {/* RIGHT */}
-      <div className="holdings-right">
-        <div className="right-card skeleton" />
-      </div>
+     
     </div>
   );
 };

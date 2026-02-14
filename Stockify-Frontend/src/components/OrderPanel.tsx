@@ -59,6 +59,10 @@ type Trade = {
     const [mode, setMode] = useState<"Delivery" | "Intraday">("Delivery");
     const [qty, setQty] = useState<string>("");
     const [approxReq,setApprox]=useState<number>(0)
+    const [slEnabled, setSlEnabled] = useState(false);
+    const [slType, setSlType] = useState<"PRICE" | "PERCENT">("PERCENT");
+    const [slValue, setSlValue] = useState<string>("");
+
   const HOST=import.meta.env.VITE_HOST_ADDRESS
 
   const [showAddMoney, setShowAddMoney] = useState(false);
@@ -85,6 +89,19 @@ type Trade = {
     return;
   } 
 
+      const val = Number(slValue) || 0;
+      let finalSlPrice = 0;
+
+      if (slEnabled && val > 0) {
+        if (slType === "PRICE") {
+          finalSlPrice = val;
+        } else {
+          // Calculate price from percentage
+          // BUY: Price * (1 - %)
+          finalSlPrice = price * (1 - val / 100);
+        }
+      }
+
       const res = await fetch(
         `${HOST}/api/orderExecution/buy`,
         {
@@ -95,8 +112,12 @@ type Trade = {
           },
           body: JSON.stringify({
             symbol: symbol,          // e.g. "TCS.NS"
-            quantity: finalQty    // 🔥 MATCH BACKEND
+            quantity: finalQty,    // 🔥 MATCH BACKEND
+            sl_enabled: slEnabled,
+            sl_price: Number(finalSlPrice.toFixed(2)) // Send computed PRICE
           })
+
+
         }
       );
 
@@ -129,8 +150,21 @@ type Trade = {
     return;
   } 
 
+      const val = Number(slValue) || 0;
+      let finalSlPrice = 0;
+
+      if (slEnabled && val > 0) {
+        if (slType === "PRICE") {
+          finalSlPrice = val;
+        } else {
+          // Calculate price from percentage
+          // SELL: Price * (1 + %)
+          finalSlPrice = price * (1 + val / 100);
+        }
+      }
+
       const res = await fetch(
-        `${HOST}/api/portfolio/sell`,
+        `${HOST}/api/sellstock/sell`,
         {
           method: "POST",
           credentials:"include",
@@ -139,8 +173,11 @@ type Trade = {
   },
           body: JSON.stringify({
             symbol: symbol,          // e.g. "TCS.NS"
-            quantity: finalQty    // 🔥 MATCH BACKEND
+            quantity: finalQty,    // 🔥 MATCH BACKEND
+            sl_enabled: slEnabled,
+            sl_price: Number(finalSlPrice.toFixed(2)) // Send computed PRICE
           })
+
         }
       );
 
@@ -199,8 +236,8 @@ type Trade = {
   const buys = trades
     .filter(t => t.side === "BUY")
     .sort((a, b) =>
-      new Date(a.createdAtIST).getTime() -
-      new Date(b.createdAtIST).getTime()
+      new Date(b.createdAtIST).getTime() -
+      new Date(a.createdAtIST).getTime()
     );
 
   for (const lot of buys) {
@@ -279,7 +316,43 @@ type Trade = {
           }
         }
 
-  }, [qty, price, balance, tab,availableQty]);
+  }, [qty, price, balance, tab, availableQty]);
+
+  // Stoploss Validation
+  // Stoploss Validation (Zerodha/Groww Logic)
+  useEffect(() => {
+    if (!slEnabled || !slValue) return;
+
+    if (slType === "PRICE") {
+      const val = Number(slValue);
+      if (tab === "BUY") {
+        // Buy Order -> Long Position -> SL Sell must be LOWER
+        if (val >= price) {
+          setWarning("Stoploss trigger must be lower than buy price");
+        } else if (warning.startsWith("Stoploss")) {
+          setWarning("Market order might be subject to price fluctuation");
+        }
+      } else if (tab === "SELL") {
+        // Sell Order -> Short Position -> SL Buy must be HIGHER
+        if (val <= price) {
+          setWarning("Stoploss trigger must be higher than sell price");
+        } else if (warning.startsWith("Stoploss")) {
+          setWarning("Market order might be subject to price fluctuation");
+        }
+      }
+    } else {
+        // Percentage Check (Generic sanity check, e.g. max 50%)
+        const val = Number(slValue);
+        if(val > 50) {
+             setWarning("Stoploss percentage reasonable limit is 50%");
+        } else if (warning.startsWith("Stoploss")) {
+             setWarning("Market order might be subject to price fluctuation");
+        }
+    }
+  }, [slEnabled, slValue, slType, tab, price]);
+
+
+
 
 
     if (!user){
@@ -402,8 +475,13 @@ type Trade = {
           >
             Intraday
           </button>
-          <button className="mtf">MTF 4.35x</button>
-          <span className="settings">⚙</span>
+          <button
+            className={`mtf ${slEnabled ? "selected" : ""}`}
+            onClick={() => setSlEnabled(!slEnabled)}
+          >
+            Stoploss
+          </button>
+
         </div>
 
         {/* Qty */}
@@ -412,31 +490,72 @@ type Trade = {
             <div className="Qty">Qty</div>
             <div className="Stype">{fullExchangeName}</div>
           </div>
-  <input
-    type="number"
-    value={qty}
-    inputMode="numeric"
-    className="qty-input"
-    onChange={(e) => {
-      const val = e.target.value;
-
-      // allow empty
-      if (val === "") {
-        setQty("");
-        onQtyChange?.(0);
-        return;
-      }
-
-      // prevent negatives
-      if (Number(val) < 0) return;
-
-      setQty(val);
-      onQtyChange?.(Number(val));
-    }}
-  />
-
-
+          <div className="input-wrapper">
+            <input
+              type="number"
+              value={qty}
+              inputMode="numeric"
+              className="qty-input"
+              placeholder="0"
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "") {
+                  setQty("");
+                  onQtyChange?.(0);
+                  return;
+                }
+                if (Number(val) < 0) return;
+                setQty(val);
+                onQtyChange?.(Number(val));
+              }}
+            />
+          </div>
         </div>
+
+
+        {/* STOPLOSS INPUT */}
+        {slEnabled && (
+          <div className="op-field sl-field">
+            <div className="type">
+              <div className="Qty">SL Trigger</div>
+              <div className="sl-toggle" onClick={() => setSlType(slType === "PRICE" ? "PERCENT" : "PRICE")}>
+                {slType === "PRICE" ? "Price" : "%"} ⇋
+              </div>
+            </div>
+            <div className="input-wrapper">
+              <input
+                type="number"
+                value={slValue}
+                placeholder={slType === "PRICE" ? "Trigger Price" : "Percentage %"}
+                className="qty-input"
+                onChange={(e) => {
+                  if (Number(e.target.value) < 0) return;
+                  setSlValue(e.target.value);
+                }}
+              />
+              {slValue && !isNaN(Number(slValue)) && (
+                <div className="sl-hint">
+                  {(() => {
+                    const val = Number(slValue);
+                    const tPrice = slType === "PRICE" 
+                      ? val 
+                      : (tab === "BUY" ? price * (1 - val / 100) : price * (1 + val / 100));
+                    
+                    if (tab === "BUY") {
+                      return `Executes SELL if price drops to ₹${tPrice.toFixed(2)}`;
+                    } else {
+                      return `Executes BUY if price rises to ₹${tPrice.toFixed(2)}`;
+                    }
+                  })()}
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
+
+
+
 
         {/* Price */}
         {/* <div className="op-field">

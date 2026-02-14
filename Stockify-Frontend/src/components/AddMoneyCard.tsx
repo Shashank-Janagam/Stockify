@@ -93,19 +93,32 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
            `${HOST}/api/payments/verify`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json",
-                              Authorization: `Bearer ${token}`
-
+            credentials:"include",
+            headers: { "Content-Type": "application/json"
              },
             body: JSON.stringify(response),
           }
         );
 
         const result = await verify.json();
+        console.log('💳 Payment verification result:', result);
 
         if (result.success) {
-            onPaymentSuccess(); // 🔥 triggers BalanceCard refetch
-
+            // 🔄 Trigger refresh multiple times to catch webhook processing
+            console.log('✅ Payment successful, triggering balance refreshes...');
+            onPaymentSuccess(); // Immediate refresh
+            setTimeout(() => {
+              console.log('🔄 Refresh after 1s');
+              onPaymentSuccess();
+            }, 1000);
+            setTimeout(() => {
+              console.log('🔄 Refresh after 2.5s');
+              onPaymentSuccess();
+            }, 2500);
+            setTimeout(() => {
+              console.log('🔄 Refresh after 5s');
+              onPaymentSuccess();
+            }, 5000);
         } 
       },
 

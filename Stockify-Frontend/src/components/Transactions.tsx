@@ -1,4 +1,5 @@
 import "../Styles/Transactions.css";
+import { formatToIST } from "../utils/dateUtils";
 
 export type Transaction = {
   id: string;
@@ -17,6 +18,7 @@ export default function Transactions({ transactions }: Props) {
   if (!transactions.length) {
     return <p className="txn-empty">No transactions yet</p>;
   }
+  console.log(transactions)
 
   return (
     <div className="transactions">
@@ -36,10 +38,7 @@ export default function Transactions({ transactions }: Props) {
               <div>
                 <div className="txn-title">{txn.title}</div>
                   <div className="txn-date">
-                  {new Date(txn.created_at).toLocaleString("en-IN", {
-                              timeZone: "Asia/Kolkata"
-                            })
-                            }
+                  {formatToIST(txn.created_at)}
                 </div>
               </div>
             </div>

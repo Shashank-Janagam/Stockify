@@ -78,16 +78,17 @@
 /* Firefox */
 .qty-input {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
+
 
 /* Tabs */
 .border-tabs{
-    border-bottom: rgb(235, 233, 233) solid;
-    border-top: rgb(235, 233, 233) solid;
-      margin: 16px 0;
-
-
+    border-bottom: 1px solid rgb(235, 233, 233);
+    border-top: 1px solid rgb(235, 233, 233);
+    margin: 16px 0;
 }
+
 .op-tabs {
   display:inline-flex;
   /* border-bottom: rgb(235, 233, 233) solid;
@@ -137,15 +138,38 @@
 .mtf {
   font-weight: 600;
 }
-.settings {
-  margin-left: auto;
+  /* Removed .settings because it was replaced by .sl-toggle logic above it, but kept the structure clean */
+
+
+.sl-toggle {
+  font-size: 11px;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
   cursor: pointer;
+  color: #374151;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
+
+.sl-toggle:hover {
+  background: #e5e7eb;
+}
+
+.sl-field {
+  padding-top: 10px;
+}
+
 .type{
     display: flex;
     align-items: center;
-    gap: 3px;
+    align-items: center;
+    gap: 6px;
+    width: 35%; /* Fixed width for Label side */
 }
+
 .Qty{
     color: #6f7070;
     font-size: small;
@@ -156,10 +180,13 @@
 }
 /* Fields */
 .op-field {
-      display:flex;
-  gap: 10rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
   padding: 10px 10px 0 10px;
 }
+
 .op-field label {
   display: flex;
   justify-content: space-between;
@@ -167,13 +194,30 @@
   color: #6b7280;
   margin-bottom: 6px;
 }
+/* Input Wrapper & Inputs */
+.input-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 60%;
+}
+
 .op-field input {
   width: 100%;
   padding: 10px;
   border-radius: 8px;
   border: 1px solid #d1d5db;
   outline: none;
+  text-align: right;
+  font-weight: 500;
 }
+
+.sl-hint {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 4px;
+  text-align: right;
+}
+
 .market-btn {
   width: 100%;
   padding: 10px;
@@ -231,8 +275,8 @@
   align-items: center;
   width: 100%;
 }
-.op-footer {
-}
+/* .op-footer rule removed or consolidated */
+
 .op-footer p {
   font-size: 13px;
   color: #6b7280;
@@ -249,7 +293,7 @@
   font-weight: 600;
   cursor: pointer;
 }
-.buy-btn-buy :hover{
+.buy-btn-buy:hover{
   margin-top: 10px;
   width: 100%;
   padding: 12px;
@@ -261,6 +305,7 @@
   font-weight: 600;
   cursor: pointer;
 }
+
 
 
 

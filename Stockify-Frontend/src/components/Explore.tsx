@@ -305,7 +305,7 @@ if (!ready) return <ExploreSkeleton />;
       alt={m.name}
       style={{ width: 20, height: 20 }}
     />
-    {m.name.split(" ").slice(0, 3).join(" ")}
+    {m.name}
   </td>
       <td className={m.percent > 0 ? "pos" : "neg"} id="marketprice" >
         {m.price !== null ? `₹${m.price.toLocaleString("en-IN")}` : "—"}
@@ -361,7 +361,7 @@ if (!ready) return <ExploreSkeleton />;
     />
 
     <div className="invest-text">
-      <strong>{s.name?.split(" ").slice(0, 2).join(" ")}</strong>
+      <strong>{s.name}</strong>
      
     </div>
   </div>

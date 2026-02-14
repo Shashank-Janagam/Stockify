@@ -16,8 +16,9 @@ import transactions from "./modules/payments/transactions.js"
 import webhooks from "./modules/payments/razorpayWeb.js";
 import multiStocks from "./modules/stocks/multiStream.routes.js"
 import OrderExecution from "./modules/OrderExecution/buyStock.js";
-import portfolio from "./modules/OrderExecution/sellStock.js";
+import sellStock from "./modules/OrderExecution/sellStock.js";
 import holdings from "./modules/OrderExecution/holdings.js";
+import portfolioRoutes from "./modules/portfolio/portfolio.routes.js";
 import login from "./Middleware/login.js"
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -48,8 +49,9 @@ app.use("/api/transactions", transactions);
 app.use("/api/webhooks",webhooks)
 app.use("/api/explore",multiStocks)
 app.use("/api/orderExecution",OrderExecution)
-app.use("/api/portfolio",portfolio);
+app.use("/api/sellStock",sellStock);
 app.use("/api/holdings",holdings)
+app.use("/api/portfolio", portfolioRoutes);
 // app.use("/api/indiaSEE",indiaReplay);
 async function startServer() {
   try {

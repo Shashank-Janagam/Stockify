@@ -9,7 +9,7 @@ router.post("/", async (req, res) => {
 
     console.log("token received:", token ? "YES" : "NO");
 
-    const expiresIn = 5000*60;
+    const expiresIn = 5000*60*60;
 
     const sessionCookie = await admin
       .auth()

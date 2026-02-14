@@ -1,30 +1,38 @@
-// routes/payment.routes.js
 import express from "express";
 import crypto from "crypto";
 import { razorpay } from "./razorpay.js";
 import requireAuth from "../../Middleware/requireAuth.js";
-const router = express.Router();
-// modules/payments/payment.js
 import { createOrderRecord } from "./orders.js";
+import { getUserId } from "../dbUtils.js"; // Import helper
+
+const router = express.Router();
 
 router.post("/create-order",requireAuth, async (req, res) => {
   const { amount } = req.body;
-  const userId = req.user.uid;
+  const { uid, name, email } = req.user;
 
-  const order = await razorpay.orders.create({
-    amount: amount * 100,
-    currency: "INR",
-    receipt: `rcpt_${Date.now()}`,
-  });
+  try {
+    // Resolve User ID (Int)
+    const userId = await getUserId(uid, name, email);
 
-  // 🔥 THIS IS WHERE orders.js IS CALLED
-  await createOrderRecord({
-    orderId: order.id,
-    userId,
-    amount, // store rupees
-  });
+    const order = await razorpay.orders.create({
+        amount: amount * 100,
+        currency: "INR",
+        receipt: `rcpt_${Date.now()}`,
+    });
 
-  res.json(order);
+    // Store in payment_orders
+    await createOrderRecord({
+        orderId: order.id,
+        userId: userId, // Int
+        amount, 
+    });
+
+    res.json(order);
+  } catch (error) {
+    console.error("Create Order Error:", error);
+    res.status(500).json({ error: "Failed to create order" });
+  }
 });
 
 router.post("/verify", requireAuth, async (req, res) => {
@@ -67,7 +75,5 @@ router.post("/verify", requireAuth, async (req, res) => {
     return res.status(500).json({ success: false });
   }
 });
-
-
 
 export default router;

@@ -185,7 +185,7 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
                       <button
                         className="profile-item"
                         onClick={() => {
-                          navigate("/orders");
+                          navigate("/dashboard", { state: { tab: "Orders" } });
                           setOpenProfile(false);
                         }}
                       >
