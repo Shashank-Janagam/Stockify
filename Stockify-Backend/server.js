@@ -22,9 +22,7 @@ import portfolioRoutes from "./modules/portfolio/portfolio.routes.js";
 import login from "./Middleware/login.js"
 const app = express();
 const PORT = process.env.PORT || 4000;
-app.use(
-  "/api/webhooks/razorpay",
-  express.raw({ type: "application/json" })
+app.use( "/api/webhooks/razorpay", express.raw({ type: "application/json" })
 );
 app.use(
   cors({

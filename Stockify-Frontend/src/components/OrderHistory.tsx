@@ -12,6 +12,7 @@ type Order = {
   status: string;
   created_at_ist: string;
   name:string;
+  sell_type:string;
   realized_pnl?: string | number;
 };
 
@@ -121,6 +122,7 @@ export default function OrderHistory() {
                 <th>Total Value</th>
                 <th>PnL</th>
                 <th>Status</th>
+                <th>Order Type</th>
               </tr>
             </thead>
             <tbody className="order-history-tbody">
@@ -185,6 +187,16 @@ export default function OrderHistory() {
                       >
                         {order.status}
                       </span>
+                      
+                    </td>
+                    <td>
+                      <span
+                        className={`order-status-badge`}
+                        style={{ color: order.sell_type=="STOPLOSS"? '#ef4444': '#10b981', fontWeight: 600, backgroundColor: 'transparent', border: 'none'  }}
+                      >
+                        {order.sell_type}
+                      </span>
+                      
                     </td>
                   </tr>
                 );

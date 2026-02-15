@@ -150,8 +150,8 @@ router.post("/sell", requireAuth, async (req, res) => {
 
     // 6️⃣ Insert Order
     const orderRes = await client.query(
-        `INSERT INTO orders (user_id, stock_id, side, order_type, quantity, price, created_at, executed_at, status)
-         VALUES ($1, $2, 'SELL', 'MARKET', $3, $4, NOW() AT TIME ZONE 'Asia/Kolkata', NOW() AT TIME ZONE 'Asia/Kolkata', 'EXECUTED')
+        `INSERT INTO orders (user_id, stock_id, side, order_type, quantity, price, created_at, executed_at, status,sell_type)
+         VALUES ($1, $2, 'SELL', 'MARKET', $3, $4, NOW() AT TIME ZONE 'Asia/Kolkata', NOW() AT TIME ZONE 'Asia/Kolkata', 'EXECUTED','Manual')
          RETURNING id`,
         [userId, stockId, quantity, pricePerShare]
     );
