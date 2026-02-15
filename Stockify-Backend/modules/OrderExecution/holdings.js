@@ -150,6 +150,7 @@ router.get("/orders", requireAuth, async (req, res) => {
         o.price,
         o.status,
         o.created_at,
+        o.sell_type,
         t.realized_pnl
       FROM orders o
       JOIN stocks s ON o.stock_id = s.id
@@ -165,6 +166,7 @@ router.get("/orders", requireAuth, async (req, res) => {
         ...r,
         name: r.name || r.symbol,
         total_price: Number(r.quantity) * Number(r.price),
+        sell_type: r.sell_type || 'REGULAR',
         created_at_ist: r.created_at // Frontend expects this key
     }));
 

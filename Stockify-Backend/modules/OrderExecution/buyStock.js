@@ -144,15 +144,32 @@ router.post("/buy", requireAuth, async (req, res) => {
 
     
     // 7️⃣ Create Position (FIFO Open Lot)
-    await client.query(
-        `INSERT INTO positions
-         (user_id, stock_id, position_type, entry_price, total_quantity, remaining_quantity, stop_loss, status)
-         VALUES ($1, $2, 'LONG', $3, $4, $5, $6, 'OPEN')`,
-        [userId, stockId, pricePerShare, quantity, quantity, sl_enabled ? sl_price : null]
+   const positionRes = await client.query(
+    `INSERT INTO positions
+     (user_id, stock_id, position_type, entry_price, total_quantity, remaining_quantity, stop_loss, status, stoploss_enabled)
+     VALUES ($1, $2, 'LONG', $3, $4, $5, $6, 'OPEN', $7)
+     RETURNING id`,
+    [userId, stockId, pricePerShare, quantity, quantity, sl_enabled ? sl_price : null, sl_enabled]
     );
+
+    const positionId = positionRes.rows[0].id;
+
 
     await client.query("COMMIT");
     await redis.del(`wallet:balance:${uid}`); // using uid as cache key
+
+    if (sl_enabled && sl_price) {
+    await redis.publish(
+    "NEW_STOPLOSS",
+    JSON.stringify({
+        positionId,
+        userId,
+        symbol: finalSymbol,
+        stopLoss: sl_price
+        })
+      );
+
+      }
 
     res.json({
         status: "EXECUTED",

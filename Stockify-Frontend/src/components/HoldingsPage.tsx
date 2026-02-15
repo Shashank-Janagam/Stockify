@@ -168,6 +168,7 @@ const navigate = useNavigate();
                         <strong>₹{h.current}</strong>
                         <div className="muted">₹{h.invested}</div>
                       </td>
+                      
                     </tr>
                   ))}
             </tbody>
