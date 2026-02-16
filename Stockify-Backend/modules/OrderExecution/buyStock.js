@@ -164,6 +164,7 @@ router.post("/buy", requireAuth, async (req, res) => {
     JSON.stringify({
         positionId,
         userId,
+        stockId,
         symbol: finalSymbol,
         stopLoss: sl_price
         })
