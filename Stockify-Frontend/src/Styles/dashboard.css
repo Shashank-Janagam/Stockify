@@ -305,7 +305,9 @@ div{
   width: 36px;
   height: 36px;
   margin-bottom: 6px;
+  border-radius: 8px;
 }
+
 
 .recent-item span {
   display: block;

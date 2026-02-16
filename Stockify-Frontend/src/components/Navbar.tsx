@@ -15,7 +15,7 @@ interface NavbarProps {
 
 const NavBar = ({ onLoginClick }: NavbarProps) => {
   const navigate = useNavigate();
-  const { user, loading, logout } = useContext(AuthContext);
+  const { user, loading, logout, isGoogleOnlyUser } = useContext(AuthContext);
 
   const [openSearch, setOpenSearch] = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
@@ -77,6 +77,7 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
       console.log("Logout error:", err);
     }
   };
+  
 
   return (
     <>
@@ -107,6 +108,7 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
                 <NavLink to="/user/balance" className="tab1">
                   Funds
                 </NavLink>
+                
               </>
             )}
           </div>
@@ -225,6 +227,19 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
                         <span>Reports</span>
                         <span className="arrow">›</span>
                       </button>
+
+                      {isGoogleOnlyUser && (
+                        <button
+                          className="profile-item"
+                          onClick={() => {
+                            navigate("/set-password");
+                            setOpenProfile(false);
+                          }}
+                        >
+                          <span>Set Password</span>
+                          <span className="arrow">›</span>
+                        </button>
+                      )}
                     </div>
 
                     <div className="profile-dropdown-divider" />

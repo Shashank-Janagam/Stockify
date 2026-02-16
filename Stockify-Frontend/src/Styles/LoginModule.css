@@ -274,3 +274,41 @@ p{
     transform: rotate(360deg);
   }
 }
+
+.error-popup {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+
+  background: #e86f6f;
+  color: white;
+  
+  padding: 0.6rem 1.25rem;
+  border-radius: 2rem;
+  
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  
+  box-shadow: 0 8px 24px rgba(255, 77, 79, 0.25);
+  z-index: 150;
+  
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  
+  animation: slideDown 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}

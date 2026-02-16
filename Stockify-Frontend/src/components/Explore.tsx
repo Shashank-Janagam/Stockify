@@ -235,7 +235,7 @@ if (!ready) return <ExploreSkeleton />;
           src={new URL(getImageSrc(r.symbol), import.meta.url).href}
           alt={r.name}
         />
-        <div>{r.name.split(" ")[0]}</div>
+        <div>{r.symbol.replace(".NS","")}</div>
         <span className={r.percent > 0 ? "pos" : "neg"}>
           {r.percent > 0 ? "+" : ""}
           {r.percent}%

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import StockHeader from "../components/StockHeader";
-import {StockChartIndia,GraphSkeleton} from "../components/StocksChartIndia";
+import { StockChartIndia, GraphSkeleton } from "../components/StocksChartIndia";
 import TimeframeBar from "../components/TimeframeBar";
 import OrderPanel from "../components/OrderPanel";
 // import {useContext} from "react"
@@ -9,8 +9,8 @@ import OrderPanel from "../components/OrderPanel";
 // import StockCandleChartIndia from "../components/StockCandleChartIndia";
 import "../Styles/stock.css";
 import StockPerformance from "../components/StockPerformanceFundamentals"
-import {useContext} from "react"
-  import { AuthContext } from "../auth/AuthProvider";// import type { Stock } from "../data/stocks";
+import { useContext } from "react"
+import { AuthContext } from "../auth/AuthProvider";// import type { Stock } from "../data/stocks";
 /* =========================
    TYPES
 ========================= */
@@ -30,8 +30,10 @@ type YahooQuote = {
   regularMarketChange: number;
   regularMarketChangePercent: number;
   marketState: string;
-  longName?:string;
-  fullExchangeName?:string;
+  longName?: string;
+  shortName?: string;
+  symbol?: string;
+  fullExchangeName?: string;
 };
 
 /* =========================
@@ -56,8 +58,8 @@ const timeframeToDays: Record<string, number | "ALL"> = {
 /* =========================
    PAGE
 ========================= */
-export default function StockPageSSE({onLoginClick}:{onLoginClick:()=>void}) {
-  const { symbol = ""} = useParams<{
+export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => void }) {
+  const { symbol = "" } = useParams<{
     symbol: string;
   }>();
 
@@ -69,55 +71,55 @@ export default function StockPageSSE({onLoginClick}:{onLoginClick:()=>void}) {
   const [loading, setLoading] = useState(true);
 
   const [lineData, setLineData] = useState<
-  { x: number; y: number }[]
->([]);
-const [marketState, setMarketState] = useState<string | null>(null);
+    { x: number; y: number }[]
+  >([]);
+  const [marketState, setMarketState] = useState<string | null>(null);
 
-const HOST=import.meta.env.VITE_HOST_ADDRESS
-  const [refresh,setRefresh]=useState(0)
-  function rerefresh(){
-    setRefresh(refresh+1);
+  const HOST = import.meta.env.VITE_HOST_ADDRESS
+  const [refresh, setRefresh] = useState(0)
+  function rerefresh() {
+    setRefresh(refresh + 1);
   }
   const [price, setPrice] = useState<number | null>(null);
   const [baseline, setBaseline] = useState<number | null>(null);
   const [change, setChange] = useState<number>(0);
   const [percent, setPercent] = useState<number>(0);
-  const [companyName,setCompanyName]=useState("");
-  const[exchangeName,setExchangeName]=useState<"NSE"|"BSE">()
-const [quote, setQuote] = useState<YahooQuote | null>(null);
+  const [companyName, setCompanyName] = useState("");
+  const [exchangeName, setExchangeName] = useState<"NSE" | "BSE">()
+  const [quote, setQuote] = useState<YahooQuote | null>(null);
 
 
- if (!symbol) {
+  if (!symbol) {
     return null; // or <Navigate /> or fallback UI
   }
-  
-    const {user} = useContext(AuthContext);
-    const [token, setToken] = useState<string | null>(null);
-   useEffect(() => {
+
+  const { user } = useContext(AuthContext);
+  const [token, setToken] = useState<string | null>(null);
+  useEffect(() => {
     if (!user) {
       return;
     }
-  
+
     let isMounted = true;
-    console.log("fetching token for user:",user)
+    console.log("fetching token for user:", user)
     const fetchToken = async () => {
       try {
         const jwt = await user.getIdToken(true); // force refresh
         if (isMounted) {
-          console.log("fetched token:",jwt)
+          console.log("fetched token:", jwt)
           setToken(jwt);
         }
       } catch (err) {
-        console.log("Failed to fetch token",err);
+        console.log("Failed to fetch token", err);
       }
     };
-  
+
     fetchToken();
-  
+
     return () => {
       isMounted = false;
     };
-  }); 
+  });
   useEffect(() => {
     const updateRecent = async () => {
       if (!companyName || !symbol) return;
@@ -137,116 +139,116 @@ const [quote, setQuote] = useState<YahooQuote | null>(null);
     updateRecent();
   }, [symbol, companyName]);
 
-   const [trades, setTrades] = useState<Trade[]>([]);
-      const [availableQty, setAvailableQty] = useState<number>(0);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [availableQty, setAvailableQty] = useState<number>(0);
 
-        useEffect(() => {
-          if(!token) return;
-          fetch(`${HOST}/api/sellstock/holding/${symbol}`,{
-            method:"GET", 
-            credentials:"include"
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${HOST}/api/sellstock/holding/${symbol}`, {
+      method: "GET",
+      credentials: "include"
 
-          })
-            .then(res => res.json())
-            .then(data => {
-              setTrades(data.trades);
-              setAvailableQty(data.totalQuantity);
-            });
-        }, [symbol,token,refresh]);
-
-
-  
+    })
+      .then(res => res.json())
+      .then(data => {
+        setTrades(data.trades);
+        setAvailableQty(data.totalQuantity);
+      });
+  }, [symbol, token, refresh]);
 
 
-      
+
+
+
+
   useEffect(() => {
     setLoading(true);
 
-  },[timeframe])
+  }, [timeframe])
   useEffect(() => {
-  fetch(`${HOST}/api/indiaSEE/${symbol}/quote`)
-    .then(res => res.json())
-    .then((q: YahooQuote) => {
-      setMarketState(q.marketState);
-      setQuote(q); 
-      setCompanyName(q.longName??"");
-      setPrice(q.regularMarketPrice);
-      setBaseline(q.regularMarketPreviousClose);
-      setChange(q.regularMarketChange);
-      setPercent(q.regularMarketChangePercent);
-      const exchange =
-        q.fullExchangeName === "NSE" || q.fullExchangeName === "BSE"
-          ? q.fullExchangeName
-          : "NSE";
+    fetch(`${HOST}/api/indiaSEE/${symbol}/quote`)
+      .then(res => res.json())
+      .then((q: YahooQuote) => {
+        setMarketState(q.marketState);
+        setQuote(q);
+        setCompanyName(q.longName ?? q.shortName ?? q.symbol ?? symbol);
+        setPrice(q.regularMarketPrice);
+        setBaseline(q.regularMarketPreviousClose);
+        setChange(q.regularMarketChange);
+        setPercent(q.regularMarketChangePercent);
+        const exchange =
+          q.fullExchangeName === "NSE" || q.fullExchangeName === "BSE"
+            ? q.fullExchangeName
+            : "NSE";
 
-      setExchangeName(exchange);
+        setExchangeName(exchange);
 
 
-      // setLoading(false);
-    });
-}, [symbol,timeframe]);
+        // setLoading(false);
+      });
+  }, [symbol, timeframe]);
 
   /* =========================
      1D → SSE (MARKET OPEN)
   ========================= */
-useEffect(() => {
-  if (timeframe !== "1D") return;
-  if (!marketState) return;
+  useEffect(() => {
+    if (timeframe !== "1D") return;
+    if (!marketState) return;
 
-  // 🔥 RESET DATA WHEN SYMBOL CHANGES
-  setLineData([]);
+    // 🔥 RESET DATA WHEN SYMBOL CHANGES
+    setLineData([]);
 
-  let es: EventSource | null = null;
+    let es: EventSource | null = null;
 
-  // 🟢 MARKET OPEN / REPLAY → SSE
-  if (marketState === "REGULAR") {
-    es = new EventSource(
-       `${HOST}/api/indiaSEE/${symbol}/stream`
-    );
-    es.onmessage = (e) => {
-      const data = JSON.parse(e.data);
+    // 🟢 MARKET OPEN / REPLAY → SSE
+    if (marketState === "REGULAR") {
+      es = new EventSource(
+        `${HOST}/api/indiaSEE/${symbol}/stream`
+      );
+      es.onmessage = (e) => {
+        const data = JSON.parse(e.data);
 
-      if (data.candles) {
-        // ✅ ALWAYS UPDATE (no length check)
-        setLineData(
-          data.candles.map((d: Candle) => ({
-            x: d.x,
-            y: d.c
-          }))
-        );
+        if (data.candles) {
+          // ✅ ALWAYS UPDATE (no length check)
+          setLineData(
+            data.candles.map((d: Candle) => ({
+              x: d.x,
+              y: d.c
+            }))
+          );
 
 
-        const last = data.candles[data.candles.length - 1];
-        setPrice(last.c);
-        setLoading(false);
-      }
-      setQuote(data.quote)
+          const last = data.candles[data.candles.length - 1];
+          setPrice(last.c);
+          setLoading(false);
+        }
+        setQuote(data.quote)
+      };
+
+      es.onerror = () => {
+        es?.close();
+      };
+    }
+    // 🔴 MARKET CLOSED → STATIC
+    else {
+      fetch(`${HOST}/api/indiaSEE/${symbol}/history?days=1`)
+        .then(res => res.json())
+        .then((candles: Candle[]) => {
+          setLineData(
+            candles.map(d => ({
+              x: d.x,
+              y: d.c
+            }))
+          );
+          setLoading(false);
+        });
+    }
+
+    // ✅ CLEANUP OLD SSE
+    return () => {
+      if (es) es.close();
     };
-
-    es.onerror = () => {
-      es?.close();
-    };
-  }
-  // 🔴 MARKET CLOSED → STATIC
-  else {
-    fetch( `${HOST}/api/indiaSEE/${symbol}/history?days=1`)
-      .then(res => res.json())
-      .then((candles: Candle[]) => {
-        setLineData(
-          candles.map(d => ({
-            x: d.x,
-            y: d.c
-          }))
-        );
-        setLoading(false);
-      });
-  }
-
-  // ✅ CLEANUP OLD SSE
-  return () => {
-    if (es) es.close();
-  };
-}, [symbol, timeframe, marketState]);
+  }, [symbol, timeframe, marketState]);
 
 
   /* =========================
@@ -257,7 +259,7 @@ useEffect(() => {
 
     const days = timeframeToDays[timeframe];
 
-    fetch( `${HOST}/api/indiaSEE/${symbol}/history?days=${days}`)
+    fetch(`${HOST}/api/indiaSEE/${symbol}/history?days=${days}`)
       .then(res => res.json())
       .then((data: Candle[]) => {
         if (!data.length) return;
@@ -265,12 +267,12 @@ useEffect(() => {
         const first = data[0];
         const last = data[data.length - 1];
 
-       setLineData(
-  data.map(d => ({
-    x: d.x,
-    y: d.c
-  }))
-);
+        setLineData(
+          data.map(d => ({
+            x: d.x,
+            y: d.c
+          }))
+        );
 
 
         setPrice(last.c);
@@ -284,15 +286,15 @@ useEffect(() => {
   /* =========================
      RENDER
   ========================= */
-  
-console.log("quote:",quote)
+
+  console.log("quote:", quote)
   return (
     <div className="stock-page">
       <div className="stock-left">
         <StockHeader
           companyName={companyName}
           symbol={symbol}
-          price={price??0}
+          price={price ?? 0}
           change={change}
           percent={percent}
           timeframe={timeframe}
@@ -302,33 +304,33 @@ console.log("quote:",quote)
           lineData={lineData}
           timeframe={timeframe}
           referencePrice={baseline}
-          marketState={marketState??""}
+          marketState={marketState ?? ""}
           trades={trades}
 
-          percent={percent.toString()}/>}
+          percent={percent.toString()} />}
 
         <TimeframeBar
           active={timeframe}
           onChange={setTimeframe}
         />
-        <StockPerformance quote={quote}/>
+        <StockPerformance quote={quote} />
       </div>
       <div className="stock-right">
-          <OrderPanel
-            companyName={companyName}
-            symbol={symbol}
-            price={price??0}
-            changePercent={percent}
-            fullExchangeName={exchangeName??"NSE"}
-            onLoginClick={onLoginClick}
-            trades={trades}
-            availableQty={availableQty}
-            refresh={refresh}
-            rerefresh={rerefresh}
-            
+        <OrderPanel
+          companyName={companyName}
+          symbol={symbol}
+          price={price ?? 0}
+          changePercent={percent}
+          fullExchangeName={exchangeName ?? "NSE"}
+          onLoginClick={onLoginClick}
+          trades={trades}
+          availableQty={availableQty}
+          refresh={refresh}
+          rerefresh={rerefresh}
 
-            
-          />
+
+
+        />
       </div>
     </div>
   );

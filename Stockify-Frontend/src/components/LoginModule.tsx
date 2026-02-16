@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import "../Styles/LoginModule.css"
 import google from "../assets/google.png";
-import { loginWithEmail,loginWithGoogle ,checkEmailExists} from "../auth/login";
+import { loginWithEmail,loginWithGoogle , getSignInMethods} from "../auth/login";
 // import { useNavigate } from "react-router-dom";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase"; // adjust path if needed
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../auth/AuthProvider";
+import { useContext } from "react";
+// import { EmailAuthProvider, linkWithCredential } from "firebase/auth";
+
 interface LoginModalProps {
   onClose: () => void;
 }
@@ -14,106 +18,140 @@ function LoginModal({ onClose }: LoginModalProps) {
   const [visible, setVisible] = useState(false);
   const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
+  const {  } = useContext(AuthContext);
 
   // const [step,setStep]=useState<"email"|"password">("email");
   const [isLoading,setIsloading]=useState(false);
   const [withEmail,setWithEmail]=useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate=useNavigate();
-const handleForgotPassword = async () => {
-  if (!email) return;
+  const handleForgotPassword = async () => {
+    if (!email) return;
 
-  try {
+    try {
+      setIsloading(true);
+      setError(null);
+      await sendPasswordResetEmail(auth, email);
+      // alert("Password reset email sent. Check your inbox.");
+      setError("Password reset email sent. Check your inbox.");
+    } catch (error: any) {
+      console.error(error);
+      setError(error.message || "Failed to send reset email");
+    } finally {
+      setIsloading(false);
+    }
+  };
+  
+
+
+
+  const handleEmailSubmit = async () => {
+    if (!email) return;
     setIsloading(true);
-    await sendPasswordResetEmail(auth, email);
-    alert("Password reset email sent. Check your inbox.");
-  } catch (error: any) {
-    console.error(error);
-    alert(error.message || "Failed to send reset email");
-  } finally {
-    setIsloading(false);
-  }
-};
+    setError(null);
+    try {
+      // 1. Check existing sign-in methods
+      const methods = await getSignInMethods(email);
+      console.log("methods", methods);
 
-  const handleEmailSubmit=async ()=>{
-    if(!email) return ;
-    setIsloading(true);
-    try{
-      const exist=await checkEmailExists(email);
-      console.log("email",exist)
-      // setIsExist(exist);
-      // setStep("password")
+      // 2. Identify Google-only users (no password set)
+      // NOTE: If Firebase "Email Enumeration Protection" is enabled, 'methods' will always be empty [].
+      // You must disable it in Firebase Console -> Authentication -> Settings -> User actions to use this feature.
+      const hasGoogle = methods.includes("google.com");
+      const hasPassword = methods.includes("password");
 
-      setWithEmail(true); 
-    }catch{
-      alert("something went wrong")
-    }finally{
+      if (hasGoogle && !hasPassword) {
+        setError("Account exists with Google. Please use 'Continue with Google'.");
+        return; 
+      }
+      
+      // If methods is empty, we can't tell if user exists or not (unless protection is off).
+      // If protection is OFF and methods is empty, it means user doesn't exist.
+      // If protection is ON and methods is empty, it means we don't know.
+      // We will proceed to let them try password. 
+      // If they are new, they should probably go to a Signup flow, but here we only have Login flow?
+
+      setWithEmail(true);
+    } catch(error) {
+      console.error(error);
+      setError("Something went wrong");
+    } finally {
       setIsloading(false)
     }
   }
 
- const handlePasswordSubmit = async () => {
-  if (!password) return;
+  const handlePasswordSubmit = async () => {
+    if (!password) return;
+    setError(null);
 
-  if (password.length < 6) {
-    alert("Password must be at least 6 characters");
-    return;
-  }
-
-  setIsloading(true);
-  try {
-      // 🔐 LOGIN FLOW
-      const userCredentials=await loginWithEmail(email,password);
-      const idToken=await userCredentials.user.getIdToken()
-
-      await fetch(`${HOST}/api/login`,{
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json"
-        },
-        credentials:"include",
-        body:JSON.stringify({token:idToken})
-      });   
-    navigate("/dashboard");
-    handleClose();
-  } catch (error: any) {
-    console.error("Auth error:", error);
-
-    if (error.code === "auth/wrong-password") {
-      alert("Incorrect password");
-    } else if (error.code === "auth/email-already-in-use") {
-      alert("Account already exists. Please login.");
-    } else {
-      alert("Authentication failed! Create Account Using Google ");
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
     }
-  } finally {
-    setIsloading(false);
-  }
-};
-const HOST=import.meta.env.VITE_HOST_ADDRESS
 
-  const handleWithgoogle=async ()=>{
-    try{
-      setIsloading(true)
-      const userCredentials=await loginWithGoogle();
-      const idToken=await userCredentials.user.getIdToken()
+    setIsloading(true);
+    try {
+      // 🔐 LOGIN FLOW
+      const userCredentials = await loginWithEmail(email, password);
+      const idToken = await userCredentials.user.getIdToken()
 
-      await fetch(`${HOST}/api/login`,{
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json"
+      await fetch(`${HOST}/api/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
         },
-        credentials:"include",
-        body:JSON.stringify({token:idToken})
+        credentials: "include",
+        body: JSON.stringify({ token: idToken })
       });
       navigate("/dashboard");
       handleClose();
-    }catch(error){
+    } catch (error: any) {
+      console.error("Auth error:", error);
+
+      if (error.code === "auth/invalid-credential") {
+        setError("Incorrect password or account used Google Login.");
+      } else if (error.code === "auth/email-already-in-use") {
+        setError("Account already exists. Please login.");
+      }else if(error.code=="auth/user-not-found"){
+        setError("Account not found. Please login using Google");
+      }
+    } finally {
+      setIsloading(false);
+    }
+  };
+  const HOST = import.meta.env.VITE_HOST_ADDRESS
+
+  const handleWithgoogle = async () => {
+    try {
+      setIsloading(true)
+      setError(null);
+      const userCredentials = await loginWithGoogle();
+      const idToken = await userCredentials.user.getIdToken()
+
+      await fetch(`${HOST}/api/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        credentials: "include",
+        body: JSON.stringify({ token: idToken })
+      });
+      navigate("/dashboard");
+      handleClose();
+    } catch (error) {
       console.log(error);
-      alert("Google Login Failed. PLease Try Again");
-    }finally{
+      setError("Google Login Failed. Please Try Again");
+    } finally {
       setIsloading(false);
     }
   }
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
 
 
@@ -180,9 +218,15 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
                 className="email-input"
                 placeholder="Your Email Address"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleEmailSubmit();
+                  }
+                }}
             />
           </div>
+
 
 
           <button
@@ -193,7 +237,6 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
           >
             {isLoading ? (
               <span className="btn-loader">
-                <span className="spinner" />
               </span>
             ) : (
               "Continue"
@@ -203,6 +246,7 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
           <p className="terms">
             By proceeding, I agree to T&C, Privacy Policy & Tariff Rates
           </p>
+          {error && <div className="error-popup">⚠️ {error}</div>}
         </div>
             
           </>
@@ -246,19 +290,24 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
             "Enter your password"
         }
         value={password}
-        onChange={(e) => setPassword(e.target.value)}
+        onChange={(e) => { setPassword(e.target.value); setError(null); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            handlePasswordSubmit();
+          }
+        }}
       />
     </div>
 
      {withEmail && (
-        <button
-          type="button"
-          className="forgot-password-btn"
-          onClick={handleForgotPassword}
-          disabled={isLoading}
-        >
+       <button
+        type="button"
+        className="forgot-password-btn"
+        onClick={handleForgotPassword}
+      >
           Forgot password?
-        </button>
+      </button>
+
       )}
 
 
@@ -272,7 +321,6 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
 >
   {isLoading ? (
     <span className="btn-loader">
-      <span className="spinner" /> 
     </span>
   ) : (
     "Login"
@@ -283,6 +331,7 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
     <p className="terms">
       By proceeding, I agree to T&C, Privacy Policy & Tariff Rates
     </p>
+    {error && <div className="error-popup">⚠️ {error}</div>}
   </div>
 )}
 

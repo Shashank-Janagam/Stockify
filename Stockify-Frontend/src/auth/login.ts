@@ -12,6 +12,11 @@ export async function checkEmailExists(email:string):Promise<boolean>{
     return methods.length>0
 
 }
+
+export async function getSignInMethods(email:string):Promise<string[]>{
+    const methods=await fetchSignInMethodsForEmail(auth,email);
+    return methods;
+}
 export async function loginWithEmail(
     email:string,password:string){
         return await signInWithEmailAndPassword(auth,email,password);

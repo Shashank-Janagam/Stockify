@@ -1,23 +1,27 @@
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import type{User} from "firebase/auth";
-import { createContext, useEffect, useState, useRef } from "react";
+import { createContext, useEffect, useState, useRef, type ReactNode } from "react";
 import { auth } from "../firebase";
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   logout: () => Promise<void>;
+  isGoogleOnlyUser:boolean;
+
 }
 
 export const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   logout: async () => {},
+  isGoogleOnlyUser:false,
 });
 
-function AuthProvider({ children }: { children: React.ReactNode }) {
+function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+const [isGoogleOnlyUser, setIsGoogleOnlyUser] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -58,10 +62,25 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 
            // 3. Final decision
            if (isSessionValid) {
+
+              const providers =
+                firebaseUser.providerData.map(p => p.providerId);
+
+              const isGoogle =
+                providers.includes("google.com");
+
+              const hasPassword =
+                providers.includes("password");
+
+              setIsGoogleOnlyUser(isGoogle && !hasPassword);
+
               setUser(firebaseUser);
-           } else {
+            }
+            else {
               await signOut(auth);
               setUser(null);
+              setIsGoogleOnlyUser(false);
+
            }
 
         } catch (error) {
@@ -152,7 +171,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout: handleLogout }}>
+    <AuthContext.Provider value={{ user, loading, logout: handleLogout,isGoogleOnlyUser }}>
       {children}
       {user && (
         <div style={{

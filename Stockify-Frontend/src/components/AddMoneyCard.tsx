@@ -158,6 +158,11 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
           value={formatINR(value)}
           onChange={handleChange}
           className="amount-input"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              handlePay();
+            }
+          }}
         />
       </div>
 

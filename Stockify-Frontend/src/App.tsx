@@ -12,6 +12,7 @@ import FundsPage from "./pages/FundsPage.tsx";
 import { ExploreSSEProvider } from "./context/ExploreSSEContext";
 
 import Portfolio from "./pages/Portfolio.tsx";
+import SetPassword from "./components/SetPassword.tsx";
 
 
 
@@ -97,6 +98,14 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <Portfolio />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/set-password"
+              element={
+                <ProtectedRoute>
+                  <SetPassword />
                 </ProtectedRoute>
               }
             />
