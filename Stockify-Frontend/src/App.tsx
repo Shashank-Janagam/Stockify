@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import NavBar from "./components/Navbar.tsx";
 import LoginModal from "./components/LoginModule.tsx";
+import CookieConsent from "./components/CookieConsent.tsx";
 import HomePage from "./pages/HomePage.tsx";
 import "./App.css";
 import ProtectedRoute from "./auth/ProtectedRoute.tsx";
@@ -61,6 +62,8 @@ const App = () => {
     <BrowserRouter>
       <ExploreSSEProvider> {/* 🔥 PERSISTENT SSE */}
         <RouteTitleManager />
+        
+        <CookieConsent />
 
         <NavBar onLoginClick={() => setShowLogin(true)} />
 

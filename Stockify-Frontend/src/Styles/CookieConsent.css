@@ -1,0 +1,126 @@
+/* CookieConsent.css */
+
+/* Overlay to block all operations - Matches modal-overlay in LoginModule.css */
+.cookie-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6); /* Standard dark overlay */
+  backdrop-filter: blur(4px); /* Slight blur matching other modals */
+  z-index: 99999; /* Highest priority to block everything */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+/* The Modal Container - Light Theme to match App */
+.cookie-modal {
+  background: #ffffff;
+  border-radius: 16px; /* 1rem, consistent with cards */
+  padding: 2.5rem;
+  max-width: 480px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12); /* Premium soft shadow */
+  transform: scale(0.95);
+  animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Optional: Top decorative line or accent */
+.cookie-modal::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: linear-gradient(90deg, #00b386 0%, #00d09c 100%);
+}
+
+/* Icon / Graphic */
+.cookie-icon {
+  font-size: 3rem;
+  margin-bottom: 1.25rem;
+  display: block;
+  animation: bounce 2s infinite ease-in-out;
+}
+
+/* Modal Title */
+.cookie-modal h2 {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 1.5rem;
+  color: #111827; /* Dark text */
+  margin-bottom: 0.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Modal Text */
+.cookie-modal p {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #6b7280; /* Muted gray text */
+  margin-bottom: 2rem;
+}
+
+/* Button Container */
+.cookie-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+/* Accept Button - Matches .login-btn and primary actions */
+.cookie-btn-accept {
+  background: #00b386; /* Groww Green */
+  color: white;
+  border: none;
+  padding: 0 2rem;
+  height: 3rem; /* 48px */
+  font-size: 1rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  max-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 179, 134, 0.2);
+}
+
+.cookie-btn-accept:hover {
+  background: #009f78;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 179, 134, 0.3);
+}
+
+.cookie-btn-accept:active {
+  transform: translateY(0);
+  background: #008f6b;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes popIn {
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}

@@ -163,8 +163,10 @@ async function checkPrices() {
         if (!orders) continue;
 
         for (const order of [...orders]) {
+            console.log("Checking order",order)
 
             if (currentPrice <= order.stopLoss) {
+                console.log("Executing order",order)
                 await executeStopLoss(order, symbol, currentPrice);
             }
         }
