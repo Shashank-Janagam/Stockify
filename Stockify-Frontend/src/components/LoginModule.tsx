@@ -64,6 +64,11 @@ function LoginModal({ onClose }: LoginModalProps) {
         setError("Account exists with Google. Please use 'Continue with Google'.");
         return; 
       }
+      if (!hasGoogle && !hasPassword) {
+        setError("Account does not exist. Please use 'Continue with Google'.");
+        return; 
+      }
+
       
       // If methods is empty, we can't tell if user exists or not (unless protection is off).
       // If protection is OFF and methods is empty, it means user doesn't exist.
