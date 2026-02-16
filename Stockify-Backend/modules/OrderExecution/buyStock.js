@@ -166,7 +166,8 @@ router.post("/buy", requireAuth, async (req, res) => {
         userId,
         stockId,
         symbol: finalSymbol,
-        stopLoss: sl_price
+        stopLoss: sl_price,
+        quantity,
         })
       );
 
