@@ -61,6 +61,11 @@
   width: 60%;
 }
 
+/* Each summary block gets a fixed width so values never push siblings */
+.summary-card > div {
+  min-width: 140px;
+}
+
 .summary-card > div {
   display: flex;
   flex-direction: column;
@@ -70,6 +75,8 @@
 .summary-card h2 {
   font-size: 26px;
   font-weight: 600;
+  /* ✅ Tabular nums in the summary header */
+  font-variant-numeric: tabular-nums;
 }
 
 .summary-card h3 {
@@ -87,7 +94,16 @@
 table {
   width: 100%;
   border-collapse: collapse;
+  /* ✅ Fixed layout: columns never resize when cell content changes */
+  table-layout: fixed;
 }
+
+/* Fixed column widths — tweak percentages to taste */
+thead th:nth-child(1) { width: 30%; }
+thead th:nth-child(2) { width: 18%; }
+thead th:nth-child(3) { width: 18%; }
+thead th:nth-child(4) { width: 22%; }
+thead th:nth-child(5) { width: 12%; }
 
 thead th {
   text-align: left;
@@ -103,10 +119,22 @@ tbody td {
   padding: 16px 18px;
   border-bottom: 1px solid #f1f1f1;
   vertical-align: middle;
+  /* ✅ Tabular nums: every digit takes equal width → no horizontal jitter */
+  font-variant-numeric: tabular-nums;
+  /* ✅ Clip overflow from very long names instead of expanding the column */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* Company column: allow normal wrapping for name + share count */
+tbody td:first-child {
+  white-space: normal;
+  overflow: visible;
 }
 
 /* =========================
@@ -205,6 +233,178 @@ td .negative {
   100% {
     background-position: -100% 0;
   }
+}
+
+/* =========================
+   PER-ROW ACTION BUTTONS
+========================= */
+.h-action-cell {
+  white-space: nowrap;
+  overflow: visible;
+  text-align: right;
+  width: 110px;
+  padding-right: 12px !important;
+}
+
+/* Hide by default, show on row hover */
+.h-action-btn {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateY(2px);
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+tbody tr:hover .h-action-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.h-buy {
+  background: #e6faf4;
+  color: #04ad83;
+}
+.h-buy:hover {
+  background: #04ad83;
+  color: #fff;
+}
+
+.h-sell {
+  background: #fff0ee;
+  color: #df5330;
+}
+.h-sell:hover {
+  background: #df5330;
+  color: #fff;
+}
+
+/* =========================
+   INLINE ORDER DRAWER
+========================= */
+.h-drawer-row td {
+  padding: 0 !important;
+  background: #fafbfc;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.h-drawer-cell {
+  white-space: normal !important;
+  overflow: visible !important;
+}
+
+.h-drawer {
+  padding: 12px 18px;
+  animation: drawerSlide 0.18s ease-out;
+}
+
+@keyframes drawerSlide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.h-drawer-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.h-tab {
+  padding: 5px 18px;
+  border-radius: 20px;
+  border: 1.5px solid #e5e7eb;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.h-tab-buy.active  { background: #04ad83; color: #fff; border-color: #04ad83; }
+.h-tab-sell.active { background: #df5330; color: #fff; border-color: #df5330; }
+
+.h-drawer-close {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+.h-drawer-close:hover { background: #f3f4f6; color: #374151; }
+
+.h-drawer-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.h-drawer-price {
+  font-size: 13px;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+  min-width: 80px;
+}
+
+.h-drawer-qty {
+  width: 90px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1.5px solid #d1d5db;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.15s;
+  /* hide spinners */
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.h-drawer-qty::-webkit-outer-spin-button,
+.h-drawer-qty::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.h-drawer-qty:focus { border-color: #04ad83; }
+
+.h-drawer-est {
+  font-size: 13px;
+  color: #374151;
+  font-variant-numeric: tabular-nums;
+  min-width: 100px;
+}
+
+.h-drawer-btn {
+  padding: 8px 22px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.12s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.h-drawer-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.h-btn-buy  { background: #04ad83; color: #fff; }
+.h-btn-buy:not(:disabled):hover  { opacity: 0.88; }
+.h-btn-sell { background: #df5330; color: #fff; }
+.h-btn-sell:not(:disabled):hover { opacity: 0.88; }
+
+.h-drawer-warn {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #dc2626;
 }
 
 /* =========================
