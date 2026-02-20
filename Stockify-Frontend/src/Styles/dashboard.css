@@ -68,7 +68,7 @@ button {
 }
 .app2 {
   width: 100%;
-  padding: 0 6% 0 6%;
+  padding: 0 2% 0 2%;
   margin: 0;
   background-color: #f9fafb;
   color: #111827;
@@ -388,24 +388,17 @@ div{
   font-size: 13px;
 }
 
-/* Table */
-.table-card {
-  background: #ffffff;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
-
-table {
+/* Scope global table rules to .table-card only — don't override order-history-table */
+.table-card table {
   width: 100%;
   border-collapse: collapse;
 }
 
-thead {
+.table-card thead {
   background: #fafafa;
 }
 
-th {
+.table-card th {
   text-align: left;
   padding: 14px;
   font-size: 15px;
@@ -414,18 +407,12 @@ th {
   border-bottom: 1px solid #e5e7eb;
 }
 
-td {
+.table-card td {
   min-height: 66px;
   padding: 14px;
   font-size: 14px;
   font-weight: 500;
   border-bottom: 1px solid #f1f5f9;
-}
-#id{
-  display: flex;
-}
-tbody tr:hover {
-  background: #f9fafb;
 }
 
 /* ===============================

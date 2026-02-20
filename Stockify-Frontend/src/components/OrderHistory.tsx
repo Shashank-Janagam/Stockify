@@ -59,10 +59,18 @@ export default function OrderHistory() {
         }
 
         const data = await res.json();
-        console.log(data)
+        console.log("API response:", data); // ✅ logs the actual API data
         if (isMounted) {
-          setOrders(prev => page === 1 ? data : [...prev, ...data]);
-          setHasMore(data.length === 20); // Assume more if we got full page
+          // Deduplicate by id — LEFT JOIN on trades can produce duplicate order rows
+          // if an order has multiple trade records.
+          const deduped: Order[] = Array.from(
+            new Map((data as Order[]).map((o: Order) => [o.id, o])).values()
+          );
+          setOrders(prev => page === 1 ? deduped : [
+            ...prev,
+            ...deduped.filter(o => !prev.some(p => p.id === o.id))
+          ]);
+          setHasMore(deduped.length === 20);
           setLoading(false);
         }
       } catch (err) {
@@ -98,6 +106,7 @@ export default function OrderHistory() {
       <td><div className="sk-block sk-w-60"></div></td>
       <td><div className="sk-block sk-w-40"></div></td>
       <td><div className="sk-block sk-badge"></div></td>
+      <td><div className="sk-block sk-w-40"></div></td>
     </tr>
   );
 
