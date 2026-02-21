@@ -6,6 +6,9 @@ Stockify is a full-stack stock market web application with a React + TypeScript 
 
 - `Stockify-Frontend/` – Vite-based React client.
 - `Stockify-Backend/` – Express API server and data integrations.
+- `AlgoTrading/` – Automated stop-loss execution engine.
+
+For a detailed breakdown of every component, data flow, and technology choice see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Prerequisites
 
