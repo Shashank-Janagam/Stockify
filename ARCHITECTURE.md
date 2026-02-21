@@ -10,9 +10,28 @@ Stockify is a full-stack paper-trading platform for Indian equities (NSE). It is
 | **Stockify-Backend** | Node.js, Express 5 | REST + SSE API, business logic, data persistence |
 | **AlgoTrading** | Node.js, Express 5 | Automated stop-loss execution engine |
 
+### Diagrams
+
+| Diagram | Description |
+|---|---|
+| [High-Level Architecture](#high-level-architecture) | All services, data stores, and external APIs at a glance |
+| [Frontend Architecture](#frontend-architecture) | React component tree and routing |
+| [Backend Architecture](#backend-architecture) | Express routes, middleware, DB & cache layers |
+| [AlgoTrading – Stop-Loss Engine](#algotrading--stop-loss-engine) | Redis Pub/Sub + price-polling engine |
+| [Authentication Flow](#authentication-flow) | Firebase token → session cookie sequence |
+| [Payment Flow](#payment-flow) | Razorpay order creation and webhook lifecycle |
+| [Order Execution Flow (Buy)](#order-execution-flow-buy) | Atomic PostgreSQL buy transaction |
+
+Rendered SVG files are stored in [`docs/diagrams/`](docs/diagrams/).
+
 ---
 
 ## High-Level Architecture
+
+![High-Level Architecture](docs/diagrams/high-level-architecture.svg)
+
+<details>
+<summary>Mermaid source</summary>
 
 ```mermaid
 graph TB
@@ -64,9 +83,16 @@ graph TB
     API -- WS --> FE
 ```
 
+</details>
+
 ---
 
 ## Frontend Architecture
+
+![Frontend Architecture](docs/diagrams/frontend-architecture.svg)
+
+<details>
+<summary>Mermaid source</summary>
 
 ```mermaid
 graph TB
@@ -115,6 +141,8 @@ graph TB
     App --> Context
 ```
 
+</details>
+
 ### Frontend Routes
 
 | Path | Page | Auth Required |
@@ -129,6 +157,11 @@ graph TB
 ---
 
 ## Backend Architecture
+
+![Backend Architecture](docs/diagrams/backend-architecture.svg)
+
+<details>
+<summary>Mermaid source</summary>
 
 ```mermaid
 graph TB
@@ -184,6 +217,8 @@ graph TB
     Routes --> Services
 ```
 
+</details>
+
 ### PostgreSQL Schema (Key Tables)
 
 | Table | Purpose |
@@ -225,6 +260,11 @@ graph TB
 
 ## AlgoTrading – Stop-Loss Engine
 
+![AlgoTrading Stop-Loss Engine](docs/diagrams/algotrading-stoploss-engine.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
 ```mermaid
 graph LR
     subgraph SLE["AlgoTrading / stoploss-engine"]
@@ -252,6 +292,8 @@ graph LR
     RedisPublisher -- "pub STOPLOSS_TRIGGERED" --> REDIS_SL
 ```
 
+</details>
+
 **Flow:**
 1. On startup the engine loads all open positions with stop-loss enabled from PostgreSQL into an in-memory `Map`.
 2. The engine subscribes to the Redis `NEW_STOPLOSS` channel; when the backend processes a new buy order with a stop-loss price it publishes to this channel and the engine registers it instantly.
@@ -261,6 +303,11 @@ graph LR
 ---
 
 ## Authentication Flow
+
+![Authentication Flow](docs/diagrams/auth-flow.svg)
+
+<details>
+<summary>Mermaid source</summary>
 
 ```mermaid
 sequenceDiagram
@@ -282,9 +329,16 @@ sequenceDiagram
     FirebaseAdmin-->>Backend: Decoded claims (uid, email, name)
 ```
 
+</details>
+
 ---
 
 ## Payment Flow
+
+![Payment Flow](docs/diagrams/payment-flow.svg)
+
+<details>
+<summary>Mermaid source</summary>
 
 ```mermaid
 sequenceDiagram
@@ -309,9 +363,16 @@ sequenceDiagram
     Backend->>PostgreSQL: UPDATE wallet_accounts (credit balance)
 ```
 
+</details>
+
 ---
 
 ## Order Execution Flow (Buy)
+
+![Order Execution Flow](docs/diagrams/order-execution-flow.svg)
+
+<details>
+<summary>Mermaid source</summary>
 
 ```mermaid
 sequenceDiagram
@@ -342,6 +403,8 @@ sequenceDiagram
         Backend-->>Frontend: { status: EXECUTED, price, balance }
     end
 ```
+
+</details>
 
 ---
 
