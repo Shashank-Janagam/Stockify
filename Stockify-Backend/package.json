@@ -4,7 +4,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "start": "node server.js"
   },
   "keywords": [],
@@ -30,5 +31,9 @@
     "ws": "^8.19.0",
     "yahoo-finance2": "^3.12.0"
   },
-  "description": ""
+  "description": "",
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.18",
+    "vitest": "^4.0.18"
+  }
 }

@@ -7,7 +7,7 @@ import redis from "../../cache/redisClient.js";
 
 const router = express.Router();
 
-function normalizeYahooTime(t) {
+export function normalizeYahooTime(t) {
   if (typeof t === "string") {
     const d = new Date(t);
     if (!isNaN(d.getTime())) return d.toISOString();

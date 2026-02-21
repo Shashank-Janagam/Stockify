@@ -2,3 +2,13 @@
 firebaseServiceKey.json
 config/firebaseServiceKey.json
 **/firebaseServiceKey.json
+
+# Dependencies
+node_modules/
+
+# Vitest cache
+node_modules/.vite/
+
+# Test reports and coverage
+coverage/
+test-reports/
