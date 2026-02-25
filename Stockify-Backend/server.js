@@ -52,6 +52,10 @@ app.use("/api/sellStock",sellStock);
 app.use("/api/holdings",holdings)
 app.use("/api/portfolio", portfolioRoutes);
 // app.use("/api/indiaSEE",indiaReplay);
+
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
 async function startServer() {
   try {
     await connectMongo();
