@@ -47,7 +47,7 @@ function stopSSE(finalData = null) {
 /* -------------------------
    ROUTE
 ------------------------- */
-router.get("/", async (req, res) => {
+router.get("/", requireAuth, async (req, res) => {
     isStopped = false
     // console.log("explore sse called")
 
@@ -72,10 +72,7 @@ const moversList = [
 
 ];
 // const moversList = await getNSETopGainers();
-    const token = req.query.token;
-    if (!token) return res.status(401).end();
-    const decodedToken = await admin.auth().verifyIdToken(token);
-
+ 
   try {
     // console.log("user verified for explore sse")
     // SSE headers
@@ -137,7 +134,8 @@ const moversList = [
 // routes/recent.routes.js
 
 import { getDb } from "../../db/mongo.js";
-router.get("/recent", async (req, res) => {
+import requireAuth from "../../Middleware/requireAuth.js";
+router.get("/recent",requireAuth, async (req, res) => {
   // console.log("🟢 recent sse called");
 
   const token = req.query.token;

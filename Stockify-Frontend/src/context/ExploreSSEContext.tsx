@@ -46,7 +46,9 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
 
         // 🔥 EXPLORE SSE
         exploreSource.current = new EventSource(
-            `${HOST}/api/explore?token=${token}`
+            `${HOST}/api/explore`,{
+              withCredentials:true
+            }
         );
 
         exploreSource.current.onmessage = (e) => {
@@ -75,7 +77,9 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
 
         // 🔥 RECENT SSE
         recentSource.current = new EventSource(
-            `${HOST}/api/explore/recent?token=${token}`
+            `${HOST}/api/explore/recent?token=${token}`,{
+              withCredentials:true
+            }
         );
 
         recentSource.current.onmessage = (e) => {
