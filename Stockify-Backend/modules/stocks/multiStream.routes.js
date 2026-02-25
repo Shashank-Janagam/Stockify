@@ -47,7 +47,7 @@ function stopSSE(finalData = null) {
 /* -------------------------
    ROUTE
 ------------------------- */
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", async (req, res) => {
     isStopped = false
     // console.log("explore sse called")
 
@@ -76,15 +76,18 @@ const moversList = [
   try {
     // console.log("user verified for explore sse")
     // SSE headers
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
     res.flushHeaders?.();
 
     const clientId = crypto.randomUUID();
     clients.set(clientId, res);
     // console.log("🟢 Client connected:", clientId);
 
+ const token = req.query.token;
+  if (!token) return res.status(401).end();
 
     if (!pollingInterval && !isStopped) {
       pollingInterval = setInterval(async () => {
@@ -135,9 +138,13 @@ const moversList = [
 
 import { getDb } from "../../db/mongo.js";
 import requireAuth from "../../Middleware/requireAuth.js";
-router.get("/recent",requireAuth, async (req, res) => {
+router.get("/recent", async (req, res) => {
   // console.log("🟢 recent sse called");
 
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
   const token = req.query.token;
   if (!token) return res.status(401).end();
 

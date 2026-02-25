@@ -1,6 +1,6 @@
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import type{User} from "firebase/auth";
-import { createContext, useEffect, useState, useRef, type ReactNode } from "react";
+import { createContext, useEffect, useState, type ReactNode } from "react";
 import { auth } from "../firebase";
 
 interface AuthContextType {
@@ -96,14 +96,6 @@ const [isGoogleOnlyUser, setIsGoogleOnlyUser] = useState(false);
     return unsubscribe;
   }, []);
 
-  /* ---------------- IDLE TIMEOUT ---------------- */
-  const lastActivityRef = useRef(Date.now());
-
-  // Throttled reset to avoid excessive updates (every 5s max)
-  const resetTimer = () => {
-    lastActivityRef.current = Date.now();
-  };
-
   const handleLogout = async () => {
     try {
       const HOST = import.meta.env.VITE_HOST_ADDRESS;
@@ -120,76 +112,10 @@ const [isGoogleOnlyUser, setIsGoogleOnlyUser] = useState(false);
     }
   };
 
-  useEffect(() => {
-    if (!user) return;
-
-    // Reset timer immediately when user logs in
-    lastActivityRef.current = Date.now();
-
-    // Events to track activity
-    const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
-    
-    // Add listeners
-    events.forEach((event) => {
-      window.addEventListener(event, resetTimer);
-    });
-
-    // Check interval
-    const checkInterval = setInterval(() => {
-        const now = Date.now();
-        // 5 minutes = 300,000 ms
-        const IDLE_LIMIT = 60* 1000*5; 
-        const diff = now - lastActivityRef.current;
-
-        // console.log(`Idle check: ${Math.floor(diff / 1000)}s inactive`);
-
-        if (diff > IDLE_LIMIT) {
-            console.log("User idle for 5 mins. Logging out...");
-            handleLogout();
-        }
-    },  30*1000); // Check every 30s for better precision
-
-    return () => {
-      events.forEach((event) => {
-        window.removeEventListener(event, resetTimer);
-      });
-      clearInterval(checkInterval);
-    };
-  }, [user]);
-  /* ---------------- DEBUG TIMER ---------------- */
-  const [idleSeconds, setIdleSeconds] = useState(0);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const timerInterval = setInterval(() => {
-      const diff = Date.now() - lastActivityRef.current;
-      setIdleSeconds(Math.floor(diff / 1000));
-    }, 1000);
-
-    return () => clearInterval(timerInterval);
-  }, [user]);
-
   return (
     <AuthContext.Provider value={{ user, loading, logout: handleLogout,isGoogleOnlyUser }}>
       {children}
-      {user && (
-        <div style={{
-          position: "fixed",
-          bottom: "10px",
-          right: "10px",
-          background: "black",
-          color: "white",
-          padding: "5px 10px",
-          borderRadius: "5px",
-          fontSize: "12px",
-          zIndex: 9999,
-          pointerEvents: "none",
-          opacity: 0.8
-        }}>
-          Idle: {idleSeconds}s / 300s
-        </div>
-      )}
+
     </AuthContext.Provider>
   );
 }

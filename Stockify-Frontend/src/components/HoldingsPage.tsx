@@ -143,24 +143,33 @@ const HoldingsPage: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    const es = new EventSource(`${HOST}/api/holdings/stocks/stream`, {
-      withCredentials: true,
+    let es: EventSource | null = null;
+    let cancelled = false;
+
+    // EventSource cannot send custom headers, so we pass the token as a query param
+    user.getIdToken().then((token) => {
+      if (cancelled) return;
+
+      es = new EventSource(
+        `${HOST}/api/holdings/stocks/stream?token=${encodeURIComponent(token)}`
+      );
+
+      es.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        setHoldings(data.holdings);
+        setSummary(data.summary);
+        setLoading(false);
+      };
+
+      es.onerror = (err) => {
+        console.error("SSE error:", err);
+        es?.close();
+      };
     });
 
-    es.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setHoldings(data.holdings);
-      setSummary(data.summary);
-      setLoading(false);
-    };
-
-    es.onerror = (err) => {
-      console.error("SSE error:", err);
-      es.close();
-    };
-
     return () => {
-      es.close();
+      cancelled = true;
+      es?.close();
     };
   }, [user, sseVersion]);
 
