@@ -1,5 +1,6 @@
 import express from "express";
 import requireAuth from "../../Middleware/requireAuth.js";
+import admin from "../../Middleware/admin.js";
 import { db } from "../../db/sql.js";
 import YahooFinance from "yahoo-finance2";
 
@@ -121,9 +122,13 @@ async function computePayload(positions) {
 /* ─────────────────────────────────────────────
    REST — one-shot snapshot (kept for compat)
 ───────────────────────────────────────────── */
-router.get("/stocks", requireAuth, async (req, res) => {
+router.get("/stocks", async (req, res) => {
   try {
-    const { uid } = req.user;
+     const token = req.query.token;
+  if (!token) return res.status(401).end();
+
+  const decoded = await admin.auth().verifyIdToken(token);
+    const uid = decoded.uid;
 
     // 1️⃣ Resolve User
     const userRes = await db.query(`SELECT id FROM users WHERE uid=$1`, [uid]);
@@ -149,8 +154,23 @@ router.get("/stocks", requireAuth, async (req, res) => {
    ✅ DB queried ONCE on connect
    ✅ Only Yahoo prices re-fetched on each tick
 ───────────────────────────────────────────── */
-router.get("/stocks/stream", requireAuth, async (req, res) => {
-  const { uid } = req.user;
+router.get("/stocks/stream", async (req, res) => {
+  // ── Inline token auth (EventSource can't send headers) ──
+  const token = req.query.token;
+  if (!token) {
+    res.status(401).end("Unauthorized");
+    return;
+  }
+
+  let uid;
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    uid = decoded.uid;
+  } catch (err) {
+    console.error("SSE auth failed:", err.message);
+    res.status(401).end("Unauthorized");
+    return;
+  }
 
   // ── Resolve user & load positions from DB — happens only ONCE ──
   const userRes = await db.query(`SELECT id FROM users WHERE uid=$1`, [uid]);
@@ -176,7 +196,7 @@ router.get("/stocks/stream", requireAuth, async (req, res) => {
     }
   };
 
-  // Send immediately on connect, then every 30 s
+  // Send immediately on connect, then every 1.5 s
   await send();
   const interval = setInterval(send, 1500);
 

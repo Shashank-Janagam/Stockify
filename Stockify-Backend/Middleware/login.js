@@ -63,7 +63,6 @@ router.post("/logout", async (req, res) => {
 });
 
 router.get("/status", async (req, res) => {
-  console.log("status called")
   const sessionCookie = req.cookies.session || "";
   if (!sessionCookie) {
     return res.status(401).json({ status: "inactive" });

@@ -19,4 +19,3 @@ export default async function requireAuth(req, res, next) {
     res.status(401).send("Unauthorized");
   }
 }
-
