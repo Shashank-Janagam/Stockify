@@ -126,8 +126,8 @@ router.post("/buy", requireAuth, async (req, res) => {
     // 6️⃣ Insert Trade
     const tradeRes = await client.query(
         `INSERT INTO trades
-         (order_id, user_id, stock_id, side, quantity, price)
-         VALUES ($1, $2, $3, 'BUY', $4, $5)
+         (order_id, user_id, stock_id, side, quantity, price,created_at)
+         VALUES ($1, $2, $3, 'BUY', $4, $5,NOW() AT TIME ZONE 'Asia/Kolkata')
          RETURNING id`,
         [orderId, userId, stockId, quantity, pricePerShare]
     );
@@ -146,8 +146,8 @@ router.post("/buy", requireAuth, async (req, res) => {
     // 7️⃣ Create Position (FIFO Open Lot)
    const positionRes = await client.query(
     `INSERT INTO positions
-     (user_id, stock_id, position_type, entry_price, total_quantity, remaining_quantity, stop_loss, status, stoploss_enabled)
-     VALUES ($1, $2, 'LONG', $3, $4, $5, $6, 'OPEN', $7)
+     (user_id, stock_id, position_type, entry_price, total_quantity, remaining_quantity, stop_loss, status, stoploss_enabled, created_at)
+     VALUES ($1, $2, 'LONG', $3, $4, $5, $6, 'OPEN', $7, NOW() AT TIME ZONE 'Asia/Kolkata')
      RETURNING id`,
     [userId, stockId, pricePerShare, quantity, quantity, sl_enabled ? sl_price : null, sl_enabled]
     );
