@@ -21,6 +21,7 @@ async function getCurrentPrice(symbol) {
 }
 
 // 📌 HOLDING DETAILS (AGGREGATED) for Dashboard/OrderPanel
+
 router.get("/holding/:symbol", requireAuth, async (req, res) => {
   try {
     const { uid } = req.user;
@@ -35,33 +36,37 @@ router.get("/holding/:symbol", requireAuth, async (req, res) => {
     if (stockRes.rows.length === 0) return res.json({ totalQuantity: 0, trades: [] });
     const stockId = stockRes.rows[0].id;
 
-    // 2️⃣ Aggregate Quantity (from OPEN positions)
+    // 2️⃣ Net open quantity — from positions (drives the sell panel)
     const posRes = await db.query(
-        `SELECT SUM(remaining_quantity) as total_qty, SUM(remaining_quantity * entry_price) as invested_val 
-         FROM positions 
+        `SELECT SUM(remaining_quantity) as total_qty
+         FROM positions
          WHERE user_id = $1 AND stock_id = $2 AND status = 'OPEN'`,
         [userId, stockId]
     );
     const totalQuantity = Number(posRes.rows[0]?.total_qty || 0);
-    const investedVal = Number(posRes.rows[0]?.invested_val || 0);
-    const avgPrice = totalQuantity > 0 ? investedVal / totalQuantity : 0;
 
-    // 3️⃣ Trade History (Simulated from Positions for Frontend PnL)
-    // Frontend OrderPanel expects 'trades' to calculate PnL.
-    // We construct a synthetic "BUY" trade representing the weighted average holding.
-    const syntheticTrade = {
-        id: 'holding_agg',
-        side: 'BUY', 
-        quantity: totalQuantity,
-        pricePerShare: avgPrice,
-        totalPrice: Number(investedVal),
-        createdAtIST: new Date().toISOString() // Timestamp doesn't matter for single aggregated lot
-    };
+    // 3️⃣ All BUY + SELL trades — used for chart markers
+    const tradesRes = await db.query(
+        `SELECT id, side, quantity, price, created_at
+         FROM trades
+         WHERE user_id = $1 AND stock_id = $2
+         ORDER BY created_at ASC`,
+        [userId, stockId]
+    );
+
+    const trades = tradesRes.rows.map(t => ({
+        id: t.id,
+        side: t.side,
+        quantity: Number(t.quantity),
+        pricePerShare: Number(t.price),
+        totalPrice: Number(t.quantity) * Number(t.price),
+        createdAtIST: t.created_at
+    }));
 
     res.json({
         symbol,
         totalQuantity,
-        trades: totalQuantity > 0 ? [syntheticTrade] : [] 
+        trades
     });
 
 
@@ -159,8 +164,8 @@ router.post("/sell", requireAuth, async (req, res) => {
 
     // 7️⃣ Insert Trade
     const tradeRes = await client.query(
-        `INSERT INTO trades (order_id, user_id, stock_id, side, quantity, price, realized_pnl)
-         VALUES ($1, $2, $3, 'SELL', $4, $5, $6)
+        `INSERT INTO trades (order_id, user_id, stock_id, side, quantity, price, realized_pnl,created_at)
+         VALUES ($1, $2, $3, 'SELL', $4, $5, $6,NOW() AT TIME ZONE 'Asia/Kolkata')
          RETURNING id`,
         [orderId, userId, stockId, quantity, pricePerShare, totalRealizedPnL]
     );

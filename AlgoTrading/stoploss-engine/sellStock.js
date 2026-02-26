@@ -108,8 +108,8 @@ async function sellStock(userId, stockId, quantity,symbol,positionId) {
 
     // 7️⃣ Insert Trade
     const tradeRes = await client.query(
-        `INSERT INTO trades (order_id, user_id, stock_id, side, quantity, price, realized_pnl)
-         VALUES ($1, $2, $3, 'SELL', $4, $5, $6)
+        `INSERT INTO trades (order_id, user_id, stock_id, side, quantity, price, realized_pnl,created_at)
+         VALUES ($1, $2, $3, 'SELL', $4, $5, $6,NOW() AT TIME ZONE 'Asia/Kolkata')
          RETURNING id`,
         [orderId, userId, stockId, quantity, pricePerShare, totalRealizedPnL]
     );

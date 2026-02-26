@@ -1,16 +1,15 @@
+
 /**
  * Format timestamp for display
  * @param timestamp - Timestamp string from backend
  * @returns Formatted date string in local timezone
  */
 export function formatToIST(timestamp: string): string {
-  const date = new Date(timestamp);
-  
-  console.log('📅 Input timestamp:', timestamp);
-  console.log('📅 Parsed Date:', date.toString());
-  
-  // Format in local browser timezone
-  const formatted = date.toLocaleString("en-IN", {
+  const corrected = timestamp.replace("Z", "");
+  const date = new Date(corrected);
+
+  return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -18,9 +17,6 @@ export function formatToIST(timestamp: string): string {
     minute: "2-digit",
     hour12: true
   });
-  
-  console.log('📅 Formatted:', formatted);
-  return formatted;
 }
 
 /**

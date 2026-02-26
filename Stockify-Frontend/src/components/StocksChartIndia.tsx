@@ -228,9 +228,17 @@ const dataPoints = chart.data.datasets[0]?.data as {
 
 if (!Array.isArray(dataPoints) || !dataPoints.length) return;
 
+// Get the visible x-axis bounds so we can skip trades outside the range
+const xMin = xScale.min;
+const xMax = xScale.max;
+
 trades.forEach((trade: Trade) => {
   const tradeTime = new Date(trade.createdAtIST).getTime();
   if (!Number.isFinite(tradeTime)) return;
+
+  // Skip trades outside the chart's visible time window
+  // (e.g. pre-market buys won't appear on the 1D intraday chart)
+  if (tradeTime < xMin || tradeTime > xMax) return;
 
   /* ── FIND NEAREST PRICE POINT ── */
   const x = xScale.getPixelForValue(tradeTime);
@@ -433,24 +441,25 @@ const lastCandleTs = lineData[lineData.length - 1].x;
 const { marketOpen, marketClose } = getNseMarketWindowUTC(lastCandleTs);
 
 
+// positions.created_at is now set with NOW() — pure UTC.
+// No offset adjustment needed; new Date(utcString).getTime() is correct.
 const tradePoints = trades.map(t => ({
-  x: new Date(t.createdAtIST).getTime(), // UTC
+  x: new Date(t.createdAtIST).getTime(),
   y: t.pricePerShare,
   side: t.side
 }));
 
 
 
+console.log(trades)
 
 
 
   currentIndex = lineData.length - 1;
   const is1D = timeframe === "1D";
 
-const prices = [
-  ...lineData.map(d => d.y),
-  ...tradePoints.map(t => t.y)
-];
+// Y-axis range is based solely on the price line — trade markers don't affect the scale
+const prices = lineData.map(d => d.y);
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
   const pad = (maxPrice - minPrice) * 0.08 || minPrice * 0.002;
