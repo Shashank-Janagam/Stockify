@@ -118,7 +118,7 @@ const moversList = [
           console.error("Polling error:", err);
           stopSSE();
         }
-      }, 1000);
+      }, 2000);
     }
 
     req.on("close", () => {
@@ -284,7 +284,7 @@ router.get("/recent", async (req, res) => {
           clearInterval(interval);
           res.end();
         }
-      }, 1000);
+      }, 2000);
     }
 
     req.on("close", () => {

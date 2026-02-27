@@ -45,7 +45,7 @@ router.get("/:symbol/stream", async (req, res) => {
   }
 
   await sendUpdate();
-  const interval = setInterval(sendUpdate, 1000);
+  const interval = setInterval(sendUpdate, 1500);
   req.on("close", () => {clearInterval(interval);
     console.log("SEE closed")
   });
