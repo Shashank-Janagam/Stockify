@@ -198,7 +198,7 @@ router.get("/stocks/stream", async (req, res) => {
 
   // Send immediately on connect, then every 1.5 s
   await send();
-  const interval = setInterval(send, 1500);
+  const interval = setInterval(send, 3500);
 
   // Cleanup when client disconnects
   req.on("close", () => {
