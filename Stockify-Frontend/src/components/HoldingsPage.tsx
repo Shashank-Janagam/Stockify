@@ -2,64 +2,54 @@ import React, { useEffect, useState, useContext, useRef } from "react";
 import "../Styles/HoldingsPage.css";
 import { AuthContext } from "../auth/AuthProvider";
 import { useNavigate } from "react-router-dom";
-type Holding = {
-  symbol: string;
-  name: string;
-  quantity: number;
-  currentPrice: number;
-  dayChangePercent: number;
-  invested: number;
-  current: number;
-  pnl: number;
-  pnlPercent: number;
-  datetime:string
-};
 
-type Summary = {
-  investedValue: number;
-  currentValue: number;
-  totalReturns: number;
-  totalReturnsPercent: number;
-};
-function slugify(name: string) {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
-function getStockRoute(
-  symbol: string,
-  name: string
-) {
-  const symbol1 = symbol.trim().toUpperCase();
-  const slug = slugify(name);
-
-
-  if (symbol1.endsWith(".NS") || symbol1.endsWith(".BO")) {
-    return `/indiaSEE/${symbol1}/${slug}`;
-  }
-
-  return `/us/${symbol1}/${slug}`;
-}
 const HOST = import.meta.env.VITE_HOST_ADDRESS;
 
-/* ── Compact inline order drawer ── */
+/* ─── Helpers ─── */
+function slugify(n: string) {
+  return n.toLowerCase().trim().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+function getRoute(symbol: string, name: string) {
+  const s = symbol.trim().toUpperCase();
+  const routeName = name ? slugify(name) : "stock";
+  return (s.endsWith(".NS") || s.endsWith(".BO")) ? `/indiaSEE/${s}/${routeName}` : `/us/${s}/${routeName}`;
+}
+const fmt = (n: number | null | undefined, d = 2) => {
+  if (n == null || isNaN(n)) return "—";
+  return `₹${n.toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d })}`;
+};
+
+/* ─── Types ─── */
+type Holding = {
+  symbol: string; name: string; quantity: number;
+  avgPrice: number; currentPrice: number;
+  dayChangePercent: number;
+  invested: number; current: number;
+  pnl: number; pnlPercent: number;
+  allocationPercent: number;
+  datetime: string;
+};
+type HoldingsSummary = {
+  investedValue: number; currentValue: number;
+  totalReturns: number; totalReturnsPercent: number;
+  dayReturns: number; dayReturnsPercent: number;
+};
+
+/* ─── Inline Order Drawer ─── */
 type DrawerState = { symbol: string; price: number; tab: "BUY" | "SELL"; availableQty: number } | null;
 
-function InlineOrderDrawer({
-  state, onClose, onDone
-}: { state: DrawerState; onClose: () => void; onDone: () => void }) {
-  const [qty, setQty] = useState("");
+function InlineOrderDrawer({ state, onClose, onDone }: { state: DrawerState; onClose: () => void; onDone: () => void }) {
+  const [qty, setQty]       = useState("");
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"BUY" | "SELL">(state?.tab ?? "BUY");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [tab, setTab]       = useState<"BUY" | "SELL">(state?.tab ?? "BUY");
+  const inputRef            = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setTab(state?.tab ?? "BUY");
-    setQty("");
-    setTimeout(() => inputRef.current?.focus(), 80);
+    if (state) {
+      setTab(state.tab);
+      setQty("");
+      setTimeout(() => inputRef.current?.focus(), 80);
+    }
   }, [state?.symbol, state?.tab]);
 
   if (!state) return null;
@@ -68,51 +58,40 @@ function InlineOrderDrawer({
   const overSell  = tab === "SELL" && Number(qty) > state.availableQty;
 
   const submit = async () => {
-    const finalQty = parseInt(qty, 10);
-    if (isNaN(finalQty) || finalQty <= 0) return;
+    const q = parseInt(qty, 10);
+    if (isNaN(q) || q <= 0) return;
     setLoading(true);
     try {
-      const url = tab === "BUY"
-        ? `${HOST}/api/orderExecution/buy`
-        : `${HOST}/api/sellstock/sell`;
-      const res = await fetch(url, {
-        method: "POST",
-        credentials: "include",
+      const url = tab === "BUY" ? `${HOST}/api/orderExecution/buy` : `${HOST}/api/sellstock/sell`;
+      const r = await fetch(url, {
+        method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol: state.symbol, quantity: finalQty, sl_enabled: false, sl_price: 0 }),
+        body: JSON.stringify({ symbol: state.symbol, quantity: q, sl_enabled: false, sl_price: 0 }),
       });
-      if (!res.ok) throw new Error();
+      if (!r.ok) throw new Error();
       onDone();
-    } catch {
-      alert("Order failed. Please try again.");
-    } finally {
-      setLoading(false);
-      setQty("");
-    }
+    } catch { alert("Order failed. Please try again."); }
+    finally { setLoading(false); setQty(""); }
   };
 
   return (
     <div className="h-drawer">
       <div className="h-drawer-tabs">
-        <button className={tab === "BUY"  ? "h-tab h-tab-buy active"  : "h-tab h-tab-buy"}  onClick={() => setTab("BUY")}>Buy</button>
-        <button className={tab === "SELL" ? "h-tab h-tab-sell active" : "h-tab h-tab-sell"} onClick={() => setTab("SELL")}>Sell</button>
+        <button className={`h-tab h-tab-buy${tab === "BUY" ? " active" : ""}`} onClick={() => setTab("BUY")}>Buy</button>
+        <button className={`h-tab h-tab-sell${tab === "SELL" ? " active" : ""}`} onClick={() => setTab("SELL")}>Sell</button>
         <button className="h-drawer-close" onClick={onClose}>✕</button>
       </div>
       <div className="h-drawer-body">
         <span className="h-drawer-price">@ ₹{state.price.toFixed(2)}</span>
         <input
-          ref={inputRef}
-          type="number"
-          className="h-drawer-qty"
-          placeholder="Qty"
-          min={1}
-          value={qty}
+          ref={inputRef} type="number" className="h-drawer-qty"
+          placeholder="Qty" min={1} value={qty}
           onChange={e => setQty(e.target.value)}
           onKeyDown={e => e.key === "Enter" && !overSell && submit()}
         />
         <span className="h-drawer-est">≈ ₹{estimated.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
         <button
-          className={tab === "BUY" ? "h-drawer-btn h-btn-buy" : "h-drawer-btn h-btn-sell"}
+          className={`h-drawer-btn ${tab === "BUY" ? "h-btn-buy" : "h-btn-sell"}`}
           disabled={loading || Number(qty) <= 0 || overSell}
           onClick={submit}
         >
@@ -124,190 +103,193 @@ function InlineOrderDrawer({
   );
 }
 
+/* ══════════════════════════════════════════
+   MAIN — Holdings Page (Delivery shares)
+══════════════════════════════════════════ */
 const HoldingsPage: React.FC = () => {
-  const { user } = useContext(AuthContext);
-  const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [drawer, setDrawer] = useState<DrawerState>(null);
-  const [sseVersion, setSseVersion] = useState(0); // bumped after every order → restarts SSE
-  const navigate = useNavigate();
+  const { user }            = useContext(AuthContext);
+  const navigate            = useNavigate();
+  const [holdings, setHoldings]   = useState<Holding[]>([]);
+  const [summary,  setSummary]    = useState<HoldingsSummary | null>(null);
+  const [loading,  setLoading]    = useState(true);
+  const [drawer,   setDrawer]     = useState<DrawerState>(null);
+  const [sseVersion, bump]        = useState(0);
 
-  // Called by InlineOrderDrawer after a successful buy/sell
-  const handleOrderDone = () => {
-    setDrawer(null);
-    setLoading(true);          // show skeleton while fresh data loads
-    setSseVersion(v => v + 1); // triggers SSE useEffect cleanup + restart
-  };
-
+  /* SSE — live stream */
   useEffect(() => {
     if (!user) return;
-
     let es: EventSource | null = null;
     let cancelled = false;
 
-    // EventSource cannot send custom headers, so we pass the token as a query param
-    user.getIdToken().then((token) => {
+    user.getIdToken().then(token => {
       if (cancelled) return;
-
       es = new EventSource(
         `${HOST}/api/holdings/stocks/stream?token=${encodeURIComponent(token)}`
       );
-
-      es.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        setHoldings(data.holdings);
-        setSummary(data.summary);
+      es.onmessage = (e) => {
+        const d = JSON.parse(e.data);
+        setHoldings(d.holdings || []);
+        setSummary(d.summary);
         setLoading(false);
       };
-
-      es.onerror = (err) => {
-        console.error("SSE error:", err);
-        es?.close();
-      };
+      es.onerror = () => es?.close();
     });
 
-    return () => {
-      cancelled = true;
-      es?.close();
-    };
+    return () => { cancelled = true; es?.close(); };
   }, [user, sseVersion]);
 
+  const handleOrderDone = () => { setDrawer(null); setLoading(true); bump(v => v + 1); };
+  const profit = (summary?.totalReturns ?? 0) >= 0;
 
   return (
-    <div className="holdings-wrapper">
-      {/* LEFT */}
-      <div className="holdings-left">
-        {/* SUMMARY */}
-        <div className="summary-card">
-          {loading ? (
-            <div className="holdings-skeleton holdings-sk-summary" />
-          ) : (
-            <>
-              <div>
-                <p className="label " >Current value</p>
-                <h2 className={summary!.totalReturns >= 0 ? "positive" : "negative"}>₹{summary!.currentValue.toLocaleString("en-IN")}</h2>
-                
-              </div>
+    <div className="hp-wrapper">
+      {/* ── Page header ── */}
+      <div className="hp-page-header">
+        <div>
+          <h1 className="hp-page-title">Holdings</h1>
+          <p className="hp-page-sub">Your settled delivery shares · live valuations</p>
+        </div>
+      </div>
 
-              <div>
-                <p className="label">Invested value</p>
-                <h2>₹{summary!.investedValue.toLocaleString("en-IN")}</h2>
+      {/* ── Summary card ── */}
+      <div className="hp-summary-card">
+        {loading
+          ? <div className="holdings-skeleton holdings-sk-summary" />
+          : summary && (<>
+              <div className="hp-sum-block">
+                <span className="hp-sum-label">Invested</span>
+                <span className="hp-sum-val">{fmt(summary.investedValue)}</span>
               </div>
-
-              <div>
-                <p className="label">Total returns</p>
-                <div className="percent">
-                <h2 className={summary!.totalReturns >= 0 ? "positive" : "negative"}>
-                  {summary!.totalReturns >= 0 ? "+" : ""}
-                  ₹{summary!.totalReturns.toLocaleString("en-IN")}
-                  
-                </h2>
-                <span className={summary!.totalReturns >= 0 ? "positive down" : "negative down"}>
-                  {summary!.totalReturns >= 0 ? "+" : ""}
-                  {summary!.totalReturnsPercent.toFixed(2)}%
+              <div className="hp-sum-divider" />
+              <div className="hp-sum-block">
+                <span className="hp-sum-label">Current Value</span>
+                <span className={`hp-sum-val ${profit ? "hp-profit" : "hp-loss"}`}>
+                  {fmt(summary.currentValue)}
                 </span>
               </div>
+              <div className="hp-sum-divider" />
+              <div className="hp-sum-block">
+                <span className="hp-sum-label">Total P&amp;L</span>
+                <span className={`hp-sum-val ${profit ? "hp-profit" : "hp-loss"}`}>
+                  {profit ? "+" : ""}{fmt(summary.totalReturns)}
+                  <span className="hp-sum-pct">({profit ? "+" : ""}{(summary.totalReturnsPercent || 0).toFixed(2)}%)</span>
+                </span>
               </div>
-             
-            </>
-          )}
-        </div>
+              <div className="hp-sum-divider" />
+              <div className="hp-sum-block">
+                <span className="hp-sum-label">Today's P&amp;L</span>
+                <span className={`hp-sum-val ${(summary.dayReturns ?? 0) >= 0 ? "hp-profit" : "hp-loss"}`}>
+                  {(summary.dayReturns ?? 0) >= 0 ? "+" : ""}{fmt(summary.dayReturns)}
+                  <span className="hp-sum-pct">({(summary.dayReturns ?? 0) >= 0 ? "+" : ""}{(summary.dayReturnsPercent || 0).toFixed(2)}%)</span>
+                </span>
+              </div>
+            </>)
+        }
+      </div>
 
-        {/* TABLE */}
-        <div className="table-card">
-          <table>
+      {/* ── Table ── */}
+      {!loading && holdings.length === 0 ? (
+        <div className="hp-empty">
+          <div className="hp-empty-icon">📦</div>
+          <p className="hp-empty-title">No holdings yet</p>
+          <p className="hp-empty-sub">
+            Delivery shares you buy will appear here. Buy a stock with "Delivery" product type to get started.
+          </p>
+        </div>
+      ) : (
+        <div className="hp-table-card">
+          <table className="hp-table">
             <thead>
               <tr>
                 <th>Company</th>
-                <th>Market price (1D)</th>
-                <th>Returns</th>
-                <th>Current / Invested</th>
+                <th>Qty / Avg Price</th>
+                <th>LTP · Day %</th>
+                <th>Invested / Current</th>
+                <th>P&amp;L</th>
+                <th>Allocation</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {loading
-                ? Array.from({ length: 6 }).map((_, i) => (
-                    <tr key={i}>
-                      <td>
-                        <div className="holdings-skeleton holdings-sk-cell h-w-60" />
-                        <div className="holdings-skeleton holdings-sk-cell h-w-40" style={{ marginTop: 6, height: 14 }} />
-                      </td>
-                      <td>
-                        <div className="holdings-skeleton holdings-sk-cell h-w-40" />
-                        <div className="holdings-skeleton holdings-sk-cell h-w-40" style={{ marginTop: 6, height: 14 }} />
-                      </td>
-                      <td>
-                        <div className="holdings-skeleton holdings-sk-cell h-w-40" />
-                      </td>
-                      <td>
-                        <div className="holdings-skeleton holdings-sk-cell h-w-60" />
-                        <div className="holdings-skeleton holdings-sk-cell h-w-40" style={{ marginTop: 6, height: 14 }} />
-                      </td>
+                ? Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="hp-sk-row">
+                      {Array.from({ length: 7 }).map((_, j) => (
+                        <td key={j}>
+                          <div className="holdings-skeleton holdings-sk-cell" style={{ width: `${45 + (j * 7) % 40}%` }} />
+                        </td>
+                      ))}
                     </tr>
                   ))
-                : holdings.map(h => (
-                    <React.Fragment key={h.symbol}>
+                : holdings.map((h, i) => (
+                    <React.Fragment key={h.symbol + i}>
                       <tr
-                        onClick={() => navigate(getStockRoute(h.symbol, h.name))}
-                        className="clickable"
+                        className="hp-row clickable"
+                        onClick={() => navigate(getRoute(h.symbol, h.name))}
                       >
                         <td>
-                          <strong>{h.name}</strong>
-                          <div className="muted">{h.quantity} shares</div>
-                        </td>
-
-                        <td>
-                          <strong>₹{h.currentPrice}</strong>
-                          <div className={h.dayChangePercent >= 0 ? "positive" : "negative"}>
-                            {h.dayChangePercent >= 0 ? "+" : ""}
-                            {h.dayChangePercent}%
+                          <div className="hp-company">
+                            <span className="hp-company-name">{h.name || h.symbol}</span>
+                            <span className="hp-company-sym">
+                              {h.symbol.replace(".NS", "").replace(".BO", "")}
+                            </span>
                           </div>
                         </td>
-
-                        <td className={h.pnl >= 0 ? "positive" : "negative"}>
-                          <strong>
-                            {h.pnl >= 0 ? "+" : ""}₹{h.pnl}
-                          </strong>
-                          <div>
-                            {h.pnl >= 0 ? "+" : ""}
-                            {h.pnlPercent}%
+                        <td>
+                          <div className="hp-2line">
+                            <span className="hp-primary">{h.quantity} shares</span>
+                            <span className="hp-muted">avg {fmt(h.avgPrice)}</span>
                           </div>
                         </td>
-
                         <td>
-                          <strong>₹{h.current}</strong>
-                          <div className="muted">₹{h.invested}</div>
+                          <div className="hp-2line">
+                            <span className="hp-primary">{fmt(h.currentPrice)}</span>
+                            <span className={`hp-sm ${(h.dayChangePercent ?? 0) >= 0 ? "hp-profit" : "hp-loss"}`}>
+                              {(h.dayChangePercent ?? 0) >= 0 ? "▲" : "▼"} {Math.abs(h.dayChangePercent ?? 0)}%
+                            </span>
+                          </div>
                         </td>
-
-                        {/* ── Per-row Buy / Sell buttons ── */}
+                        <td>
+                          <div className="hp-2line">
+                            <span className="hp-primary">{fmt(h.current)}</span>
+                            <span className="hp-muted">{fmt(h.invested)}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className={`hp-pnl ${(h.pnl ?? 0) >= 0 ? "hp-profit" : "hp-loss"}`}>
+                            <span>{(h.pnl ?? 0) >= 0 ? "+" : ""}{fmt(h.pnl)}</span>
+                            <span className="hp-sm">{(h.pnlPercent ?? 0) >= 0 ? "+" : ""}{h.pnlPercent}%</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="hp-alloc-wrap">
+                            <span className="hp-alloc-val">{(h.allocationPercent || 0)}%</span>
+                            <div className="hp-alloc-bar">
+                              <div className="hp-alloc-fill" style={{ width: `${h.allocationPercent || 0}%` }} />
+                            </div>
+                          </div>
+                        </td>
                         <td className="h-action-cell" onClick={e => e.stopPropagation()}>
                           <button
                             className="h-action-btn h-buy"
-                            onClick={() =>
-                              setDrawer(d =>
-                                d?.symbol === h.symbol && d.tab === "BUY" ? null
-                                : { symbol: h.symbol, price: h.currentPrice, tab: "BUY", availableQty: h.quantity }
-                              )
-                            }
+                            onClick={() => setDrawer(d =>
+                              d?.symbol === h.symbol && d.tab === "BUY" ? null
+                              : { symbol: h.symbol, price: h.currentPrice, tab: "BUY", availableQty: h.quantity }
+                            )}
                           >Buy</button>
                           <button
                             className="h-action-btn h-sell"
-                            onClick={() =>
-                              setDrawer(d =>
-                                d?.symbol === h.symbol && d.tab === "SELL" ? null
-                                : { symbol: h.symbol, price: h.currentPrice, tab: "SELL", availableQty: h.quantity }
-                              )
-                            }
+                            onClick={() => setDrawer(d =>
+                              d?.symbol === h.symbol && d.tab === "SELL" ? null
+                              : { symbol: h.symbol, price: h.currentPrice, tab: "SELL", availableQty: h.quantity }
+                            )}
                           >Sell</button>
                         </td>
                       </tr>
 
-                      {/* ── Inline drawer row — rendered only for the active holding ── */}
                       {drawer?.symbol === h.symbol && (
                         <tr className="h-drawer-row">
-                          <td colSpan={5} className="h-drawer-cell">
+                          <td colSpan={7} className="h-drawer-cell">
                             <InlineOrderDrawer
                               state={drawer}
                               onClose={() => setDrawer(null)}
@@ -317,13 +299,12 @@ const HoldingsPage: React.FC = () => {
                         </tr>
                       )}
                     </React.Fragment>
-                  ))}
+                  ))
+              }
             </tbody>
           </table>
         </div>
-      </div>
-
-     
+      )}
     </div>
   );
 };

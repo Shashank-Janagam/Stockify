@@ -3,221 +3,224 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { createClient } from "redis";
 import { monitorPrice } from "./priceMonitor.js";
-import sellStock from "./sellStock.js";
+import { executeSell, executeBuy } from "./orderExecution.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
-// DB import
 const { default: db } = await import("../db/sql.js");
 
-// =============================
-// Redis Setup
-// =============================
+// ─────────────────────────────────────────────────────────
+//  Redis
+// ─────────────────────────────────────────────────────────
+const subscriber = createClient({ url: process.env.REDIS_URL });
+const publisher  = createClient({ url: process.env.REDIS_URL });
 
-console.log("redis url stoploss:",process.env.REDIS_URL)
-const subscriber = createClient({
-    url: process.env.REDIS_URL
-});
-
-const publisher = createClient({
-    url: process.env.REDIS_URL
-});
-
-subscriber.on("error", (err) => {
-    console.error("Redis error:", err);
-});
+subscriber.on("error", (err) => console.error("[SL Engine] Subscriber error:", err));
+publisher.on("error",  (err) => console.error("[SL Engine] Publisher error:", err));
 
 await subscriber.connect();
 await publisher.connect();
+console.log("[SL Engine] ✅ Connected to Redis");
 
-console.log("Connected to Redis Cloud");
+// ─────────────────────────────────────────────────────────
+//  In-memory watch store
+//  Map<symbol, Map<Number(orderId), descriptor>>
+// ─────────────────────────────────────────────────────────
+const activeOrders = new Map(); // symbol → Map<orderId, descriptor>
 
+function registerOrder(descriptor) {
+  const sym = descriptor.symbol.endsWith(".NS")
+    ? descriptor.symbol
+    : `${descriptor.symbol}.NS`;
 
-// =============================
-// In-Memory Store
-// =============================
-const activeStops = new Map();
+  descriptor.symbol = sym;
+  const targetId = Number(descriptor.orderId);
 
-/*
-Structure:
-Map {
-   "RELIANCE.NS" => [
-        { positionId: 1, userId: 10, stopLoss: 2450 }
-   ]
+  if (!activeOrders.has(sym)) activeOrders.set(sym, new Map());
+  const map = activeOrders.get(sym);
+
+  if (map.has(targetId)) {
+    console.log(`[SL Engine] Already tracking order #${targetId}`);
+    return;
+  }
+
+  map.set(targetId, { ...descriptor, orderId: targetId });
+  console.log(
+    `[SL Engine] 📋 Registered ${descriptor.side} #${targetId}` +
+    ` | ${sym} | trigger ₹${descriptor.stopLoss} | qty ${descriptor.quantity}`
+  );
 }
-*/
 
-// =============================
-// Load Active Stops From DB
-// =============================
-async function loadActiveStops() {
+// ─────────────────────────────────────────────────────────
+//  Load PENDING orders from DB
+// ─────────────────────────────────────────────────────────
+async function loadPendingOrders() {
+  console.log("[SL Engine] 🔄 Loading PENDING orders from DB...");
+  try {
+    const result = await db.query(
+      `SELECT o.id        AS order_id,
+              o.user_id,
+              o.stock_id,
+              o.side,
+              o.quantity,
+              o.stop_trigger_price,
+              o.sell_type AS product_type,
+              s.symbol
+       FROM orders o
+       JOIN stocks s ON o.stock_id = s.id
+       WHERE o.status = 'PENDING'`
+    );
 
-    console.log("Loading active stoplosses from DB...");
-
-    const result = await db.query(`
-        SELECT p.id AS position_id,
-               p.user_id,
-               p.stop_loss,
-               p.stock_id,
-               s.symbol,
-               p.remaining_quantity
-        FROM positions p
-        JOIN stocks s ON p.stock_id = s.id
-        WHERE p.status = 'OPEN'
-        AND p.stoploss_enabled = true
-    `);
-
-    activeStops.clear();
+    console.log(`[SL Engine] Found ${result.rows.length} PENDING order(s)`);
 
     for (const row of result.rows) {
-
-        const symbol = row.symbol;
-
-        if (!activeStops.has(symbol)) {
-            activeStops.set(symbol, []);
-        }
-
-        activeStops.get(symbol).push({
-            positionId: row.position_id,
-            userId: row.user_id,
-            stockId: row.stock_id,
-            stopLoss: Number(row.stop_loss),
-            quantity: Number(row.remaining_quantity)  
-        });
+      registerOrder({
+        orderId:      row.order_id,
+        userId:       row.user_id,
+        stockId:      row.stock_id,
+        symbol:       row.symbol,
+        stopLoss:     Number(row.stop_trigger_price),
+        quantity:     Number(row.quantity),
+        side:         row.side,
+        product_type: row.product_type,
+      });
     }
-
-    console.log("Active Stops Loaded:", activeStops);
+  } catch (err) {
+    console.error("[SL Engine] Failed to load pending orders:", err.message);
+  }
 }
 
-// =============================
-// Execute StopLoss
-// =============================
-async function executeStopLoss(order, symbol, currentPrice) {
+// ─────────────────────────────────────────────────────────
+//  Execute a triggered order
+// ─────────────────────────────────────────────────────────
+async function executeTrigger(descriptor, currentPrice) {
+  const { orderId, symbol, side } = descriptor;
 
-    console.log(`STOPLOSS HIT → ${symbol} | Position ${order.positionId}`);
+  console.log(
+    `[SL Engine] 🔔 TRIGGER: ${side} #${orderId} | ${symbol}` +
+    ` | current ₹${currentPrice} | trigger ₹${descriptor.stopLoss}`
+  );
 
-    try {
-        console.log("Closing position in DB...", order,symbol,currentPrice);
-        // Close position in DB
-        const res=await sellStock(order.userId, order.stockId, order.quantity,symbol,order.positionId);
+  let result;
+  if (side === "SELL") {
+    result = await executeSell(descriptor, currentPrice);
+  } else if (side === "BUY") {
+    result = await executeBuy(descriptor, currentPrice);
+  }
 
-        if(res.error || res.status!="EXECUTED"){
-            console.log("Failed to close position in DB:", res.error);
-            
-            // If the position is gone or invalid, we MUST remove it from memory to stop the loop
-            if (res.error === "Position not found" || res.error === "Not enough shares" || res.error === "Stock not found") {
-                console.log("⚠️ Removing invalid/stale stoploss from memory.");
-            } else {
-                 // For other errors (e.g. DB connection), we might want to retry, so we return early
-                return;
-            }
-        }
-
-        // Remove from memory
-        console.log("removing from local data---")
-        const updatedList = activeStops.get(symbol)
-            .filter(o => o.positionId !== order.positionId);
-
-        if (updatedList.length === 0) {
-            activeStops.delete(symbol);
-        } else {
-            activeStops.set(symbol, updatedList);
-        }
-
-        // Optional: Notify main server
-        if (!res.error) {
-            await publisher.publish(
-                "STOPLOSS_TRIGGERED",
-                JSON.stringify({
-                    positionId: order.positionId,
-                    symbol,
-                    price: currentPrice
-                })
-            );
-        }
-
-    } catch (err) {
-        console.error("Stoploss execution failed:", err);
-    }
+  if (result && !result.error) {
+    await publisher.publish(
+      "STOPLOSS_TRIGGERED",
+      JSON.stringify({
+        orderId, side, symbol, price: currentPrice, status: "EXECUTED",
+      })
+    );
+  } else {
+    console.error(`[SL Engine] ❌ Execution failed for #${orderId}:`, result?.error || "Unknown error");
+  }
 }
 
-// =============================
-// Price Checking Loop
-// =============================
+// ─────────────────────────────────────────────────────────
+//  Price polling loop
+// ─────────────────────────────────────────────────────────
 async function checkPrices() {
+  if (activeOrders.size === 0) return;
+  const symbols = [...activeOrders.keys()];
+  const prices  = await monitorPrice(symbols);
 
-    if (activeStops.size === 0) return;
+  for (const sym of symbols) {
+    const currentPrice = prices[sym];
+    if (!currentPrice) continue;
+    const orderMap = activeOrders.get(sym);
+    if (!orderMap) continue;
 
-    const symbols = Array.from(activeStops.keys());
+    for (const [orderId, descriptor] of orderMap) {
+      const { stopLoss, side } = descriptor;
+      const triggered = side === "SELL" ? currentPrice <= stopLoss : currentPrice >= stopLoss;
 
-    const prices = await monitorPrice(symbols);
-    console.log("new prices ",prices);
-
-    for (const symbol of symbols) {
-
-        const currentPrice = prices[symbol];
-        if (!currentPrice) continue;
-
-        const orders = activeStops.get(symbol);
-        if (!orders) continue;
-
-        for (const order of [...orders]) {
-            console.log("Checking order",order)
-
-            if (currentPrice <= order.stopLoss) {
-                console.log("Executing order",order)
-                await executeStopLoss(order, symbol, currentPrice);
-            }
-        }
+      if (triggered) {
+        orderMap.delete(orderId);
+        if (orderMap.size === 0) activeOrders.delete(sym);
+        executeTrigger(descriptor, currentPrice).catch(err => console.error(err));
+      }
     }
+  }
 }
 
-// =============================
-// Redis Subscriber (NEW STOPLOSS)
-// =============================
+// ─────────────────────────────────────────────────────────
+//  Subscriptions
+// ─────────────────────────────────────────────────────────
 await subscriber.subscribe("NEW_STOPLOSS", (message) => {
-
-    try {
-        const data = JSON.parse(message);
-        const symbol = data.symbol;
-
-        if (!activeStops.has(symbol)) {
-            activeStops.set(symbol, []);
-        }
-
-        const list = activeStops.get(symbol);
-        const exists = list.some(o => o.positionId === data.positionId);
-
-        if (!exists) {
-            list.push({
-                positionId: data.positionId,
-                userId: data.userId,
-                stopLoss: Number(data.stopLoss),
-                stockId: data.stockId, // Ensure we pass this if available, though trigger usually has it
-                quantity: Number(data.quantity || 0) // Should ideally come from event
-            });
-            console.log("New stoploss added:", symbol, data.positionId);
-        } else {
-            console.log("Stoploss already being tracked:", symbol, data.positionId);
-        }
-    } catch(err) {
-        console.error("Redis sub error:", err);
-    }
+  try {
+    const data = JSON.parse(message);
+    registerOrder({
+      orderId: data.orderId,
+      userId: data.userId,
+      stockId: data.stockId,
+      symbol: data.symbol,
+      stopLoss: Number(data.stopLoss),
+      quantity: Number(data.quantity),
+      side: data.side,
+      product_type: data.product_type,
+    });
+  } catch (err) {
+    console.error("[SL Engine] NEW_STOPLOSS Error:", err.message);
+  }
 });
 
-// =============================
-// Engine Start
-// =============================
-await loadActiveStops();
+// ── UPDATE_STOPLOSS: trigger price OR quantity changes ──
+await subscriber.subscribe("UPDATE_STOPLOSS", (message) => {
+  try {
+    const data = JSON.parse(message);
+    const targetId = Number(data.orderId);
+    
+    // Check both possible property names for trigger price and quantity
+    const newPrice = Number(data.stop_trigger_price ?? data.stopLoss);
+    const newQty = data.newQuantity != null ? Number(data.newQuantity) : null;
 
-// Poll every 5 seconds
-setInterval(async () => {
-    try {
-        await checkPrices();
-    } catch (err) {
-        console.error("Engine error:", err);
+    let found = false;
+    for (const [, orderMap] of activeOrders) {
+      if (orderMap.has(targetId)) {
+        const descriptor = orderMap.get(targetId);
+        if (!isNaN(newPrice)) descriptor.stopLoss = newPrice;
+        if (newQty !== null) descriptor.quantity = newQty;
+        
+        orderMap.set(targetId, descriptor);
+        console.log(`[SL Engine] ✏️  Updated #${targetId}: trigger ₹${descriptor.stopLoss}, qty ${descriptor.quantity}`);
+        found = true;
+        break;
+      }
     }
+    if (!found) console.warn(`[SL Engine] UPDATE_STOPLOSS: order #${targetId} not in watch map`);
+  } catch (err) {
+    console.error("[SL Engine] UPDATE_STOPLOSS Error:", err.message);
+  }
+});
+
+await subscriber.subscribe("CANCEL_STOPLOSS", (message) => {
+  try {
+    const { orderId } = JSON.parse(message);
+    const targetId = Number(orderId);
+    let found = false;
+    for (const [sym, orderMap] of activeOrders) {
+      if (orderMap.has(targetId)) {
+        orderMap.delete(targetId);
+        if (orderMap.size === 0) activeOrders.delete(sym);
+        console.log(`[SL Engine] 🗑  Removed order #${targetId} from watch map`);
+        found = true;
+        break;
+      }
+    }
+    if (!found) console.log(`[SL Engine] CANCEL_STOPLOSS: order #${targetId} not found`);
+  } catch (err) {
+    console.error("[SL Engine] CANCEL_STOPLOSS Error:", err.message);
+  }
+});
+
+await loadPendingOrders();
+setInterval(async () => {
+  try { await checkPrices(); } catch (err) {}
 }, 5000);
 
-console.log("StopLoss Engine Running...");
+console.log("[SL Engine] 🚀 Running — polling every 5s");

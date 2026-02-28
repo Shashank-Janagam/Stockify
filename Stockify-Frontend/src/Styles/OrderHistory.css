@@ -1,323 +1,634 @@
-/* =========================
-   PAGE LAYOUT
-========================= */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-.orders-wrapper {
+/* ═══════════════════════════════════════════
+   ROOT WRAPPER
+═══════════════════════════════════════════ */
+.oh-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 8px; /* Adjusted padding for better fit in dashboard */
+  gap: 20px;
+  padding: 8px;
   width: 100%;
-  animation: fadeIn 0.4s ease-out;
-  font-family: 'Inter', sans-serif; /* Modern Font */
+  font-family: 'Inter', sans-serif;
+  animation: oh-fade 0.35s ease-out;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes oh-fade {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* =========================
+/* ═══════════════════════════════════════════
    HEADER
-========================= */
-.orders-header {
+═══════════════════════════════════════════ */
+.oh-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding-bottom: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.orders-header h2 {
-  font-size: 24px;
+.oh-title {
+  font-size: 22px;
   font-weight: 700;
-  color: #111827; /* Darker, sharper text */
+  color: #111827;
   letter-spacing: -0.02em;
   margin: 0;
 }
 
-/* =========================
-   TABLE CARD
-========================= */
-.orders-card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
-  overflow-x: auto;          /* horizontal scroll when viewport is narrow */
-  overflow-y: visible;
-  border: 1px solid #f3f4f6;
+/* ═══════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════ */
+.oh-tabs {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 12px;
 }
 
-.order-history-table {
+.oh-tab-btn {
+  padding: 8px 18px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-family: 'Inter', sans-serif;
+  white-space: nowrap;
+}
+
+.oh-tab-btn:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.oh-tab-active {
+  background: #fff !important;
+  color: #111827 !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10);
+}
+
+.oh-tab-sl.oh-tab-active {
+  color: #d97706 !important;
+}
+
+/* ═══════════════════════════════════════════
+   CARD
+═══════════════════════════════════════════ */
+.oh-card {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════
+   TABLE WRAPPER
+═══════════════════════════════════════════ */
+.oh-table-wrap {
+  overflow-x: auto;
+}
+
+.oh-table {
   width: 100%;
-  min-width: 900px;          /* never collapses below this — scroll kicks in instead */
+  min-width: 720px;   /* narrower — horizontal scroll handles the rest */
   border-collapse: collapse;
   border-spacing: 0;
-  table-layout: fixed;
+  table-layout: auto; /* let columns size naturally */
 }
 
-/* Distribute the 8 columns */
-.order-history-table th:nth-child(1) { width: 24%; } /* Company */
-.order-history-table th:nth-child(2) { width: 8%;  } /* Side */
-.order-history-table th:nth-child(3) { width: 6%;  } /* Qty */
-.order-history-table th:nth-child(4) { width: 12%; } /* Price */
-.order-history-table th:nth-child(5) { width: 14%; } /* Total Value */
-.order-history-table th:nth-child(6) { width: 14%; } /* PnL */
-.order-history-table th:nth-child(7) { width: 11%; } /* Status */
-.order-history-table th:nth-child(8) { width: 11%; } /* Order Type */
+/* Give the Actions column breathing room */
+.oh-table th:last-child,
+.oh-table td:last-child {
+  min-width: 52px;
+  width: 52px;
+  text-align: center;
+}
 
-.order-history-thead th {
-  text-align: left;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: #6b7280;
-  padding: 16px 24px;
+/* Header row */
+.oh-table thead tr {
   background: #f9fafb;
   border-bottom: 1px solid #e5e7eb;
-  letter-spacing: 0.05em;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.oh-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  padding: 13px 18px;
   white-space: nowrap;
 }
 
-.order-history-tbody td {
-  padding: 18px 24px;
+/* Body rows */
+.oh-row td {
+  padding: 13px 16px;
+  font-size: 13px;
+  color: #374151;
   border-bottom: 1px solid #f3f4f6;
   vertical-align: middle;
-  transition: background 0.15s ease-in-out;
-  font-size: 14px;
-  color: #374151;
+  transition: background 0.12s;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.order-history-tbody tr:hover td {
-  background: #f8fafc; /* Subtle hover effect */
-}
-
-.order-history-tbody tr:last-child td {
+.oh-row:last-child td {
   border-bottom: none;
 }
 
-/* =========================
-   CELL STYLES
-========================= */
-.symbol-cell {
+.oh-row:hover td {
+  background: #fafafa;
+}
+
+/* ═══════════════════════════════════════════
+   STOCK CELL
+═══════════════════════════════════════════ */
+.oh-stock-cell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
-.symbol-name {
-  font-size: 15px; /* Slightly larger */
+.oh-stock-name {
+  font-size: 14px;
   font-weight: 600;
   color: #111827;
-  letter-spacing: -0.01em;
 }
 
-.order-date {
-  font-size: 12px;
+.oh-stock-symbol {
+  font-size: 11px;
   color: #9ca3af;
   font-weight: 500;
 }
 
-/* =========================
-   BADGES
-========================= */
-.order-history-badge {
+/* ═══════════════════════════════════════════
+   BADGES — Side (BUY / SELL)
+═══════════════════════════════════════════ */
+.oh-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 12px;
-  border-radius: 8px; /* Modern shape */
-  font-size: 12px;
-  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  min-width: 60px;
 }
 
-.order-history-badge.buy {
-  background: #ecfdf5; /* Softer green bg */
-  color: #059669;      /* Stronger green text */
-}
+.oh-buy  { background: #ecfdf5; color: #059669; }
+.oh-sell { background: #fef2f2; color: #dc2626; }
 
-.order-history-badge.sell {
-  background: #fef2f2; /* Softer red bg */
-  color: #dc2626;      /* Stronger red text */
-}
-
-.order-status-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 999px; /* Pill shape */
-  font-size: 12px;
+/* ═══════════════════════════════════════════
+   ORDER TYPE PILL
+═══════════════════════════════════════════ */
+.oh-type-pill {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 11px;
   font-weight: 600;
-  text-transform: capitalize;
-}
-
-.order-status-badge.executed {
-  background: #f0fdf4;
-  color: #166534;
-  /* border: 1px solid #bbf7d0; Remove heavy border */
-}
-
-.order-status-badge.rejected {
-  background: #fef2f2;
-  color: #991b1b;
-  /* border: 1px solid #fecaca; */
-}
-
-/* =========================
-   NUMERICAL DATA
-========================= */
-.order-price {
-  font-weight: 600;
-  font-size: medium;
-  color: #111827;
-  font-variant-numeric: tabular-nums; /* Better number alignment */
-}
-
-.order-amount {
+  background: #f3f4f6;
   color: #4b5563;
+  letter-spacing: 0.03em;
+}
+
+/* ═══════════════════════════════════════════
+   NUMBERS
+═══════════════════════════════════════════ */
+.oh-num {
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
+}
+
+.oh-price {
+  font-weight: 600;
+  color: #111827;
+}
+
+.oh-null {
+  color: #d1d5db;
+  font-weight: 400;
+}
+
+/* ═══════════════════════════════════════════
+   P&L
+═══════════════════════════════════════════ */
+.oh-pnl {
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.order-qty-cell {
+.oh-profit { color: #10b981; }
+.oh-loss   { color: #ef4444; }
+
+/* ═══════════════════════════════════════════
+   CATEGORY BADGES
+═══════════════════════════════════════════ */
+.oh-category {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.oh-sl      { background: #fef3c7; color: #d97706; }
+.oh-intra   { background: #ede9fe; color: #7c3aed; }
+.oh-regular { background: #f0f9ff; color: #0369a1; }
+
+/* ═══════════════════════════════════════════
+   STATUS PILLS
+═══════════════════════════════════════════ */
+.oh-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.oh-status::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.oh-status-executed  { background: #f0fdf4; color: #16a34a; }
+.oh-status-pending   { background: #fffbeb; color: #d97706; }
+.oh-status-cancelled { background: #f3f4f6; color: #6b7280; }
+.oh-status-rejected  { background: #fef2f2; color: #dc2626; }
+
+/* ═══════════════════════════════════════════
+   DATE CELL
+═══════════════════════════════════════════ */
+.oh-date-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.oh-date-exec {
+  font-size: 13px;
   font-weight: 500;
   color: #374151;
+  white-space: nowrap;
 }
 
-/* =========================
-   LOADING SPINNER
-========================= */
-.loading-more-container {
-  display: flex;
-  justify-content: center;
+.oh-date-placed {
+  font-size: 11px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════
+   STOPLOSS TRIGGER CELL
+═══════════════════════════════════════════ */
+.oh-trigger-cell {
+  display: inline-flex;
   align-items: center;
-  padding: 24px;
-  width: 100%;
+  gap: 5px;
+  white-space: nowrap;
 }
 
-.loading-spinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid #e5e7eb;
-  border-top-color: #3b82f6; /* Blue accent */
+/* Pencil edit icon — always visible, subtle */
+.oh-pencil-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.13s, color 0.13s, border-color 0.13s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.oh-pencil-btn:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+
+.oh-trigger-icon  { font-size: 14px; }
+.oh-trigger-price {
+  font-size: 14px;
+  font-weight: 700;
+  color: #d97706;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════
+   INLINE EDIT CONTROLS
+═══════════════════════════════════════════ */
+.oh-trigger-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.oh-edit-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.oh-row:hover .oh-edit-icon-btn { opacity: 1; }
+
+.oh-row-editing td { background: #fefce8 !important; }
+
+.oh-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.oh-edit-input {
+  width: 110px;
+  padding: 6px 10px;
+  border: 1.5px solid #f59e0b;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  color: #111827;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.oh-edit-input:focus { box-shadow: 0 0 0 3px rgba(245,158,11,0.18); }
+
+/* Remove browser arrows on number input */
+.oh-edit-input::-webkit-outer-spin-button,
+.oh-edit-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.oh-edit-input[type=number]               { -moz-appearance: textfield; }
+
+.oh-save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: 'Inter', sans-serif;
+  min-width: 52px;
+}
+.oh-save-btn:hover:not(:disabled) { background: #d97706; }
+.oh-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.oh-discard-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #9ca3af;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.oh-discard-btn:hover { background: #f3f4f6; color: #374151; }
+
+/* Edit + Delete side by side */
+.oh-action-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;   /* keep on one line */
+  min-width: 150px;
+}
+
+.oh-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: 'Inter', sans-serif;
+}
+.oh-edit-btn:hover { background: #dbeafe; border-color: #93c5fd; }
+
+
+/* ═══════════════════════════════════════════
+   STOPLOSS INFO BANNER
+═══════════════════════════════════════════ */
+.oh-sl-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  background: #fffbeb;
+  border-bottom: 1px solid #fde68a;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.oh-sl-info-icon { font-size: 15px; }
+
+/* ═══════════════════════════════════════════
+   CANCEL BUTTON
+═══════════════════════════════════════════ */
+.oh-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: 1px solid #fca5a5;
+  background: #fff;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: 'Inter', sans-serif;
+  min-width: 72px;
+}
+
+.oh-cancel-btn:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #ef4444;
+}
+
+.oh-cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Prominent red delete button ── */
+.oh-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: none;
+  background: #ef4444;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  font-family: 'Inter', sans-serif;
+  min-width: 84px;
+  box-shadow: 0 1px 3px rgba(239,68,68,0.30);
+}
+
+.oh-delete-btn:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(239,68,68,0.35);
+}
+
+.oh-delete-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.oh-delete-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Icon-only trash column ── */
+.oh-del-cell {
+  width: 48px;
+  text-align: center;
+  padding: 0 8px !important;
+}
+
+.oh-trash-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #fca5a5;
+  background: #fff;
+  color: #ef4444;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.oh-trash-btn:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #ef4444;
+  transform: scale(1.1);
+}
+
+.oh-trash-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+
+.oh-cancel-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fca5a5;
+  border-top-color: #dc2626;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: oh-spin 0.7s linear infinite;
 }
 
-@keyframes spin {
+@keyframes oh-spin {
   to { transform: rotate(360deg); }
 }
 
-/* =========================
-   EMPTY & ERROR STATES
-========================= */
-.no-orders, .error {
-  text-align: center;
-  padding: 48px;
-  color: #6b7280;
-  font-size: 15px;
-}
-
-.skeleton-card {
-  height: 300px;
+/* ═══════════════════════════════════════════
+   EMPTY STATE
+═══════════════════════════════════════════ */
+.oh-empty-state {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #fff;
-  color: #9ca3af;
+  padding: 64px 24px;
+  gap: 10px;
+  text-align: center;
 }
 
-/* =========================
-   RESPONSIVE
-========================= */
-@media (max-width: 768px) {
-  .orders-card {
-    border-radius: 12px;
-  }
-  
-  .order-history-thead {
-    display: none; /* Hide headers on mobile if needed, or adjust */
-  }
+.oh-empty-icon  { font-size: 40px; }
+.oh-empty-title { font-size: 16px; font-weight: 600; color: #374151; margin: 0; }
+.oh-empty-sub   { font-size: 13px; color: #9ca3af; margin: 0; }
+.oh-empty       { text-align: center; padding: 40px; color: #9ca3af; font-size: 14px; }
 
-  .order-history-tbody td {
-    display: block;
-    padding: 10px 16px;
-    text-align: right;
-    border-bottom: none;
-  }
-  
-  .order-history-tbody td::before {
-    content: attr(data-label);
-    float: left;
-    font-weight: 600;
-    color: #6b7280;
-    font-size: 12px;
-    text-transform: uppercase;
-  }
-
-  .order-history-tbody tr {
-    display: block;
-    border-bottom: 1px solid #e5e7eb;
-    padding: 12px 0;
-  }
-
-  .symbol-cell {
-    text-align: left;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .symbol-cell .order-date {
-    margin-top: 0;
-  }
-}
-
-/* =========================
+/* ═══════════════════════════════════════════
    SKELETON LOADER
-========================= */
-.sk-row td {
-  padding: 18px 24px;
-}
+═══════════════════════════════════════════ */
+.sk-row td { padding: 15px 18px; }
 
 .sk-block {
-  background: #f3f4f6;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
   border-radius: 6px;
-  position: relative;
-  overflow: hidden;
+  height: 14px;
+  animation: oh-shimmer 1.4s infinite;
 }
 
-.sk-block::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.6) 50%,
-    transparent 100%
-  );
-  animation: shimmer 1.5s infinite;
+@keyframes oh-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+.sk-w-80 { width: 80%; }
+.sk-w-60 { width: 60%; }
+.sk-w-40 { width: 40%; }
+.sk-badge { width: 56px; height: 22px; border-radius: 20px; }
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .oh-header { flex-direction: column; align-items: flex-start; }
+  .oh-tabs   { width: 100%; }
+  .oh-tab-btn { flex: 1; text-align: center; }
 }
-
-.sk-w-40 { width: 40%; height: 14px; }
-.sk-w-60 { width: 60%; height: 16px; }
-.sk-w-80 { width: 80%; height: 16px; }
-.sk-badge { width: 60px; height: 24px; border-radius: 999px; }
-

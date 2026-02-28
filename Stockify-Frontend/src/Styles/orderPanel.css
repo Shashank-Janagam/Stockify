@@ -6,68 +6,132 @@
   font-family: system-ui, sans-serif;
   height: auto;
 }
+
 .stock-caption {
   font-size: 14px;
   font-weight: 500;
 }
 
 .stock-caption.pos {
-  color: #16a34a; /* green */
+  color: #16a34a;
+  /* green */
 }
 
 .stock-caption.neg {
-  color: #dc2626; /* red */
+  color: #dc2626;
+  /* red */
 }
-.holding-info {
+
+.holding-info-container {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin: 8px 0;
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.holding-row.primary {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: #6b7280; /* muted gray */
+  border-bottom: 1px dashed #cbd5e1;
+  padding-bottom: 6px;
 }
 
-.holding-qty .qty {
-  font-weight: 600;
-  color: #111827; /* dark */
+.holding-row.primary .label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
 }
 
-.divider {
-  color: #d1d5db;
+.holding-row.primary .val {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
 }
 
-.holding-value {
+.holding-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.holding-sub {
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.holding-value .value {
+.holding-sub .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #64748b;
+}
+
+.holding-sub .val {
+  font-size: 14px;
   font-weight: 600;
-  color: #16a34a; /* Groww green */
+  color: #334155;
+}
+
+.holding-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-top: 4px;
+  border-left: 3px solid #63b18c;
+}
+
+.mode-tag {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.avail-val {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.avail-val.pos {
+  color: #04ad83;
 }
 
 
 /* Header */
-.op-header{
-    padding: 10px 0 0 10px;
-    gap: 0px;
+.op-header {
+  padding: 10px 0 0 10px;
+  gap: 0px;
 }
+
 .op-header h2 {
   margin: 0;
   font-size: 20px;
 
 }
+
 .op-header p {
-    margin-bottom: 0px;
+  margin-bottom: 0px;
 
   color: #6b7280;
   font-size: 13px;
 }
-.pos{
-    color:#04ad83;
+
+.pos {
+  color: #04ad83;
 }
-.neg{
-    color: #df5330;
+
+.neg {
+  color: #df5330;
 }
+
 /* Chrome, Edge, Safari */
 .qty-input::-webkit-outer-spin-button,
 .qty-input::-webkit-inner-spin-button {
@@ -83,21 +147,20 @@
 
 
 /* Tabs */
-.border-tabs{
-    border-bottom: 1px solid rgb(235, 233, 233);
-    border-top: 1px solid rgb(235, 233, 233);
-    margin: 16px 0;
+.border-tabs {
+  border-bottom: 1px solid rgb(235, 233, 233);
+  border-top: 1px solid rgb(235, 233, 233);
+  margin: 8px 0;
 }
 
 .op-tabs {
-  display:inline-flex;
-  /* border-bottom: rgb(235, 233, 233) solid;
-    border-top: rgb(235, 233, 233) solid; */
-    padding: 5px;
-    padding-bottom: 0px;
-    gap: 2px;
+  display: inline-flex;
+  padding: 5px;
+  padding-bottom: 0px;
+  gap: 2px;
 
 }
+
 .op-tabs button {
   flex: 1;
   padding: 10px;
@@ -107,10 +170,12 @@
   cursor: pointer;
   min-width: 4rem;
 }
+
 .op-tabs .active.buy {
   border-bottom: 3px solid #04ad83;
   color: #04ad83;
 }
+
 .op-tabs .active.sell {
   border-bottom: 3px solid #dc2626;
   color: #dc2626;
@@ -123,6 +188,36 @@
   gap: 8px;
   padding: 10px;
 }
+
+.op-options.mixed {
+  justify-content: space-between;
+  padding: 4px 10px;
+}
+
+.op-group {
+  display: flex;
+  background: #f3f4f6;
+  padding: 3px;
+  border-radius: 20px;
+  gap: 2px;
+}
+
+.op-group button {
+  padding: 4px 10px !important;
+  border: none !important;
+  border-radius: 18px !important;
+  background: transparent !important;
+  font-size: 12px !important;
+  color: #6b7280;
+}
+
+.op-group button.selected {
+  background: #fff !important;
+  color: #111827 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
 .op-options button {
   padding: 6px 12px;
   border-radius: 20px;
@@ -131,15 +226,21 @@
   font-size: 13px;
   cursor: pointer;
 }
+
 .op-options .selected {
   border-color: #111827;
   font-weight: 600;
 }
+
 .mtf {
   font-weight: 600;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px !important;
+  padding: 0 10px !important;
 }
-  /* Removed .settings because it was replaced by .sl-toggle logic above it, but kept the structure clean */
-
 
 .sl-toggle {
   font-size: 11px;
@@ -162,29 +263,30 @@
   padding-top: 10px;
 }
 
-.type{
-    display: flex;
-    align-items: center;
-    align-items: center;
-    gap: 6px;
-    width: 35%; /* Fixed width for Label side */
+.type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 35%;
 }
 
-.Qty{
-    color: #6f7070;
-    font-size: small;
+.Qty {
+  color: #6f7070;
+  font-size: small;
 }
-.Stype{
-    font-weight: 500;
-    font-size:small;
+
+.Stype {
+  font-weight: 500;
+  font-size: small;
 }
+
 /* Fields */
 .op-field {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  padding: 10px 10px 0 10px;
+  padding: 6px 10px 0 10px;
 }
 
 .op-field label {
@@ -194,6 +296,7 @@
   color: #6b7280;
   margin-bottom: 6px;
 }
+
 /* Input Wrapper & Inputs */
 .input-wrapper {
   display: flex;
@@ -229,13 +332,14 @@
 
 /* Warning */
 .op-warning {
-  margin-top: 16px;
+  margin-top: 8px;
   background: #fff7ed;
   padding: 10px;
   border-radius: 8px;
   font-size: 12px;
   color: #92400e;
 }
+
 .btn-loader {
   width: 18px;
   height: 18px;
@@ -258,29 +362,57 @@
 }
 
 /* Footer */
-.footer{
-    margin-top: 50px;
-      padding: 10px 10px 0 10px;
-      gap: 5px;
+.footer {
+  margin-top: 8px;
+  padding: 6px 10px 0 10px;
+  gap: 5px;
+}
 
-}
-.line{
-    margin-top: 5px;
-    border:1px rgb(235, 233, 233) solid;
-    width: 100%;
-}
-.money{
-    display: flex;
-  justify-content: space-between;
-  align-items: center;
+.line {
+  margin-top: 5px;
+  border: 1px rgb(235, 233, 233) solid;
   width: 100%;
 }
-/* .op-footer rule removed or consolidated */
 
-.op-footer p {
-  font-size: 13px;
-  color: #6b7280;
+.money {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
 }
+
+.money-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.money-label {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.money-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.money-val.req {
+  color: #475569;
+}
+
+.money-val.sell {
+  color: #04ad83;
+}
+
+.op-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
 .buy-btn-buy {
   margin-top: 10px;
   width: 100%;
@@ -293,7 +425,8 @@
   font-weight: 600;
   cursor: pointer;
 }
-.buy-btn-buy:hover{
+
+.buy-btn-buy:hover {
   margin-top: 10px;
   width: 100%;
   padding: 12px;
@@ -348,7 +481,8 @@
   padding: 14px 0;
   border-radius: 12px;
   border: none;
-  background: #63b18c; /* Groww green */
+  background: #63b18c;
+  /* Groww green */
   color: #ffffff;
   font-size: 16px;
   font-weight: 600;
