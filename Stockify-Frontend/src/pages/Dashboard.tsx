@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import Explore from "../components/Explore";
 import "../Styles/dashboard.css";
 import HoldingsPage from "../components/HoldingsPage.tsx";
+import PositionsPage from "../components/PositionsPage.tsx";
 // import OrderHistory from "../components/OrderHistory.tsx"; // Remove static import
 import { useLocation } from "react-router-dom";
 
@@ -47,6 +48,7 @@ export default function Dashboard() {
 
       {tab === "Explore" && <Explore />}
       {tab === "Holdings" && <HoldingsPage />}
+      {tab === "Positions" && <PositionsPage />}
       {tab === "Orders" && (
         <Suspense fallback={<div className="loading-shimmer-block">Loading...</div>}>
           <OrderHistory />

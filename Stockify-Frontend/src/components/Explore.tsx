@@ -4,7 +4,62 @@ import { useNavigate } from "react-router-dom";
 import stockifylogo from "../assets/StockiftLogo.png";
 import { useExploreSSE } from "../context/ExploreSSEContext";
 
+import "../Styles/explore.css";
+import { useMemo } from "react";
 
+function MiniGraph({ positive }: { positive: boolean }) {
+  const points = useMemo(() => generatePoints(positive), [positive]);
+
+  const path = useMemo(() => {
+    return points
+      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+      .join(" ");
+  }, [points]);
+
+  return (
+    <svg width="80" height="34" viewBox="0 0 80 34">
+      <path
+        d={path}
+        fill="none"
+        stroke={positive ? "#16a34a" : "#dc2626"}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="graph-line"
+      />
+    </svg>
+  );
+}
+
+function generatePoints(positive: boolean) {
+  const points = [];
+  // Use a moderate vertical starting point
+  let y = positive ? 25 : 9; 
+
+  for (let i = 0; i < 10; i++) {
+    // Medium swings (between -4.5 and +4.5) with moderate drift
+    const swing = (Math.random() - 0.5) * 9; 
+    const drift = positive ? -1.5 : 1.5; 
+    
+    y += swing + drift;
+    
+    // clamp within SVG bounds, leaving stroke width padding
+    y = Math.max(4, Math.min(30, y));
+
+    points.push({
+      x: i * 8,
+      y,
+    });
+  }
+
+  // Ensure it shows a clear but moderate trend at the ends
+  if (points.length > 0) {
+    if (positive) points[points.length - 1].y = Math.min(points[points.length - 1].y, 14);
+    else points[points.length - 1].y = Math.max(points[points.length - 1].y, 20);
+  }
+
+  return points;
+}
 function ExploreSkeleton() {
 
   
@@ -254,23 +309,31 @@ if (!ready) return <ExploreSkeleton />;
             <h2>Most traded stocks on Stockify</h2>
            <div className="card-grid">
   {mostTraded.map((s: any) => (
-<div
-      key={s.symbol}
-      className="stock-card clickable"
-      onClick={() => handleStockClick(s)}
-    >    <img
-     src={new URL(`${getImageSrc(s.symbol)}`, import.meta.url).href}
-
-    alt={s.name}
-  />  <div className="name">{s.name.split(" ")[0]} {s.name.split(" ")[1] ? s.name.split(" ")[1] : " "}</div>
-      <div className="price">
-        {s.price !== null ? `₹${s.price.toLocaleString("en-IN")}` : "—"}
-      </div>
-      <div className={s.percent > 0 ? "pos" : "neg"}>
-        {s.change !== null ? (s.change > 0 ? `${s.change}` : s.change) : "—"}
-          ({s.percent > 0 ? "+" : ""}{s.percent}%)
-      </div>
+<div className="stock-card clickable" onClick={() => handleStockClick(s)}>
+  <div className="stock-top">
+    <div className="logo-wrap">
+      <img
+        src={new URL(`${getImageSrc(s.symbol)}`, import.meta.url).href}
+        alt={s.name}
+      />
     </div>
+
+    <MiniGraph positive={s.percent > 0} />
+  </div>
+
+  <div className="name">
+    {s.name.split(" ")[0]} {s.name.split(" ")[1] || ""}
+  </div>
+
+  <div className="price">
+    ₹{s.price?.toLocaleString("en-IN")}
+  </div>
+
+  <div className={s.percent > 0 ? "badge pos" : "badge neg"}>
+    {s.percent > 0 ? "+" : ""}
+    {s.percent}%
+  </div>
+</div>
   ))}
 </div>
 
@@ -288,40 +351,54 @@ if (!ready) return <ExploreSkeleton />;
                 <thead>
                   <tr>
                     <th>Company</th>
+                    <th></th>
                     <th>Market price (1D)</th>
                     <th>Volume</th>
                   </tr>
                 </thead>
                 <tbody>
   {movers.map((m: any) => (
-<tr
+    <tr
       key={m.symbol}
       className="clickable"
       onClick={() => handleStockClick(m)}
-    >      <td style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-    <img
-          src={new URL(`${getImageSrc(m.symbol)}`, import.meta.url).href}
-      onError={(e) => (e.currentTarget.src = stockifylogo)}
-      alt={m.name}
-      style={{ width: 20, height: 20 }}
-    />
-    {m.name}
-  </td>
-      <td className={m.percent > 0 ? "pos" : "neg"} id="marketprice" >
+    >
+      {/* Company column: logo + name + symbol */}
+      <td>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <img
+            src={new URL(`${getImageSrc(m.symbol)}`, import.meta.url).href}
+            onError={(e) => (e.currentTarget.src = stockifylogo)}
+            alt={m.name}
+            className="table-logo"
+          />
+          <div>
+            <div className="table-name">{m.name}</div>
+            <div className="table-sym">{m.symbol.replace(".NS", "")}</div>
+          </div>
+        </div>
+      </td>
+
+      {/* Chart column */}
+      <td className="table-chart-cell">
+        <MiniGraph positive={m.percent > 0} />
+      </td>
+
+      {/* Price + % column */}
+      <td className={m.percent > 0 ? "pos" : "neg"} id="marketprice">
         {m.price !== null ? `₹${m.price.toLocaleString("en-IN")}` : "—"}
         <div>
-          {m.percent > 0 ? "+" : ""}
-          {m.percent}%
+          {m.percent > 0 ? "+" : ""}{m.percent}%
         </div>
-
       </td>
-      <td>
+
+      {/* Volume column */}
+      <td className="vol">
         {m.volume.toLocaleString("en-IN")}
       </td>
     </tr>
   ))}
 </tbody>
-
               </table>
             </div>
           </section>
@@ -342,47 +419,28 @@ if (!ready) return <ExploreSkeleton />;
     ) : (
       <div className="invest-list">
         {invested.map((s: any) => (
-          <div
-  key={s.symbol}
-  className="invest-item clickable"
-  onClick={() => handleStockClick(s)}
->
-  <div className="invest-left">
-    <img
-      className="invest-logo"
-      src={new URL(
-        `${getImageSrc(s.symbol)}`,
-        import.meta.url
-      ).href}
-      alt={s.symbol}
-      onError={(e) =>
-        (e.currentTarget.src = stockifylogo)
-      }
-    />
+          <div className="invest-item clickable" onClick={() => handleStockClick(s)} key={s.symbol}>
+  {/* Logo */}
+  <img
+    className="invest-logo"
+    src={new URL(`${getImageSrc(s.symbol)}`, import.meta.url).href}
+    alt={s.name}
+    onError={(e) => (e.currentTarget.src = stockifylogo)}
+  />
 
-    <div className="invest-text">
-      <strong>{s.name}</strong>
-     
-    </div>
+  {/* Name + symbol */}
+  <div className="invest-text">
+    <strong>{s.name.split(" ")[0]} {s.name.split(" ")[1] || ""}</strong>
+    <span className="inv-sym">{s.symbol.replace(".NS", "")}</span>
   </div>
 
+  {/* PnL */}
   <div className="invest-right">
-    <div
-      className={`invest-pnl ${
-        s.change >= 0 ? "pos" : "neg"
-      }`}
-    >
-      {s.change >= 0 ? "+" : "-"}₹
-      {Math.abs(s.change).toLocaleString("en-IN")}
+    <div className={`invest-pnl ${s.percent >= 0 ? "pos" : "neg"}`}>
+      ₹{s.price?.toLocaleString("en-IN")}
     </div>
-
-    <div
-      className={`invest-percent ${
-        s.percent >= 0 ? "pos" : "neg"
-      }`}
-    >
-      {s.percent >= 0 ? "+" : ""}
-      {s.percent}%
+    <div className={`invest-percent ${s.percent >= 0 ? "pos" : "neg"}`}>
+      {s.percent >= 0 ? "+" : ""}{s.percent}%
     </div>
   </div>
 </div>

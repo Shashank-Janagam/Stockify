@@ -28,13 +28,12 @@ button {
 .top-nav {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
   padding: 0px 28px 0 6.5rem;
   border-bottom: 1px solid #e5e7eb;
   background: #ffffff;
-  /* border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px; */
-  height:3rem;
+  height: 3.2rem;
+  margin: 0;
   /* width: 100%; */
 }
 
@@ -48,18 +47,29 @@ button {
 }
 
 .tabbs {
-  font-size: 1rem;             /* 16px */
+  font-size: 0.95rem;
   font-weight: 600;
   color: #7a7a7a;
   text-decoration: none;
-  height: 2.5rem;
+  padding-bottom: 10px;
+  position: relative;
+  transition: color 0.2s ease;
 }
 
 .tabbs.active {
   color: #111;
   font-weight: 600;
-    border-bottom: 2px solid black;
+}
 
+.tabbs.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; /* Align perfectly with header border */
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: #111;
+  border-radius: 2px 2px 0 0;
 }
 
 .top-actions {
@@ -302,10 +312,12 @@ div{
 
 
 .recent-item img {
-  width: 36px;
-  height: 36px;
+  width: 52px;
+  height: 52px;
   margin-bottom: 6px;
   border-radius: 8px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
 }
 
 
@@ -604,8 +616,8 @@ div{
   }
 
   .recent-item img {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
   }
 
   /* -------- MOST TRADED -------- */

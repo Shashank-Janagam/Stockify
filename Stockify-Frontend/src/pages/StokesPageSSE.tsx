@@ -141,6 +141,8 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
   const [trades, setTrades] = useState<Trade[]>([]);
   const [availableQty, setAvailableQty] = useState<number>(0);
+  const [intradayQty, setIntradayQty] = useState<number>(0);
+  const [deliveryQty, setDeliveryQty] = useState<number>(0);
 
   useEffect(() => {
     if (!token) return;
@@ -153,6 +155,8 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
       .then(data => {
         setTrades(data.trades);
         setAvailableQty(data.totalQuantity);
+        setIntradayQty(data.intradayQuantity || 0);
+        setDeliveryQty(data.deliveryQuantity || 0);
       });
   }, [symbol, token, refresh]);
 
@@ -325,6 +329,8 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
           onLoginClick={onLoginClick}
           trades={trades}
           availableQty={availableQty}
+          intradayQty={intradayQty}
+          deliveryQty={deliveryQty}
           refresh={refresh}
           rerefresh={rerefresh}
 
