@@ -2,6 +2,8 @@ import React, { useEffect, useState, useContext, useRef } from "react";
 import "../Styles/HoldingsPage.css";
 import { AuthContext } from "../auth/AuthProvider";
 import { useNavigate } from "react-router-dom";
+import { useAIAnalysis } from "../hooks/useAIAnalysis";
+import AIInsightCard from "./AIInsightCard";
 
 const HOST = import.meta.env.VITE_HOST_ADDRESS;
 
@@ -15,14 +17,6 @@ function getRoute(symbol: string, name: string) {
 }
 const fmt = (n: number, d = 2) =>
     `₹${n.toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d })}`;
-const fmtD = (d: string | null | undefined) => {
-    if (!d) return "—";
-    const c = d.replace(/Z$/, "").replace(/[+-]\d{2}:\d{2}$/, "");
-    return new Date(c).toLocaleString("en-IN", {
-        day: "numeric", month: "short",
-        hour: "2-digit", minute: "2-digit",
-    });
-};
 
 /* ─── Inline Order Drawer (same as Holdings) ─── */
 type DrawerState = { symbol: string; price: number; tab: "BUY" | "SELL"; availableQty: number; productType: string } | null;
@@ -177,11 +171,11 @@ function mergePositions(positions: Position[]): MergedPosition[] {
             m.openedAt = p.openedAt;
         }
 
-        // merge stoploss
+        // Stoploss global sync
         if (p.stoplossEnabled) {
             m.stoplossEnabled = true;
             m.stopLoss        = p.stopLoss;
-            m.stopLossQty     = (m.stopLossQty ?? 0) + (p.stopLossQty ?? 0);
+            m.stopLossQty     = Math.max(m.stopLossQty ?? 0, p.stopLossQty ?? 0); // take max, avoid summation since back-end replicates it per lot
         }
     }
 
@@ -208,6 +202,9 @@ const PositionsPage: React.FC = () => {
     const [drawer, setDrawer]       = useState<DrawerState>(null);
     const [sseVersion, bump]        = useState(0);
 
+    const EMPTY_ARRAY = React.useMemo(() => [], []);
+    const { data: aiData, loading: aiLoading, refetch: refetchAI } = useAIAnalysis(user?.uid, positions, EMPTY_ARRAY, !loading);
+
     /* SSE */
     useEffect(() => {
         if (!user) return;
@@ -231,7 +228,7 @@ const PositionsPage: React.FC = () => {
         return () => { cancelled = true; es?.close(); };
     }, [user, sseVersion]);
 
-    const handleOrderDone = () => { setDrawer(null); bump(v => v + 1); };
+    const handleOrderDone = () => { setDrawer(null); bump(v => v + 1); refetchAI(); };
 
     /* Merge lots → grouped rows */
     const merged = React.useMemo(() => mergePositions(positions), [positions]);
@@ -250,108 +247,104 @@ const PositionsPage: React.FC = () => {
 
     const profit = (summary?.totalReturns ?? 0) >= 0;
 
-    /* ── Row ── */
+    /* ── List Row ── */
     const renderRow = (p: MergedPosition) => {
         const rowProfit = p.totalPnl >= 0;
-        return (
-            <React.Fragment key={p.key}>
-            <tr
-                className="hp-row clickable"
-                onClick={() => navigate(getRoute(p.symbol, p.name))}
-            >
-                <td>
-                    <div className="hp-company">
-                        <span className="hp-company-name">{p.name}</span>
-                        <span className="hp-company-sym">
-                            {p.symbol.replace(".NS", "").replace(".BO", "")}
-                        </span>
-                    </div>
-                </td>
-                <td>
-                    <div className="hp-badges">
-                        <span className={`hp-product-badge ${p.productType === "Intraday" ? "hp-intra" : "hp-delivery"}`}>
-                            {p.productType}
-                        </span>
-                        <span className={`hp-type-badge ${p.positionType === "LONG" ? "hp-long" : "hp-short"}`}>
-                            {p.positionType}
-                        </span>
-                    </div>
-                </td>
-                {/* ✅ Total qty = sum of all lots */}
-                <td className="hp-num">
-                    {p.totalQty}
-                    {p.lotCount > 1 && (
-                        <span className="hp-muted" style={{ marginLeft: 4, fontSize: 11 }}>
-                            ({p.lotCount} lots)
-                        </span>
-                    )}
-                </td>
-                <td>
-                    <div className="hp-2line">
-                        <span className="hp-primary">{fmt(p.ltp)}</span>
-                        <span className="hp-muted">avg {fmt(p.totalInvested / p.totalQty)}</span>
-                    </div>
-                </td>
-                <td>
-                    <span className={`hp-sm ${p.dayChangePercent >= 0 ? "hp-profit" : "hp-loss"}`}>
-                        {p.dayChangePercent >= 0 ? "▲" : "▼"} {Math.abs(p.dayChangePercent)}%
-                    </span>
-                </td>
-                <td>
-                    <div className="hp-2line">
-                        <span className="hp-primary">{fmt(p.totalCurrentValue)}</span>
-                        <span className="hp-muted">{fmt(p.totalInvested)}</span>
-                    </div>
-                </td>
-                {/* ✅ PnL = sum of all lot PnLs, % recalculated from totals */}
-                <td>
-                    <div className={`hp-pnl ${rowProfit ? "hp-profit" : "hp-loss"}`}>
-                        <span>{rowProfit ? "+" : ""}{fmt(p.totalPnl)}</span>
-                        <span className="hp-sm">
-                            {p.totalPnlPct >= 0 ? "+" : ""}{p.totalPnlPct}%
-                        </span>
-                    </div>
-                </td>
-                <td>
-                    {p.stoplossEnabled && p.stopLoss
-                        ? <span className="hp-sl-badge">{p.stopLossQty} @ {fmt(p.stopLoss)}</span>
-                        : <span className="hp-muted">—</span>}
-                </td>
-                <td>
-                    <span className="hp-muted">{fmtD(p.openedAt)}</span>
-                </td>
-                {/* ── Buy / Sell action buttons ── */}
-                <td className="h-action-cell" onClick={e => e.stopPropagation()}>
-                    <button
-                        className="h-action-btn h-buy"
-                        onClick={() => setDrawer(d =>
-                            d?.symbol === p.symbol && d?.productType === p.productType && d.tab === "BUY" ? null
-                            : { symbol: p.symbol, price: p.ltp, tab: "BUY", availableQty: p.totalQty, productType: p.productType }
-                        )}
-                    >Buy</button>
-                    <button
-                        className="h-action-btn h-sell"
-                        onClick={() => setDrawer(d =>
-                            d?.symbol === p.symbol && d?.productType === p.productType && d.tab === "SELL" ? null
-                            : { symbol: p.symbol, price: p.ltp, tab: "SELL", availableQty: p.totalQty, productType: p.productType }
-                        )}
-                    >Sell</button>
-                </td>
-            </tr>
+        const aiInsight = aiData?.positionsAnalysis?.find(a => a.symbol === p.symbol.replace(".NS", "").replace(".BO", ""));
 
-            {/* ── Inline drawer ── */}
-            {drawer?.symbol === p.symbol && drawer?.productType === p.productType && (
-                <tr className="h-drawer-row">
-                    <td colSpan={10} className="h-drawer-cell">
-                        <InlineOrderDrawer
-                            state={drawer}
-                            onClose={() => setDrawer(null)}
-                            onDone={handleOrderDone}
-                        />
-                    </td>
-                </tr>
-            )}
-            </React.Fragment>
+        return (
+            <div key={p.key}
+                 className="hp-row"
+                 style={{ 
+                     display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
+                     backgroundColor: '#ffffff', padding: '20px 24px',
+                     borderBottom: '1px solid #f3f4f6', cursor: 'pointer',
+                     position: 'relative', gap: '24px', transition: 'background-color 0.2s'
+                 }}
+                 onClick={() => navigate(getRoute(p.symbol, p.name))}
+                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+            >
+                <div style={{ position: 'absolute', top: '16px', bottom: '16px', left: 0, width: '4px', borderRadius: '0 4px 4px 0', backgroundColor: rowProfit ? '#059669' : '#dc2626' }} />
+                
+                {/* 1. Name & Badges */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1.5', minWidth: '220px', paddingLeft: '8px' }}>
+                    <div style={{ fontWeight: 700, color: '#111827', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {p.name}
+                        {p.lotCount > 1 && <span style={{ backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: '#4b5563', fontWeight: '600' }}>{p.lotCount} lots</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '13px', color: '#6b7280', fontWeight: 'bold' }}>{p.symbol.replace(".NS", "").replace(".BO", "")}</span>
+                        <span className={`hp-product-badge ${p.productType === "Intraday" ? "hp-intra" : "hp-delivery"}`}>{p.productType}</span>
+                        <span className={`hp-type-badge ${p.positionType === "LONG" ? "hp-long" : "hp-short"}`}>{p.positionType}</span>
+                        {p.stoplossEnabled && p.stopLoss && (
+                            <span style={{ backgroundColor: '#fef2f2', color: '#ef4444', padding: '2px 6px', borderRadius: '4px', border: '1px solid #fecaca', fontSize: '10px', fontWeight: 600 }}>SL: {p.stopLossQty} @ {fmt(p.stopLoss)}</span>
+                        )}
+                    </div>
+                </div>
+
+                {/* 2. Position Size */}
+                <div style={{ display: 'flex', flexDirection: 'column', flex: '1', minWidth: '100px' }}>
+                    <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '4px', fontWeight: 500 }}>Qty & Avg</div>
+                    <div style={{ color: '#111827', fontSize: '14px', fontWeight: 700 }}>{p.totalQty} <span style={{color: '#9ca3af', fontWeight: 500}}>@</span> {fmt(p.totalInvested / p.totalQty)}</div>
+                </div>
+
+                {/* 3. Current Live */}
+                <div style={{ display: 'flex', flexDirection: 'column', flex: '1', minWidth: '120px' }}>
+                    <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '4px', fontWeight: 500 }}>Live Price</div>
+                    <div style={{ color: '#111827', fontSize: '14px', fontWeight: 700 }}>
+                        {fmt(p.ltp)} <span style={{ fontSize: '12px', marginLeft: '4px', fontWeight: 700, color: p.dayChangePercent >= 0 ? '#059669' : '#dc2626' }}>{p.dayChangePercent >= 0 ? '▲' : '▼'}{Math.abs(p.dayChangePercent)}%</span>
+                    </div>
+                </div>
+
+                {/* 4. Total P&L */}
+                <div style={{ display: 'flex', flexDirection: 'column', flex: '1', minWidth: '120px' }}>
+                    <div style={{ color: '#6b7280', fontSize: '12px', marginBottom: '4px', fontWeight: 500 }}>Total P&L</div>
+                    <div style={{ fontSize: '16px', fontWeight: '800', color: rowProfit ? '#059669' : '#dc2626' }}>
+                        {rowProfit ? '+' : ''}{fmt(p.totalPnl)} <span style={{ fontSize: '12px', fontWeight: '700', opacity: 0.9 }}>({rowProfit ? '+' : ''}{p.totalPnlPct}%)</span>
+                    </div>
+                </div>
+
+                {/* 5. AI Insight (Sleek Inline) */}
+                <div style={{ flex: '1.5', minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '6px' }} onClick={e => e.stopPropagation()}>
+                    {aiInsight ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <span style={{ 
+                                    padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800, 
+                                    backgroundColor: aiInsight.suggestion === 'Add' ? '#ecfdf5' : aiInsight.suggestion === 'Exit' ? '#fef2f2' : aiInsight.suggestion === 'Reduce' ? '#fffbeb' : '#eff6ff',
+                                    color: aiInsight.suggestion === 'Add' ? '#10b981' : aiInsight.suggestion === 'Exit' ? '#ef4444' : aiInsight.suggestion === 'Reduce' ? '#f59e0b' : '#3b82f6',
+                                    border: `1px solid ${aiInsight.suggestion === 'Add' ? '#10b981' : aiInsight.suggestion === 'Exit' ? '#ef4444' : aiInsight.suggestion === 'Reduce' ? '#f59e0b' : '#3b82f6'}`,
+                                    textTransform: 'uppercase'
+                                }}>
+                                    {aiInsight.suggestion}
+                                </span>
+                                <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 600 }}>{aiInsight.riskLevel} Risk</span>
+                            </div>
+                            <div style={{ fontSize: '13px', color: '#4b5563', lineHeight: '1.3', fontWeight: 500 }}>
+                                <span style={{marginRight: '4px'}}>🧠</span> {aiInsight.keyInsight}
+                            </div>
+                        </div>
+                    ) : (
+                        <div style={{ fontSize: '12px', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}>
+                             {aiLoading ? <span className="btn-loader" style={{ width: '12px', height: '12px', borderWidth: '2px', borderColor: '#d1d5db', borderRightColor: 'transparent' }} /> : '🧠'} 
+                             {aiLoading ? 'Thinking...' : 'No insight.'}
+                        </div>
+                    )}
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: '8px', flex: '0.5', minWidth: '120px', justifyContent: 'flex-end', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                    <button className="h-action-btn h-buy" onClick={() => setDrawer(d => d?.symbol === p.symbol && d?.productType === p.productType && d.tab === "BUY" ? null : { symbol: p.symbol, price: p.ltp, tab: "BUY", availableQty: p.totalQty, productType: p.productType })}>Buy</button>
+                    <button className="h-action-btn h-sell" onClick={() => setDrawer(d => d?.symbol === p.symbol && d?.productType === p.productType && d.tab === "SELL" ? null : { symbol: p.symbol, price: p.ltp, tab: "SELL", availableQty: p.totalQty, productType: p.productType })}>Sell</button>
+                </div>
+
+                {drawer?.symbol === p.symbol && drawer?.productType === p.productType && (
+                    <div style={{ flexBasis: '100%', marginTop: '16px', backgroundColor: '#ffffff', padding: '16px', borderTop: '1px solid #f3f4f6', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }} onClick={e => e.stopPropagation()}>
+                        <InlineOrderDrawer state={drawer} onClose={() => setDrawer(null)} onDone={handleOrderDone} />
+                    </div>
+                )}
+            </div>
         );
     };
 
@@ -360,22 +353,13 @@ const PositionsPage: React.FC = () => {
         const sectionPnl = rows.reduce((s, r) => s + r.totalPnl, 0);
         const pnlPos     = sectionPnl >= 0;
         return (
-            <tr className="hp-section-header-row" key={`sh-${label}`}>
-                <td colSpan={10}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <span style={{ fontWeight: 700, fontSize: 13, color: "#374151" }}>{label}</span>
-                        <span style={{ fontSize: 12, color: "#9ca3af" }}>
-                            {rows.length} stock{rows.length !== 1 ? "s" : ""}
-                        </span>
-                        <span style={{
-                            marginLeft: "auto", fontSize: 13, fontWeight: 700,
-                            color: pnlPos ? "#059669" : "#dc2626"
-                        }}>
-                            {pnlPos ? "+" : ""}{fmt(sectionPnl)}
-                        </span>
-                    </div>
-                </td>
-            </tr>
+            <div key={`sh-${label}`} style={{ width: '100%', display: "flex", alignItems: "center", gap: 12, padding: '12px 24px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb', borderLeft: `6px solid ${pnlPos ? '#059669' : '#dc2626'}` }}>
+                <span style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>{label}</span>
+                <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 500 }}>{rows.length} position{rows.length !== 1 ? "s" : ""}</span>
+                <span style={{ marginLeft: "auto", fontSize: 15, fontWeight: 700, color: pnlPos ? "#059669" : "#dc2626" }}>
+                    {pnlPos ? "+" : ""}{fmt(sectionPnl)}
+                </span>
+            </div>
         );
     };
 
@@ -388,6 +372,18 @@ const PositionsPage: React.FC = () => {
                     <p className="hp-page-sub">All your open lots — live unrealized P&amp;L updated every few seconds</p>
                 </div>
             </div>
+
+            {/* AI Insight */}
+            {(aiData || aiLoading) && (
+                <AIInsightCard 
+                    portfolioRiskScore={aiData?.portfolioRiskScore || 0} 
+                    riskCategory={aiData?.riskCategory || ''} 
+                    emotionalFlags={aiData?.emotionalFlags || { revengeTrading: false, fomo: false, panicSelling: false, overtrading: false }} 
+                    behavioralMetrics={aiData?.behavioralMetrics}
+                    overallAdvice={aiData?.overallAdvice || ''} 
+                    loading={aiLoading} 
+                />
+            )}
 
             {/* Summary bar */}
             <div className="hp-summary-card" style={{ marginBottom: '24px' }}>
@@ -436,7 +432,7 @@ const PositionsPage: React.FC = () => {
                 ))}
             </div>
 
-            {/* Table */}
+            {/* List Layout replacement for Grid/Table */}
             {!loading && filtered.length === 0 ? (
                 <div className="hp-empty">
                     <div className="hp-empty-icon">📊</div>
@@ -448,49 +444,30 @@ const PositionsPage: React.FC = () => {
                     </p>
                 </div>
             ) : (
-                <div className="hp-table-card">
-                    <table className="hp-table hp-positions-table">
-                        <thead>
-                            <tr>
-                                <th>Stock</th>
-                                <th>Type</th>
-                                <th>Qty</th>
-                                <th>LTP / Avg</th>
-                                <th>Day %</th>
-                                <th>Cur / Inv</th>
-                                <th>P&amp;L</th>
-                                <th>Stop Loss</th>
-                                <th>Opened</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading
-                                ? Array.from({ length: 4 }).map((_, i) => (
-                                    <tr key={i} className="hp-sk-row">
-                                        {Array.from({ length: 10 }).map((_, j) => (
-                                            <td key={j}>
-                                                <div className="holdings-skeleton holdings-sk-cell"
-                                                    style={{ width: `${40 + (j * 9) % 40}%` }} />
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))
-                                : showSections
-                                    ? <>
-                                        {intraday.length > 0 && <>
-                                            {sectionHeader("Intraday", intraday)}
-                                            {intraday.map(renderRow)}
-                                        </>}
-                                        {delivery.length > 0 && <>
-                                            {sectionHeader("Delivery", delivery)}
-                                            {delivery.map(renderRow)}
-                                        </>}
-                                    </>
-                                    : filtered.map(renderRow)
-                            }
-                        </tbody>
-                    </table>
+                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                    {loading
+                        ? Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '24px', padding: '24px', borderBottom: '1px solid #f3f4f6', backgroundColor: '#ffffff' }}>
+                                <div className="holdings-skeleton" style={{ width: '20%', height: '40px', borderRadius: '8px', backgroundColor: '#f3f4f6' }} />
+                                <div className="holdings-skeleton" style={{ width: '15%', height: '40px', borderRadius: '8px', backgroundColor: '#f9fafb' }} />
+                                <div className="holdings-skeleton" style={{ width: '15%', height: '40px', borderRadius: '8px', backgroundColor: '#f9fafb' }} />
+                                <div className="holdings-skeleton" style={{ width: '25%', height: '40px', borderRadius: '8px', backgroundColor: '#eff6ff' }} />
+                                <div className="holdings-skeleton" style={{ width: '10%', height: '40px', borderRadius: '8px', backgroundColor: '#f3f4f6', marginLeft: 'auto' }} />
+                            </div>
+                        ))
+                        : showSections
+                            ? <>
+                                {intraday.length > 0 && <>
+                                    {sectionHeader("Intraday", intraday)}
+                                    {intraday.map(renderRow)}
+                                </>}
+                                {delivery.length > 0 && <>
+                                    {sectionHeader("Delivery", delivery)}
+                                    {delivery.map(renderRow)}
+                                </>}
+                            </>
+                            : filtered.map(renderRow)
+                    }
                 </div>
             )}
         </div>

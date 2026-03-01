@@ -2,8 +2,16 @@
 import express from "express";
 import { getYahooIndiaHistory } from "./yahooIndiaHistory.service.js";
 import { getYahooIndiaQuote } from "./yahooIndiaQuote.service.js";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import redis from "../../cache/redisClient.js";
+import fs from "fs";
 
 const router = express.Router();
+
+let genAI = null;
+if (process.env.GEMINI_API_KEY) {
+  genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+}
 
 // mock
 router.get("/:symbol/stream", async (req, res) => {
@@ -81,6 +89,98 @@ router.get("/:symbol/quote", async (req, res) => {
 
     res.json(data);
  
+});
+
+// 🧠 1️⃣ Gemini Prompt for Single Stock AI Report
+const buildStockPrompt = (symbol, quoteData, history1D, history1Y) => `
+You are a quantitative trading assistant. Analyze ${symbol} and provide a probability-based technical assessment.
+
+Stock Data: Price ₹${quoteData.regularMarketPrice}, Change ${quoteData.regularMarketChangePercent}%, 1D-Trend: ${JSON.stringify(history1D.slice(-10))}, 1Y-Sample: ${JSON.stringify(history1Y.filter((_, i) => i % 20 === 0))}.
+
+Return ONLY this STRICT JSON format (no markdown):
+{
+  "bullish": number (chance of price going up 0-100),
+  "bearish": number (chance of price going down 0-100),
+  "neutral": number (chance of price staying flat 0-100),
+  "breakout": number (chance of a sudden big jump 0-100),
+  "correction": number (chance of a sudden big drop 0-100),
+  "target": number (the price it might reach),
+  "stopLoss": number (the price to sell if it drops),
+  "summary": "max 8 words overall view",
+  "intraday": "max 12 words for day traders",
+  "delivery": "max 12 words for long-term investors",
+  "suggestion": "BUY | SELL | HOLD | WAIT",
+  "confidence": number (your certainty 0-100)
+}
+`;
+
+// 🚀 Stock AI Route with Redis Caching (24 Hours)
+router.get("/:symbol/ai-report", async (req, res) => {
+  const { symbol } = req.params;
+  const cacheKey = `stock:ai:v3:${symbol.toUpperCase()}`; // v3 for probability schema
+
+  try {
+    // 1️⃣ Check Redis First
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return res.json({
+        source: "cache",
+        data: JSON.parse(cached)
+      });
+    }
+
+    // 2️⃣ Fetch Fresh Market Data
+    const [quote, history1D, history1Y] = await Promise.all([
+      getYahooIndiaQuote(symbol),
+      getYahooIndiaHistory(symbol, 1),
+      getYahooIndiaHistory(symbol, 365)
+    ]);
+
+    if (!quote) {
+        fs.appendFileSync("ai_debug.log", `[${new Date().toISOString()}] NO QUOTE for ${symbol}\n`);
+        return res.status(404).json({ error: "Stock data unavailable" });
+    }
+
+    // 3️⃣ Build Prompt and Call Gemini
+    if (!genAI) return res.status(503).json({ error: "AI service offline" });
+
+    const model = genAI.getGenerativeModel({ 
+        model: "gemini-2.5-flash-lite", 
+        generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.1,
+            maxOutputTokens: 2048
+           }
+    });
+
+    const prompt = buildStockPrompt(symbol, quote, history1D, history1Y);
+    const result = await model.generateContent(prompt);
+    let responseText = result.response.text();
+    
+    // 🛡️ Sanitize: Strip potential markdown code blocks
+    responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    let analysis;
+    try {
+        analysis = JSON.parse(responseText);
+    } catch (parseError) {
+        fs.appendFileSync("ai_debug.log", `[${new Date().toISOString()}] PARSE ERROR for ${symbol}: ${responseText}\n`);
+        throw parseError;
+    }
+
+    // 4️⃣ Store in Redis (24 Hours)
+    await redis.setex(cacheKey, 86400, JSON.stringify(analysis));
+
+    return res.json({
+      source: "gemini",
+      data: analysis
+    });
+
+  } catch (error) {
+    console.error(`AI Report Error (${symbol}):`, error);
+    fs.appendFileSync("ai_debug.log", `[${new Date().toISOString()}] ERROR for ${symbol}: ${error.stack || error.message}\n`);
+    res.status(500).json({ error: "Failed to generate AI analysis" });
+  }
 });
 
 export default router;
