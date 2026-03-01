@@ -156,8 +156,10 @@ export async function performAutoSquareOff() {
           await client.query("COMMIT");
 
           // Redis/Cache
-          const uidRes = await db.query(`SELECT uid FROM users WHERE id = $1`, [userId]);
-          if (uidRes.rows[0]) await redis.del(`wallet:balance:${uidRes.rows[0].uid}`);
+          if (uidRes.rows[0]) {
+            await redis.del(`wallet:balance:${uidRes.rows[0].uid}`);
+            await redis.del(`ai_portfolio_v3_${userId}`);
+          }
 
           for (const cancelled of slRes.rows) {
             await redis.publish("CANCEL_STOPLOSS", JSON.stringify({ orderId: cancelled.id }));
@@ -180,12 +182,13 @@ export async function performAutoSquareOff() {
   }
 }
 
-// Every Mon-Fri at 15:15 IST
-cron.schedule('22 38 * * 1-6', () => {
+// Run every day at 15:15 IST (3:15 PM) -> '15 15 * * *'
+cron.schedule('15 15 * * 1-5', () => {
     performAutoSquareOff();
 }, {
     timezone: "Asia/Kolkata"
 });
-// performAutoSquareOff();
+
+// Uncommented below so it runs immediately when you execute `node intradaySquareOff.js`
 
 console.log("[Auto Square-Off] 🚀 Intraday Job scheduled for 15:15 IST (Mon-Fri)");

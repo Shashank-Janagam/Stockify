@@ -19,6 +19,7 @@ import OrderExecution from "./modules/OrderExecution/buyStock.js";
 import sellStock from "./modules/OrderExecution/sellStock.js";
 import holdings from "./modules/OrderExecution/holdings.js";
 import portfolioRoutes from "./modules/portfolio/portfolio.routes.js";
+import aiRoutes from "./modules/ai/ai.routes.js";
 import login from "./Middleware/login.js"
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -51,6 +52,7 @@ app.use("/api/orderExecution",OrderExecution)
 app.use("/api/sellStock",sellStock);
 app.use("/api/holdings",holdings)
 app.use("/api/portfolio", portfolioRoutes);
+app.use("/api/ai", aiRoutes);
 // app.use("/api/indiaSEE",indiaReplay);
 
 app.get("/health", (req, res) => {

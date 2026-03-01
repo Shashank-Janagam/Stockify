@@ -9,6 +9,7 @@ import OrderPanel from "../components/OrderPanel";
 // import StockCandleChartIndia from "../components/StockCandleChartIndia";
 import "../Styles/stock.css";
 import StockPerformance from "../components/StockPerformanceFundamentals"
+import AIStockReport from "../components/AIStockReport";
 import { useContext } from "react"
 import { AuthContext } from "../auth/AuthProvider";// import type { Stock } from "../data/stocks";
 /* =========================
@@ -318,6 +319,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
           onChange={setTimeframe}
         />
         <StockPerformance quote={quote} />
+
       </div>
       <div className="stock-right">
         <OrderPanel
@@ -333,11 +335,9 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
           deliveryQty={deliveryQty}
           refresh={refresh}
           rerefresh={rerefresh}
-
-
-
         />
       </div>
+      <AIStockReport symbol={symbol} />
     </div>
   );
 }

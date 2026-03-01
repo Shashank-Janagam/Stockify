@@ -19,13 +19,23 @@ async function fetchHoldings(userId) {
       s.stock_name as name,
       SUM(p.remaining_quantity) as quantity,
       SUM(p.remaining_quantity * p.entry_price) / NULLIF(SUM(p.remaining_quantity), 0) as avg_price,
-      MIN(p.created_at) as created_at
+      MIN(p.created_at) as created_at,
+      COALESCE((
+        SELECT SUM(o.quantity) 
+        FROM orders o 
+        WHERE o.user_id = $1 AND o.stock_id = s.id AND o.status = 'PENDING' AND o.side = 'SELL' AND o.sell_type = 'Delivery'
+      ), 0) as allocated_qty,
+      (
+        SELECT MAX(o.stop_trigger_price)
+        FROM orders o
+        WHERE o.user_id = $1 AND o.stock_id = s.id AND o.status = 'PENDING' AND o.side = 'SELL' AND o.sell_type = 'Delivery'
+      ) as stop_loss
     FROM positions p
     JOIN stocks s ON p.stock_id = s.id
     WHERE p.user_id = $1
       AND p.status = 'OPEN'
       AND p.sell_type = 'Delivery'
-    GROUP BY s.symbol, s.stock_name
+    GROUP BY s.symbol, s.stock_name, s.id
     HAVING SUM(p.remaining_quantity) > 0`,
     [userId]
   );
@@ -69,7 +79,9 @@ async function computeHoldingsPayload(holdings) {
       avgPrice: avg,
       currentPrice: ltp, dayChangePercent: Number(dayChangePerc.toFixed(2)),
       invested: Number(invested.toFixed(2)), current: Number(current.toFixed(2)),
-      pnl: Number(pnl.toFixed(2)), pnlPercent: invested > 0 ? Number(((pnl / invested) * 100).toFixed(2)) : 0
+      pnl: Number(pnl.toFixed(2)), pnlPercent: invested > 0 ? Number(((pnl / invested) * 100).toFixed(2)) : 0,
+      allocatedQty: Number(pos.allocated_qty || 0),
+      stopLoss: pos.stop_loss ? Number(pos.stop_loss) : null
     };
   });
 
@@ -104,7 +116,17 @@ async function fetchDetailedPositions(userId) {
       p.id, s.symbol, s.stock_name as name,
       p.sell_type as product_type, p.position_type,
       p.remaining_quantity as quantity, p.entry_price,
-      p.stop_loss, p.created_at as opened_at
+      p.created_at as opened_at,
+      COALESCE((
+        SELECT SUM(o.quantity) 
+        FROM orders o 
+        WHERE o.user_id = $1 AND o.stock_id = s.id AND o.status = 'PENDING' AND o.side = 'SELL' AND o.sell_type = p.sell_type
+      ), 0) as allocated_qty,
+      (
+        SELECT MAX(o.stop_trigger_price)
+        FROM orders o
+        WHERE o.user_id = $1 AND o.stock_id = s.id AND o.status = 'PENDING' AND o.side = 'SELL' AND o.sell_type = p.sell_type
+      ) as stop_loss
     FROM positions p
     JOIN stocks s ON p.stock_id = s.id
     WHERE p.user_id = $1 AND p.status = 'OPEN' AND p.remaining_quantity > 0
@@ -152,8 +174,9 @@ async function computePositionsPayload(lots) {
       dayChangePercent: Number(dayChangePerc.toFixed(2)),
       invested: Number(invested.toFixed(2)), currentValue: Number(current.toFixed(2)),
       unrealizedPnl: Number(pnl.toFixed(2)), unrealizedPnlPct: entry > 0 ? Number(((pnl / invested) * 100).toFixed(2)) : 0,
-      stoplossEnabled: !!lot.stop_loss, stopLoss: lot.stop_loss ? Number(lot.stop_loss) : null,
-      stopLossQty: lot.stop_loss ? qty : null,
+      stoplossEnabled: Number(lot.allocated_qty || 0) > 0 || !!lot.stop_loss,
+      stopLoss: lot.stop_loss ? Number(lot.stop_loss) : null,
+      stopLossQty: Number(lot.allocated_qty || 0),
       openedAt: lot.opened_at
     };
   });

@@ -114,7 +114,10 @@ export async function executeSell({ orderId, userId, stockId, symbol, quantity, 
 
     // Invalidate wallet cache
     const uidRes = await db.query(`SELECT uid FROM users WHERE id=$1`, [userId]);
-    if (uidRes.rows[0]) await redis.del(`wallet:balance:${uidRes.rows[0].uid}`);
+    if (uidRes.rows[0]) {
+      await redis.del(`wallet:balance:${uidRes.rows[0].uid}`);
+      await redis.del(`ai_portfolio_v3_${userId}`);
+    }
 
     console.log(`[SL Engine] ✅ SELL #${orderId} EXECUTED | ${symbol} | qty ${quantity} @ ₹${executionPrice} | PnL ₹${totalRealizedPnL.toFixed(2)}`);
 
@@ -214,7 +217,10 @@ export async function executeBuy({ orderId, userId, stockId, symbol, quantity, p
 
     // Invalidate wallet cache
     const uidRes = await db.query(`SELECT uid FROM users WHERE id=$1`, [userId]);
-    if (uidRes.rows[0]) await redis.del(`wallet:balance:${uidRes.rows[0].uid}`);
+    if (uidRes.rows[0]) {
+      await redis.del(`wallet:balance:${uidRes.rows[0].uid}`);
+      await redis.del(`ai_portfolio_v3_${userId}`);
+    }
 
     console.log(`[SL Engine] ✅ BUY #${orderId} EXECUTED | ${symbol} | qty ${quantity} @ ₹${executionPrice}`);
 

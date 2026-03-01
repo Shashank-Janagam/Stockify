@@ -2,6 +2,8 @@ import React, { useEffect, useState, useContext, useRef } from "react";
 import "../Styles/HoldingsPage.css";
 import { AuthContext } from "../auth/AuthProvider";
 import { useNavigate } from "react-router-dom";
+import { useAIAnalysis } from "../hooks/useAIAnalysis";
+import AIInsightCard from "./AIInsightCard";
 
 const HOST = import.meta.env.VITE_HOST_ADDRESS;
 
@@ -28,6 +30,8 @@ type Holding = {
   pnl: number; pnlPercent: number;
   allocationPercent: number;
   datetime: string;
+  allocatedQty?: number;
+  stopLoss?: number | null;
 };
 type HoldingsSummary = {
   investedValue: number; currentValue: number;
@@ -115,6 +119,9 @@ const HoldingsPage: React.FC = () => {
   const [drawer,   setDrawer]     = useState<DrawerState>(null);
   const [sseVersion, bump]        = useState(0);
 
+  const EMPTY_ARRAY = React.useMemo(() => [], []);
+  const { data: aiData, loading: aiLoading, refetch: refetchAI } = useAIAnalysis(user?.uid, EMPTY_ARRAY, holdings, !loading);
+
   /* SSE — live stream */
   useEffect(() => {
     if (!user) return;
@@ -138,7 +145,7 @@ const HoldingsPage: React.FC = () => {
     return () => { cancelled = true; es?.close(); };
   }, [user, sseVersion]);
 
-  const handleOrderDone = () => { setDrawer(null); setLoading(true); bump(v => v + 1); };
+  const handleOrderDone = () => { setDrawer(null); setLoading(true); bump(v => v + 1); refetchAI(); };
   const profit = (summary?.totalReturns ?? 0) >= 0;
 
   return (
@@ -151,8 +158,19 @@ const HoldingsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* AI Insight */}
+      {(aiData || aiLoading) && (
+        <AIInsightCard 
+          portfolioRiskScore={aiData?.portfolioRiskScore || 0} 
+          riskCategory={aiData?.riskCategory || ''} 
+          emotionalFlags={aiData?.emotionalFlags || { revengeTrading: false, fomo: false, panicSelling: false, overtrading: false }} 
+          behavioralMetrics={aiData?.behavioralMetrics}
+          overallAdvice={aiData?.overallAdvice || ''} 
+          loading={aiLoading} 
+        />
+      )}
       {/* ── Summary card ── */}
-      <div className="hp-summary-card">
+      <div className="hp-summary-card" style={{ marginBottom: '24px' }}>
         {loading
           ? <div className="holdings-skeleton holdings-sk-summary" />
           : summary && (<>
@@ -206,6 +224,7 @@ const HoldingsPage: React.FC = () => {
                 <th>LTP · Day %</th>
                 <th>Invested / Current</th>
                 <th>P&amp;L</th>
+                <th>AI Insight</th>
                 <th>Allocation</th>
                 <th></th>
               </tr>
@@ -214,14 +233,18 @@ const HoldingsPage: React.FC = () => {
               {loading
                 ? Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="hp-sk-row">
-                      {Array.from({ length: 7 }).map((_, j) => (
+                      {Array.from({ length: 8 }).map((_, j) => (
                         <td key={j}>
                           <div className="holdings-skeleton holdings-sk-cell" style={{ width: `${45 + (j * 7) % 40}%` }} />
                         </td>
                       ))}
                     </tr>
                   ))
-                : holdings.map((h, i) => (
+                : holdings.map((h, i) => {
+                    const pureSymbol = h.symbol.replace(".NS", "").replace(".BO", "");
+                    const aiInsight = aiData?.positionsAnalysis?.find(a => a.symbol === pureSymbol);
+
+                    return (
                     <React.Fragment key={h.symbol + i}>
                       <tr
                         className="hp-row clickable"
@@ -231,13 +254,20 @@ const HoldingsPage: React.FC = () => {
                           <div className="hp-company">
                             <span className="hp-company-name">{h.name || h.symbol}</span>
                             <span className="hp-company-sym">
-                              {h.symbol.replace(".NS", "").replace(".BO", "")}
+                              {pureSymbol}
                             </span>
                           </div>
                         </td>
                         <td>
                           <div className="hp-2line">
-                            <span className="hp-primary">{h.quantity} shares</span>
+                            <span className="hp-primary">
+                              {h.quantity} shares
+                              {!!h.allocatedQty && (
+                                <span style={{ marginLeft: '6px', fontSize: '10px', backgroundColor: 'rgba(239,68,68,0.1)', color: '#ef4444', padding: '2px 4px', borderRadius: '4px', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                  {h.allocatedQty} allocated {h.stopLoss ? `@ ${fmt(h.stopLoss)}` : ''}
+                                </span>
+                              )}
+                            </span>
                             <span className="hp-muted">avg {fmt(h.avgPrice)}</span>
                           </div>
                         </td>
@@ -260,6 +290,35 @@ const HoldingsPage: React.FC = () => {
                             <span>{(h.pnl ?? 0) >= 0 ? "+" : ""}{fmt(h.pnl)}</span>
                             <span className="hp-sm">{(h.pnlPercent ?? 0) >= 0 ? "+" : ""}{h.pnlPercent}%</span>
                           </div>
+                        </td>
+                        <td>
+                            {/* 5. AI Insight (Sleek Inline) */}
+                            <div style={{ flex: '1.5', minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '6px' }} onClick={e => e.stopPropagation()}>
+                                {aiInsight ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <span style={{ 
+                                                padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800, 
+                                                backgroundColor: aiInsight.suggestion === 'Add' ? '#ecfdf5' : aiInsight.suggestion === 'Exit' ? '#fef2f2' : aiInsight.suggestion === 'Reduce' ? '#fffbeb' : '#eff6ff',
+                                                color: aiInsight.suggestion === 'Add' ? '#10b981' : aiInsight.suggestion === 'Exit' ? '#ef4444' : aiInsight.suggestion === 'Reduce' ? '#f59e0b' : '#3b82f6',
+                                                border: `1px solid ${aiInsight.suggestion === 'Add' ? '#10b981' : aiInsight.suggestion === 'Exit' ? '#ef4444' : aiInsight.suggestion === 'Reduce' ? '#f59e0b' : '#3b82f6'}`,
+                                                textTransform: 'uppercase'
+                                            }}>
+                                                {aiInsight.suggestion}
+                                            </span>
+                                            <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 600 }}>{aiInsight.riskLevel} Risk</span>
+                                        </div>
+                                        <div style={{ fontSize: '13px', color: '#4b5563', lineHeight: '1.3', fontWeight: 500 }}>
+                                            <span style={{marginRight: '4px'}}>🧠</span> {aiInsight.keyInsight}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{ fontSize: '12px', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}>
+                                         {aiLoading ? <span className="btn-loader" style={{ width: '12px', height: '12px', borderWidth: '2px', borderColor: '#d1d5db', borderRightColor: 'transparent' }} /> : '🧠'} 
+                                         {aiLoading ? 'Thinking...' : 'AI thinking...'}
+                                    </div>
+                                )}
+                            </div>
                         </td>
                         <td>
                           <div className="hp-alloc-wrap">
@@ -289,7 +348,7 @@ const HoldingsPage: React.FC = () => {
 
                       {drawer?.symbol === h.symbol && (
                         <tr className="h-drawer-row">
-                          <td colSpan={7} className="h-drawer-cell">
+                          <td colSpan={8} className="h-drawer-cell">
                             <InlineOrderDrawer
                               state={drawer}
                               onClose={() => setDrawer(null)}
@@ -299,7 +358,8 @@ const HoldingsPage: React.FC = () => {
                         </tr>
                       )}
                     </React.Fragment>
-                  ))
+                    );
+                  })
               }
             </tbody>
           </table>

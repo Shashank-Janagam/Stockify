@@ -219,6 +219,7 @@ router.post("/buy", requireAuth, async (req, res) => {
 
     await client.query("COMMIT");
     await redis.del(`wallet:balance:${uid}`);
+    await redis.del(`ai_portfolio_v3_${userId}`);
 
     res.json({
       status: "EXECUTED",
