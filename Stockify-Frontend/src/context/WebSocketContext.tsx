@@ -21,15 +21,23 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
 
   const WS_URL = React.useMemo(() => {
-    // Handle relative paths (empty string or starts with /)
-    if (HOST === "" || HOST.startsWith("/")) {
+    // 1. Handle relative paths (empty string or starts with /)
+    if (!HOST || HOST.startsWith("/")) {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const path = HOST === "" ? "/api" : (HOST.endsWith("/api") ? HOST : `${HOST}/api`);
-      return `${protocol}//${window.location.host}${path}`;
+      let path = HOST || "/api";
+      // Ensure it ends with /api
+      if (!path.endsWith("/api")) {
+        path = path.endsWith("/") ? `${path}api` : `${path}/api`;
+      }
+      // Construct absolute URL (WebSocket requires absolute URL in most browsers)
+      const url = `${protocol}//${window.location.host}${path}`;
+      return url.replace(/([^:]\/)\/+/g, "$1"); // Normalize double slashes
     }
-    // Handle absolute URLs (like http://localhost:4000)
+
+    // 2. Handle absolute URLs (e.g., http://localhost:4000)
     const wsUrl = HOST.replace(/^http/, "ws");
-    return wsUrl.endsWith("/api") ? wsUrl : `${wsUrl}/api`;
+    const finalUrl = wsUrl.endsWith("/api") ? wsUrl : (wsUrl.endsWith("/") ? `${wsUrl}api` : `${wsUrl}/api`);
+    return finalUrl.replace(/([^:]\/)\/+/g, "$1"); // Normalize double slashes
   }, [HOST]);
 
   useEffect(() => {

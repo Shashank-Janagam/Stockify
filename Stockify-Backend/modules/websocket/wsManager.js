@@ -18,7 +18,7 @@ export function setHoldingsService(service) {
 
 export class WebSocketManager {
   constructor(server) {
-    this.wss = new WebSocketServer({ server });
+    this.wss = new WebSocketServer({ server, path: "/api" });
     this.clients = new Map();
 
     const heartbeat = setInterval(() => {
@@ -29,12 +29,18 @@ export class WebSocketManager {
       });
     }, 30000);
 
-    this.wss.on("connection", (ws) => {
+    this.wss.on("connection", (ws, req) => {
       console.log("🟢 WS client connected");
       ws.isAlive = true;
       ws.on("pong", () => { ws.isAlive = true; });
 
-      this.clients.set(ws, { subscriptions: new Map(), userId: null, token: null });
+      const cookies = this.parseCookies(req.headers.cookie || "");
+      this.clients.set(ws, { 
+        subscriptions: new Map(), 
+        userId: null, 
+        token: null,
+        cookies 
+      });
 
       ws.on("message", (message) => this.handleMessage(ws, message));
       ws.on("close", () => {
@@ -46,6 +52,17 @@ export class WebSocketManager {
     this.wss.on("close", () => {
       clearInterval(heartbeat);
     });
+  }
+
+  parseCookies(cookieStr) {
+    const cookies = {};
+    cookieStr.split(";").forEach((cookie) => {
+      const parts = cookie.split("=");
+      if (parts.length === 2) {
+        cookies[parts[0].trim()] = parts[1].trim();
+      }
+    });
+    return cookies;
   }
 
   async handleMessage(ws, message) {
