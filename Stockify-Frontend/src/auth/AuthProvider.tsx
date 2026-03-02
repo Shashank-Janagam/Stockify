@@ -27,7 +27,7 @@ const [isGoogleOnlyUser, setIsGoogleOnlyUser] = useState(false);
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-           const HOST = import.meta.env.VITE_HOST_ADDRESS;
+           const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
            
            // 1. Check if session is valid
            const res = await fetch(`${HOST}/api/login/status`, {
@@ -98,7 +98,7 @@ const [isGoogleOnlyUser, setIsGoogleOnlyUser] = useState(false);
 
   const handleLogout = async () => {
     try {
-      const HOST = import.meta.env.VITE_HOST_ADDRESS;
+      const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
       // Fire and forget logout to avoid blocking
       fetch(`${HOST}/api/login/logout`, {
         method: "POST",

@@ -6,6 +6,7 @@ import http from "http";
 import { WebSocketServer } from "ws";
 import cookieParser from "cookie-parser";
 import { connectMongo } from "./db/mongo.js";
+import { WebSocketManager } from "./modules/websocket/wsManager.js";
 
 import indiaLiveRoutes from "./modules/stocks/indiaLive.routes.js"
 import searchResults from "./modules/Search/searchResults.js";
@@ -17,7 +18,7 @@ import webhooks from "./modules/payments/razorpayWeb.js";
 import multiStocks from "./modules/stocks/multiStream.routes.js"
 import OrderExecution from "./modules/OrderExecution/buyStock.js";
 import sellStock from "./modules/OrderExecution/sellStock.js";
-import holdings from "./modules/OrderExecution/holdings.js";
+import * as holdings from "./modules/OrderExecution/holdings.js";
 import portfolioRoutes from "./modules/portfolio/portfolio.routes.js";
 import aiRoutes from "./modules/ai/ai.routes.js";
 import login from "./Middleware/login.js"
@@ -50,7 +51,7 @@ app.use("/api/webhooks",webhooks)
 app.use("/api/explore",multiStocks)
 app.use("/api/orderExecution",OrderExecution)
 app.use("/api/sellStock",sellStock);
-app.use("/api/holdings",holdings)
+app.use("/api/holdings", holdings.default);
 app.use("/api/portfolio", portfolioRoutes);
 app.use("/api/ai", aiRoutes);
 // app.use("/api/indiaSEE",indiaReplay);
@@ -58,16 +59,15 @@ app.use("/api/ai", aiRoutes);
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
+
+const wsManager = { current: null };
 async function startServer() {
   try {
     await connectMongo();
 
     const server = http.createServer(app);
-    const wss = new WebSocketServer({ server });
-
-    wss.on("connection", (ws) => {
-      console.log("🟢 WS client connected");
-    });
+    wsManager.current = new WebSocketManager(server);
+    import("./modules/websocket/wsManager.js").then(m => m.setHoldingsService(holdings));
 
     server.listen(PORT, () => {
       console.log(`✅ Server running on http://localhost:${PORT}`);

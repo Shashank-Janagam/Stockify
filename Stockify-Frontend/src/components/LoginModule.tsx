@@ -124,7 +124,7 @@ function LoginModal({ onClose }: LoginModalProps) {
       setIsloading(false);
     }
   };
-  const HOST = import.meta.env.VITE_HOST_ADDRESS
+  const HOST = import.meta.env.VITE_HOST_ADDRESS || ""
 
   const handleWithgoogle = async () => {
     try {

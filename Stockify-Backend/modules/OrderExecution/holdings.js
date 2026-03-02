@@ -12,7 +12,7 @@ const yahoo = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
    HOLDINGS (AGGREGATED BY SYMBOL)
 ────────────────────────────────────────────────────────── */
 
-async function fetchHoldings(userId) {
+export async function fetchHoldings(userId) {
   const { rows: positions } = await db.query(
     `SELECT
       s.symbol,
@@ -42,7 +42,7 @@ async function fetchHoldings(userId) {
   return positions;
 }
 
-async function computeHoldingsPayload(holdings) {
+export async function computeHoldingsPayload(holdings) {
   if (holdings.length === 0) {
     return {
       summary: { investedValue: 0, currentValue: 0, totalReturns: 0, totalReturnsPercent: 0, dayReturns: 0, dayReturnsPercent: 0 },
@@ -110,7 +110,7 @@ async function computeHoldingsPayload(holdings) {
    POSITIONS (DETAILED LOTS)
 ────────────────────────────────────────────────────────── */
 
-async function fetchDetailedPositions(userId) {
+export async function fetchDetailedPositions(userId) {
   const { rows } = await db.query(
     `SELECT
       p.id, s.symbol, s.stock_name as name,
@@ -136,7 +136,7 @@ async function fetchDetailedPositions(userId) {
   return rows;
 }
 
-async function computePositionsPayload(lots) {
+export async function computePositionsPayload(lots) {
   if (lots.length === 0) {
     return {
       summary: { investedValue: 0, currentValue: 0, totalReturns: 0, totalReturnsPercent: 0, dayReturns: 0, dayReturnsPercent: 0 },
@@ -225,7 +225,7 @@ router.get("/stocks/stream", async (req, res) => {
     };
 
     await send();
-    const interval = setInterval(send, 4000);
+    const interval = setInterval(send, 15000);
     req.on("close", () => clearInterval(interval));
   } catch (e) { res.status(401).end(); }
 });
@@ -254,7 +254,7 @@ router.get("/positions/stream", async (req, res) => {
     };
 
     await send();
-    const interval = setInterval(send, 4000);
+    const interval = setInterval(send, 15000);
     req.on("close", () => clearInterval(interval));
   } catch (e) { res.status(401).end(); }
 });

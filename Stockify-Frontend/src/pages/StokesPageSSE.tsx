@@ -77,7 +77,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   >([]);
   const [marketState, setMarketState] = useState<string | null>(null);
 
-  const HOST = import.meta.env.VITE_HOST_ADDRESS
+  const HOST = import.meta.env.VITE_HOST_ADDRESS || ""
   const [refresh, setRefresh] = useState(0)
   function rerefresh() {
     setRefresh(refresh + 1);
