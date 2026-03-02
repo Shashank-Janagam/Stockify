@@ -39,7 +39,7 @@ type StoplossOrder = {
 
 type Tab = "orders" | "stoploss";
 
-const HOST = import.meta.env.VITE_HOST_ADDRESS;
+const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
 
 /* ─── Formatters ─── */
 const fmt = (n: number | null | undefined, decimals = 2) =>

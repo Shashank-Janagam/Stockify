@@ -17,9 +17,20 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const [lastMessage, setLastMessage] = useState<any>(null);
   const ws = useRef<WebSocket | null>(null);
   const subscriptions = useRef<Set<string>>(new Set());
-  
-  const HOST = import.meta.env.VITE_HOST_ADDRESS;
-  const WS_URL = HOST.replace(/^http/, "ws");
+
+  const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
+
+  const WS_URL = React.useMemo(() => {
+    // Handle relative paths (empty string or starts with /)
+    if (HOST === "" || HOST.startsWith("/")) {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const path = HOST === "" ? "/api" : (HOST.endsWith("/api") ? HOST : `${HOST}/api`);
+      return `${protocol}//${window.location.host}${path}`;
+    }
+    // Handle absolute URLs (like http://localhost:4000)
+    const wsUrl = HOST.replace(/^http/, "ws");
+    return wsUrl.endsWith("/api") ? wsUrl : `${wsUrl}/api`;
+  }, [HOST]);
 
   useEffect(() => {
     let timeout: any;
