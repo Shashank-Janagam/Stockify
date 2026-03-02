@@ -4,6 +4,7 @@ import { AuthContext } from "../auth/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import { useAIAnalysis } from "../hooks/useAIAnalysis";
 import AIInsightCard from "./AIInsightCard";
+import { useWebSocket } from "../context/WebSocketContext";
 
 const HOST = import.meta.env.VITE_HOST_ADDRESS;
 
@@ -117,35 +118,28 @@ const HoldingsPage: React.FC = () => {
   const [summary,  setSummary]    = useState<HoldingsSummary | null>(null);
   const [loading,  setLoading]    = useState(true);
   const [drawer,   setDrawer]     = useState<DrawerState>(null);
-  const [sseVersion, bump]        = useState(0);
 
   const EMPTY_ARRAY = React.useMemo(() => [], []);
   const { data: aiData, loading: aiLoading, refetch: refetchAI } = useAIAnalysis(user?.uid, EMPTY_ARRAY, holdings, !loading);
 
-  /* SSE — live stream */
+  const { subscribe, unsubscribe, lastMessage } = useWebSocket();
+
+  /* WS — live stream */
   useEffect(() => {
     if (!user) return;
-    let es: EventSource | null = null;
-    let cancelled = false;
+    subscribe("HOLDINGS_LIVE");
+    return () => unsubscribe("HOLDINGS_LIVE");
+  }, [user]);
 
-    user.getIdToken().then(token => {
-      if (cancelled) return;
-      es = new EventSource(
-        `${HOST}/api/holdings/stocks/stream?token=${encodeURIComponent(token)}`
-      );
-      es.onmessage = (e) => {
-        const d = JSON.parse(e.data);
-        setHoldings(d.holdings || []);
-        setSummary(d.summary);
-        setLoading(false);
-      };
-      es.onerror = () => es?.close();
-    });
+  useEffect(() => {
+    if (lastMessage?.type === "HOLDINGS_UPDATE") {
+      setHoldings(lastMessage.data.holdings || []);
+      setSummary(lastMessage.data.summary);
+      setLoading(false);
+    }
+  }, [lastMessage]);
 
-    return () => { cancelled = true; es?.close(); };
-  }, [user, sseVersion]);
-
-  const handleOrderDone = () => { setDrawer(null); setLoading(true); bump(v => v + 1); refetchAI(); };
+  const handleOrderDone = () => { setDrawer(null); setLoading(true); refetchAI(); };
   const profit = (summary?.totalReturns ?? 0) >= 0;
 
   return (

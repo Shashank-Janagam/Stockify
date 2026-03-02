@@ -151,122 +151,30 @@ function getStockRoute(
 export default function Explore() {
   const { data, recentData, invested, ready } = useExploreSSE();
 
-  // const [data, setData] = useState<any>(null);
-// const [recentData, setRecentData] = useState<any[]>([]);
-// const [invested, setInvested] = useState<any[]>([]);
-
-  const navigate =useNavigate()
-  // const [token, setToken] = useState<string | null>(null);
-// const [exploreReady, setExploreReady] = useState(false);
-// const [recentReady, setRecentReady] = useState(false);
-const images = import.meta.glob(
-  "../assets/*.{png,jpg,jpeg,svg,webp}",
-  { eager: true }
-);
-
-const getImageSrc = (symbol: string): string => {
-  const name = symbol.replace(".NS", "");
-
-  const match = Object.keys(images).find(path =>
-    path.includes(`/${name}.`)
+  const navigate = useNavigate();
+  
+  const images = import.meta.glob(
+    "../assets/*.{png,jpg,jpeg,svg,webp}",
+    { eager: true }
   );
 
-  return match
-    ? (images[match] as any).default
-    : (images["../assets/StockiftLogo.png"] as any).default;
-};
+  const getImageSrc = (symbol: string): string => {
+    const name = symbol.replace(".NS", "");
 
+    const match = Object.keys(images).find(path =>
+      path.includes(`/${name}.`)
+    );
+
+    return match
+      ? (images[match] as any).default
+      : (images["../assets/StockiftLogo.png"] as any).default;
+  };
 
   const handleStockClick = (stock: any) => {
-  navigate(getStockRoute(stock.symbol, stock.name));
-};
+    navigate(getStockRoute(stock.symbol, stock.name));
+  };
 
-    // const { user } = useContext(AuthContext);
-// useEffect(() => {
-//   if (!user) return;
-
-//   let cancelled = false;
-
-//   const fetchToken = async () => {
-//     try {
-//       const jwt = await user.getIdToken(); // no force refresh needed
-//       if (!cancelled) {
-//         setToken(jwt);
-//         // console.log(token)
-//       }
-//     } catch (err) {
-//       console.error("Failed to fetch token", err);
-//     }
-//   };
-
-//   fetchToken();
-
-//   return () => {
-//     cancelled = true;
-//   };
-// }, [user]);
-
-
-
-//   const HOST = import.meta.env.VITE_HOST_ADDRESS;
-
-//   useEffect(() => {
-//     if (!token) return; // 🔑 CRITICAL GUARD
-//     const source = new EventSource(
-//       `${HOST}/api/explore?token=${token}`
-//     );
-
-//     source.onmessage = (event) => {
-//       const parsed = JSON.parse(event.data);
-//       setData(parsed);
-//       setExploreReady(true);
-//     };
-
-//     source.onerror = () => {
-//       console.error("SSE error or market closed");
-
-//       source.close();
-//     };
-
-// return () => {
-//     source.close();
-//   };}, [token]);
-
-//  useEffect(() => {
- 
-//     if (!token) return; // 🔑 CRITICAL GUARD
-
-//     const source = new EventSource(
-//       `${HOST}/api/explore/recent?token=${token}`
-//     );    
-
-
-//           source.onmessage = (event) => {
-//   const parsed = JSON.parse(event.data);
-
-//   setRecentData(parsed.recentlyViewed ?? []);
-//   setInvested(parsed.invested ?? []);
-
-//   setRecentReady(true);
-// };
-
-
-
-//       source.onerror = () => {
-
-//           console.error("SSE error or market closed");
-//           source.close();
-//         };
-// return () => {
-//     source.close();
-//   };
-// }, [token]);
-
-// const loading = !(exploreReady && recentReady);
-
-// if (loading) return <ExploreSkeleton />;
-
-if (!ready) return <ExploreSkeleton />;
+  if (!ready) return <ExploreSkeleton />;
 
 
   const { mostTraded, movers } = data;

@@ -4,6 +4,7 @@ import { AuthContext } from "../auth/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import { useAIAnalysis } from "../hooks/useAIAnalysis";
 import AIInsightCard from "./AIInsightCard";
+import { useWebSocket } from "../context/WebSocketContext";
 
 const HOST = import.meta.env.VITE_HOST_ADDRESS;
 
@@ -200,35 +201,28 @@ const PositionsPage: React.FC = () => {
     const [loading, setLoading]     = useState(true);
     const [filter, setFilter]       = useState<"ALL" | "LONG" | "SHORT" | "Intraday" | "Delivery">("ALL");
     const [drawer, setDrawer]       = useState<DrawerState>(null);
-    const [sseVersion, bump]        = useState(0);
 
     const EMPTY_ARRAY = React.useMemo(() => [], []);
     const { data: aiData, loading: aiLoading, refetch: refetchAI } = useAIAnalysis(user?.uid, positions, EMPTY_ARRAY, !loading);
 
-    /* SSE */
+    const { subscribe, unsubscribe, lastMessage } = useWebSocket();
+
+    /* WS */
     useEffect(() => {
         if (!user) return;
-        let es: EventSource | null = null;
-        let cancelled = false;
+        subscribe("POSITIONS_LIVE");
+        return () => unsubscribe("POSITIONS_LIVE");
+    }, [user]);
 
-        user.getIdToken().then(token => {
-            if (cancelled) return;
-            es = new EventSource(
-                `${HOST}/api/holdings/positions/stream?token=${encodeURIComponent(token)}`
-            );
-            es.onmessage = (e) => {
-                const d = JSON.parse(e.data);
-                setPositions(d.positions);
-                setSummary(d.summary);
-                setLoading(false);
-            };
-            es.onerror = () => es?.close();
-        });
+    useEffect(() => {
+        if (lastMessage?.type === "POSITIONS_UPDATE") {
+            setPositions(lastMessage.data.positions);
+            setSummary(lastMessage.data.summary);
+            setLoading(false);
+        }
+    }, [lastMessage]);
 
-        return () => { cancelled = true; es?.close(); };
-    }, [user, sseVersion]);
-
-    const handleOrderDone = () => { setDrawer(null); bump(v => v + 1); refetchAI(); };
+    const handleOrderDone = () => { setDrawer(null); refetchAI(); };
 
     /* Merge lots → grouped rows */
     const merged = React.useMemo(() => mergePositions(positions), [positions]);

@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard.tsx";
 import StockPageSSE from "./pages/StokesPageSSE.tsx";
 import FundsPage from "./pages/FundsPage.tsx";
 import { ExploreSSEProvider } from "./context/ExploreSSEContext";
+import { WebSocketProvider } from "./context/WebSocketContext";
 
 import Portfolio from "./pages/Portfolio.tsx";
 import SetPassword from "./components/SetPassword.tsx";
@@ -61,66 +62,68 @@ const App = () => {
 
   return (
     <BrowserRouter>
-      <ExploreSSEProvider> {/* 🔥 PERSISTENT SSE */}
-        <RouteTitleManager />
-        
-        <CookieConsent />
+      <WebSocketProvider>
+        <ExploreSSEProvider> {/* 🔥 PERSISTENT SSE */}
+          <RouteTitleManager />
+          
+          <CookieConsent />
 
-        <NavBar onLoginClick={() => setShowLogin(true)} />
+          <NavBar onLoginClick={() => setShowLogin(true)} />
 
-        {showLogin && (
-          <LoginModal onClose={() => setShowLogin(false)} />
-        )}
+          {showLogin && (
+            <LoginModal onClose={() => setShowLogin(false)} />
+          )}
 
-        <div className="page-content">
-          <Routes>
-            <Route
-              path="/"
-              element={<HomePage onLoginClick={() => setShowLogin(true)} />}
-            />
+          <div className="page-content">
+            <Routes>
+              <Route
+                path="/"
+                element={<HomePage onLoginClick={() => setShowLogin(true)} />}
+              />
 
-            <Route
-              path="/indiaSEE/:symbol/:name"
-              element={<StockPageSSE onLoginClick={() => setShowLogin(true)} />}
-            />
+              <Route
+                path="/indiaSEE/:symbol/:name"
+                element={<StockPageSSE onLoginClick={() => setShowLogin(true)} />}
+              />
 
-            <Route
-              path="/user/balance"
-              element={
-                <ProtectedRoute>
-                  <FundsPage />
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/user/balance"
+                element={
+                  <ProtectedRoute>
+                    <FundsPage />
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/portfolio"
-              element={
-                <ProtectedRoute>
-                  <Portfolio />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/set-password"
-              element={
-                <ProtectedRoute>
-                  <SetPassword />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/portfolio"
+                element={
+                  <ProtectedRoute>
+                    <Portfolio />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/set-password"
+                element={
+                  <ProtectedRoute>
+                    <SetPassword />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
 
-          </Routes>
-        </div>
-      </ExploreSSEProvider>
+            </Routes>
+          </div>
+        </ExploreSSEProvider>
+      </WebSocketProvider>
     </BrowserRouter>
   );
 };
