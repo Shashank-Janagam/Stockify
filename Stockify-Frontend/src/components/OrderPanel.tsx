@@ -69,7 +69,7 @@ export default function OrderPanel({
   const [orderType, setOrderType] = useState<"Market" | "Limit">("Market");
   const [limitPrice, setLimitPrice] = useState<string>("");
 
-  const HOST = import.meta.env.VITE_HOST_ADDRESS;
+  const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
 
   const [showAddMoney, setShowAddMoney] = useState(false);
   const [loading, setLoading] = useState(false);

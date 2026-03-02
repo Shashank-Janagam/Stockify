@@ -6,7 +6,7 @@ import { useAIAnalysis } from "../hooks/useAIAnalysis";
 import AIInsightCard from "./AIInsightCard";
 import { useWebSocket } from "../context/WebSocketContext";
 
-const HOST = import.meta.env.VITE_HOST_ADDRESS;
+const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
 
 /* ─── Helpers ─── */
 function slugify(n: string) {
@@ -153,14 +153,14 @@ const HoldingsPage: React.FC = () => {
       </div>
 
       {/* AI Insight */}
-      {(aiData || aiLoading) && (
+      {(loading || aiLoading || aiData) && (
         <AIInsightCard 
           portfolioRiskScore={aiData?.portfolioRiskScore || 0} 
           riskCategory={aiData?.riskCategory || ''} 
           emotionalFlags={aiData?.emotionalFlags || { revengeTrading: false, fomo: false, panicSelling: false, overtrading: false }} 
           behavioralMetrics={aiData?.behavioralMetrics}
           overallAdvice={aiData?.overallAdvice || ''} 
-          loading={aiLoading} 
+          loading={loading || aiLoading} 
         />
       )}
       {/* ── Summary card ── */}
@@ -307,9 +307,22 @@ const HoldingsPage: React.FC = () => {
                                         </div>
                                     </div>
                                 ) : (
-                                    <div style={{ fontSize: '12px', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}>
-                                         {aiLoading ? <span className="btn-loader" style={{ width: '12px', height: '12px', borderWidth: '2px', borderColor: '#d1d5db', borderRightColor: 'transparent' }} /> : '🧠'} 
-                                         {aiLoading ? 'Thinking...' : 'AI thinking...'}
+                                    <div style={{ fontSize: '12px', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                                         {aiLoading ? (
+                                             <div style={{ position: 'relative', width: '10px', height: '10px' }}>
+                                                 <div style={{ position: 'absolute', width: '100%', height: '100%', backgroundColor: '#60a5fa', borderRadius: '50%', animation: 'aiPulseOpacity 1.5s infinite ease-in-out' }} />
+                                                 <div style={{ position: 'absolute', width: '100%', height: '100%', border: '1px solid #60a5fa', borderRadius: '50%', animation: 'aiOrbScale 1.5s infinite ease-out' }} />
+                                             </div>
+                                         ) : '🧠'} 
+                                         <span style={{ 
+                                             background: aiLoading ? 'linear-gradient(90deg, #9ca3af, #60a5fa, #9ca3af)' : 'none',
+                                             backgroundSize: '200% 100%',
+                                             WebkitBackgroundClip: aiLoading ? 'text' : 'none',
+                                             WebkitTextFillColor: aiLoading ? 'transparent' : 'inherit',
+                                             animation: aiLoading ? 'aiShimmer 2s infinite linear' : 'none'
+                                         }}>
+                                             {aiLoading ? 'AI ANALYZING...' : 'AI thinking...'}
+                                         </span>
                                     </div>
                                 )}
                             </div>

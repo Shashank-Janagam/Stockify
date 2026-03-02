@@ -30,7 +30,7 @@ const AIStockReport: React.FC<AIStockReportProps> = ({ symbol }) => {
       setLoading(true);
       setError(null);
       try {
-        const HOST = import.meta.env.VITE_HOST_ADDRESS;
+        const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
         const response = await fetch(`${HOST}/api/indiaSEE/${symbol}/ai-report`);
         if (!response.ok) throw new Error('Analysis failed');
         const result = await response.json();

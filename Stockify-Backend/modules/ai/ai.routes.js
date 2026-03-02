@@ -37,6 +37,7 @@ router.post('/analyze-portfolio', requireAuth, async (req, res) => {
     }
 
     if (!genAI) {
+        console.error("❌ AI reporting: Service unavailable (Gemini API key missing)");
         return res.status(503).json({
             error: "AI service unavailable",
             message: "Gemini API key is not configured on the server."

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-const HOST = import.meta.env.VITE_HOST_ADDRESS;
+const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
 
 export interface AIAnalysisResponse {
   portfolioRiskScore: number;

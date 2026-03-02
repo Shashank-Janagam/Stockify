@@ -29,10 +29,54 @@ const AIInsightCard: React.FC<AIInsightCardProps> = ({
 }) => {
   if (loading) {
     return (
-      <div style={{ backgroundColor: '#1f2937', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', flexDirection: 'column', gap: '16px', animation: 'aiPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>
-        <div style={{ height: '24px', width: '200px', backgroundColor: '#374151', borderRadius: '4px' }}></div>
-        <div style={{ height: '8px', width: '100%', backgroundColor: '#374151', borderRadius: '4px' }}></div>
-        <div style={{ height: '40px', width: '100%', backgroundColor: '#374151', borderRadius: '4px' }}></div>
+      <div style={{ 
+        backgroundColor: 'rgba(17, 24, 39, 0.9)', 
+        borderRadius: '20px', 
+        padding: '28px', 
+        marginBottom: '24px', 
+        border: '1px solid rgba(59, 130, 246, 0.2)',
+        position: 'relative',
+        overflow: 'hidden',
+        minHeight: '260px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px'
+      }}>
+        {/* Futuristic Scanning Laser */}
+        <div style={{ 
+          position: 'absolute', 
+          top: 0, left: '-100%', width: '50%', height: '100%', 
+          background: 'linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent)',
+          animation: 'aiScan 2.5s infinite linear',
+          zIndex: 1
+        }} />
+
+        {/* Header Skeleton */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '32px', height: '32px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)', animation: 'aiPulseOpacity 2s infinite ease-in-out' }} />
+          <div style={{ height: '14px', width: '220px', background: 'linear-gradient(90deg, #1f2937, #374151, #1f2937)', backgroundSize: '200% 100%', borderRadius: '4px', animation: 'aiShimmer 2s infinite linear' }} />
+          <div style={{ marginLeft: 'auto', width: '100px', height: '20px', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderRadius: '20px', border: '1px solid rgba(96, 165, 250, 0.1)' }} />
+        </div>
+
+        {/* Risk Meter Skeleton */}
+        <div style={{ marginTop: '10px' }}>
+           <div style={{ height: '8px', width: '100%', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderRadius: '10px', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: '40%', background: 'linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.4), transparent)', position: 'absolute', left: '-40%', animation: 'aiShimmer 1.5s infinite linear' }} />
+           </div>
+           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+              <div style={{ height: '10px', width: '60px', backgroundColor: '#1f2937', borderRadius: '4px' }} />
+              <div style={{ height: '10px', width: '80px', backgroundColor: '#1f2937', borderRadius: '4px' }} />
+           </div>
+        </div>
+
+        {/* Metrics Grid Skeleton */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+           <div style={{ height: '54px', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.04)' }} />
+           <div style={{ height: '54px', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.04)' }} />
+        </div>
+
+        {/* Advice Box Skeleton */}
+        <div style={{ height: '60px', width: '100%', background: 'rgba(59, 130, 246, 0.03)', borderLeft: '3px solid rgba(59, 130, 246, 0.2)', borderRadius: '0 8px 8px 0', borderTop: '1px solid rgba(59,130,246,0.05)' }} />
       </div>
     );
   }
@@ -178,9 +222,17 @@ const AIInsightCard: React.FC<AIInsightCardProps> = ({
 
       <style>
         {`
-          @keyframes aiPulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: .5; }
+          @keyframes aiScan {
+            0% { left: -100%; }
+            100% { left: 100%; }
+          }
+          @keyframes aiShimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+          }
+          @keyframes aiPulseOpacity {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.95); }
           }
         `}
       </style>
