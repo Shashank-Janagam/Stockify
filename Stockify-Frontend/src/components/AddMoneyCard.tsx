@@ -145,8 +145,25 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
 
   return (
     <div className="card add-money-card">
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px', gap: '10px' }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          width: '32px', 
+          height: '32px', 
+          backgroundColor: 'rgba(16, 185, 129, 0.1)', 
+          borderRadius: '8px'
+        }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 12V8C20 6.89543 19.1046 6 18 6H6C4.89543 6 4 6.89543 4 8V16C4 17.1046 4.89543 18 6 18H18C19.1046 18 20 17.1046 20 16V14M20 12H17C15.8954 12 15 12.8954 15 14C15 15.1046 15.8954 16 17 16H20M20 12V14" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <p className="card-title" style={{ margin: 0, color: '#64748b' }}>Wallet Top-up</p>
+      </div>
+
       <div className="tabs">
-        <span className="active">Add money</span>
+        <span className="active">Deposit</span>
         <span>Withdraw</span>
       </div>
 
@@ -158,6 +175,7 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
           value={formatINR(value)}
           onChange={handleChange}
           className="amount-input"
+          placeholder="0"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               handlePay();
@@ -179,36 +197,17 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
         ))}
       </div>
 
-      {/* ✅ Razorpay only opens on click */}
       <button 
         className={`primary-btn ${loading ? "btn-loading" : ""}`} 
         onClick={handlePay}
         disabled={loading}
-        style={{ position: 'relative', overflow: 'hidden' }}
       >
-        {loading ? (
-            <>
-                <span className="spinner-border" style={{ 
-                    width: '1em', 
-                    height: '1em', 
-                    border: '2px solid transparent', 
-                    borderTopColor: 'currentColor', 
-                    borderRadius: '50%', 
-                    display: 'inline-block', 
-                    animation: 'spin 0.6s linear infinite',
-                    marginRight: '8px',
-                    verticalAlign: 'middle'
-                }}></span>
-                Processing...
-                <style>{`
-                    @keyframes spin {
-                        0% { transform: rotate(0deg); }
-                        100% { transform: rotate(360deg); }
-                    }
-                `}</style>
-            </>
-        ) : "Add money"}
+        {loading ? "Initializing..." : "Add Money"}
       </button>
+
+      <p style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', marginTop: '20px' }}>
+        Secured by Razorpay. Instant settlement to Vault.
+      </p>
     </div>
   );
 }
