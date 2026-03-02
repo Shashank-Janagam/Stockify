@@ -6,6 +6,7 @@ import TimeframeBar from "../components/TimeframeBar";
 import OrderPanel from "../components/OrderPanel";
 // import {useContext} from "react"
 // import { AuthContext } from "../auth/AuthProvider";
+import { useWebSocket } from "../context/WebSocketContext";
 // import StockCandleChartIndia from "../components/StockCandleChartIndia";
 import "../Styles/stock.css";
 import StockPerformance from "../components/StockPerformanceFundamentals"
@@ -196,6 +197,8 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   /* =========================
      1D → SSE (MARKET OPEN)
   ========================= */
+  const { subscribe, unsubscribe, lastMessage } = useWebSocket();
+
   useEffect(() => {
     if (timeframe !== "1D") return;
     if (!marketState) return;
@@ -203,36 +206,9 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     // 🔥 RESET DATA WHEN SYMBOL CHANGES
     setLineData([]);
 
-    let es: EventSource | null = null;
-
-    // 🟢 MARKET OPEN / REPLAY → SSE
+    // 🟢 MARKET OPEN / REPLAY → WS
     if (marketState === "REGULAR") {
-      es = new EventSource(
-        `${HOST}/api/indiaSEE/${symbol}/stream`
-      );
-      es.onmessage = (e) => {
-        const data = JSON.parse(e.data);
-
-        if (data.candles) {
-          // ✅ ALWAYS UPDATE (no length check)
-          setLineData(
-            data.candles.map((d: Candle) => ({
-              x: d.x,
-              y: d.c
-            }))
-          );
-
-
-          const last = data.candles[data.candles.length - 1];
-          setPrice(last.c);
-          setLoading(false);
-        }
-        setQuote(data.quote)
-      };
-
-      es.onerror = () => {
-        es?.close();
-      };
+      subscribe("STOCK_LIVE", { symbol });
     }
     // 🔴 MARKET CLOSED → STATIC
     else {
@@ -249,11 +225,30 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
         });
     }
 
-    // ✅ CLEANUP OLD SSE
     return () => {
-      if (es) es.close();
+      if (marketState === "REGULAR") {
+        unsubscribe("STOCK_LIVE", { symbol });
+      }
     };
   }, [symbol, timeframe, marketState]);
+
+  useEffect(() => {
+    if (lastMessage?.type === "STOCK_UPDATE" && lastMessage.symbol === symbol) {
+      const { candles, quote } = lastMessage.data;
+      if (candles) {
+        setLineData(
+          candles.map((d: Candle) => ({
+            x: d.x,
+            y: d.c
+          }))
+        );
+        const last = candles[candles.length - 1];
+        if (last) setPrice(last.y || last.c);
+        setLoading(false);
+      }
+      if (quote) setQuote(quote);
+    }
+  }, [lastMessage, symbol]);
 
 
   /* =========================
