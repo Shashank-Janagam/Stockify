@@ -142,7 +142,10 @@ router.get("/:symbol/ai-report", async (req, res) => {
     }
 
     // 3️⃣ Build Prompt and Call Gemini
-    if (!genAI) return res.status(503).json({ error: "AI service offline" });
+    if (!genAI) {
+        console.error("❌ AI reporting: Service unavailable (Gemini API key missing)");
+        return res.status(503).json({ error: "AI service offline" });
+    }
 
     const model = genAI.getGenerativeModel({ 
         model: "gemini-2.5-flash-lite", 

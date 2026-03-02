@@ -52,7 +52,7 @@ const Portfolio = () => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("1M");
 
-  const HOST = import.meta.env.VITE_HOST_ADDRESS;
+  const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
 
   /* =========================
      1. AUTH TOKEN

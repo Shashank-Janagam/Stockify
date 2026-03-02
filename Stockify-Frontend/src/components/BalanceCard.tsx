@@ -18,7 +18,7 @@ export default function BalanceCard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const HOST = import.meta.env.VITE_HOST_ADDRESS;
+  const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
 
   /* =========================
      FETCH TRANSACTIONS
