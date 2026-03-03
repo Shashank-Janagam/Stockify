@@ -22,6 +22,13 @@ import * as holdings from "./modules/OrderExecution/holdings.js";
 import portfolioRoutes from "./modules/portfolio/portfolio.routes.js";
 import aiRoutes from "./modules/ai/ai.routes.js";
 import login from "./Middleware/login.js"
+import rateLimit from "express-rate-limit";
+
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10, // 10 AI calls per minute per IP
+});
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 app.use( "/api/webhooks/razorpay", express.raw({ type: "application/json" })
@@ -53,7 +60,8 @@ app.use("/api/orderExecution",OrderExecution)
 app.use("/api/sellStock",sellStock);
 app.use("/api/holdings", holdings.default);
 app.use("/api/portfolio", portfolioRoutes);
-app.use("/api/ai", aiRoutes);
+app.use("/api/ai", aiRoutes,limiter);
+
 // app.use("/api/indiaSEE",indiaReplay);
 
 app.get("/health", (req, res) => {

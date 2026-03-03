@@ -61,19 +61,42 @@ async function fetchNSE(url) {
 
 
 /* -------------------------
-   NSE MOVERS
+   NSE MOVERS WITH FALLBACK
 ------------------------- */
+let cachedGainers = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "KOTAKBANK.NS", "LT.NS"];
+let cachedLosers = ["TATAMOTORS.NS", "WIPRO.NS", "AXISBANK.NS", "HINDALCO.NS", "ADANIENT.NS", "ONGC.NS", "JSWSTEEL.NS", "MARUTI.NS", "BAJFINANCE.NS", "TITAN.NS"];
+
 export async function getNSETopGainers(limit = 10) {
-  const json = await fetchNSE(
-    `${BASE}/api/live-analysis-variations?index=gainers`
-  );
+  try {
+    const json = await fetchNSE(`${BASE}/api/live-analysis-variations?index=gainers`);
+    const symbols = json?.allSec?.data?.slice(0, limit).map(s => `${s.symbol}.NS`);
+    
+    if (symbols && symbols.length > 0) {
+      cachedGainers = symbols;
+      return symbols;
+    }
+    throw new Error("No data found in NSE response");
+  } catch (err) {
+    // console.warn("⚠️ NSE Gainers Fetch Failed, using fallback. Error:", err.message);
+    return cachedGainers.slice(0, limit);
+  }
+}
 
- 
-
-  return json?.allSec?.data
-
-    ?.slice(0, limit)
-    .map(s => `${s.symbol}.NS`) || [];
+export async function getNSETopLosers(limit = 10) {
+  try {
+    // Note: The correct NSE parameter is 'losers', not 'loosers'
+    const json = await fetchNSE(`${BASE}/api/live-analysis-variations?index=losers`);
+    const symbols = json?.allSec?.data?.slice(0, limit).map(s => `${s.symbol}.NS`);
+    
+    if (symbols && symbols.length > 0) {
+      cachedLosers = symbols;
+      return symbols;
+    }
+    throw new Error("No data found in NSE response");
+  } catch (err) {
+    // console.warn("⚠️ NSE Losers Fetch Failed, using fallback. Error:", err.message);
+    return cachedLosers.slice(0, limit);
+  }
 }
 
 

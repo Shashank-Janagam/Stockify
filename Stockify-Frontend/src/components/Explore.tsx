@@ -3,9 +3,9 @@
 import { useNavigate } from "react-router-dom";
 import stockifylogo from "../assets/StockiftLogo.png";
 import { useExploreSSE } from "../context/ExploreSSEContext";
+import { useState, useMemo } from "react";
 
 import "../Styles/explore.css";
-import { useMemo } from "react";
 
 function MiniGraph({ positive }: { positive: boolean }) {
   const points = useMemo(() => generatePoints(positive), [positive]);
@@ -150,6 +150,7 @@ function getStockRoute(
 }
 export default function Explore() {
   const { data, recentData, invested, ready } = useExploreSSE();
+  const [moverTab, setMoverTab] = useState<"gainers" | "losers">("gainers");
 
   const navigate = useNavigate();
   
@@ -177,36 +178,36 @@ export default function Explore() {
   if (!ready) return <ExploreSkeleton />;
 
 
-  const { mostTraded, movers } = data;
+  const { mostTraded, movers, losers } = data;
 //   console.log("most traded",mostTraded)
 //   console.log("movers",movers)
 
   return (
     <div className="explore-page">
       {/* RECENTLY VIEWED */}
-<section className="section">
-  <h2>Recently viewed</h2>
+      <section className="section">
+        <h2>Recently viewed</h2>
 
-  <div className="recent-grid">
-    {recentData.map((r: any) => (
-      <div
-        key={r.symbol}
-        className="recent-item clickable"
-        onClick={() => handleStockClick(r)}
-      >
-        <img
-          src={new URL(getImageSrc(r.symbol), import.meta.url).href}
-          alt={r.name}
-        />
-        <div>{r.symbol.replace(".NS","")}</div>
-        <span className={r.percent > 0 ? "pos" : "neg"}>
-          {r.percent > 0 ? "+" : ""}
-          {r.percent}%
-        </span>
-      </div>
-    ))}
-  </div>
-</section>
+        <div className="recent-grid">
+          {recentData.map((r: any) => (
+            <div
+              key={r.symbol}
+              className="recent-item clickable"
+              onClick={() => handleStockClick(r)}
+            >
+              <img
+                src={new URL(getImageSrc(r.symbol), import.meta.url).href}
+                alt={r.name}
+              />
+              <div>{r.symbol.replace(".NS","")}</div>
+              <span className={r.percent > 0 ? "pos" : "neg"}>
+                {r.percent > 0 ? "+" : ""}
+                {r.percent}%
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
 
 
       <div className="main-grid">
@@ -215,44 +216,63 @@ export default function Explore() {
           {/* MOST TRADED */}
           <section className="section">
             <h2>Most traded stocks on Stockify</h2>
-           <div className="card-grid">
-  {mostTraded.map((s: any) => (
-<div className="stock-card clickable" onClick={() => handleStockClick(s)}>
-  <div className="stock-top">
-    <div className="logo-wrap">
-      <img
-        src={new URL(`${getImageSrc(s.symbol)}`, import.meta.url).href}
-        alt={s.name}
-      />
-    </div>
+            <div className="card-grid">
+              {mostTraded.map((s: any) => (
+                <div key={s.symbol} className="stock-card clickable" onClick={() => handleStockClick(s)}>
+                  <div className="stock-top">
+                    <div className="logo-wrap">
+                      <img
+                        src={new URL(`${getImageSrc(s.symbol)}`, import.meta.url).href}
+                        alt={s.name}
+                      />
+                    </div>
 
-    <MiniGraph positive={s.percent > 0} />
-  </div>
+                    <MiniGraph positive={s.percent > 0} />
+                  </div>
 
-  <div className="name">
-    {s.name.split(" ")[0]} {s.name.split(" ")[1] || ""}
-  </div>
+                  <div className="name">
+                    {s.name.split(" ")[0]} {s.name.split(" ")[1] || ""}
+                  </div>
 
-  <div className="price">
-    ₹{s.price?.toLocaleString("en-IN")}
-  </div>
+                  <div className="price">
+                    ₹{s.price?.toLocaleString("en-IN")}
+                  </div>
 
-  <div className={s.percent > 0 ? "badge pos" : "badge neg"}>
-    {s.percent > 0 ? "+" : ""}
-    {s.percent}%
-  </div>
-</div>
-  ))}
-</div>
+                  <div className={s.percent > 0 ? "badge pos" : "badge neg"}>
+                    {s.percent > 0 ? "+" : ""}
+                    {s.percent}%
+                  </div>
+                </div>
+              ))}
+            </div>
 
             <span className="link">See more →</span>
           </section>
 
-          {/* TOP MARKET MOVERS */}
+          {/* TOP MARKET MOVERS / LOSERS TOGGLE */}
           <section className="section">
-            <h2>Top market movers</h2>
-
-           
+            <div className="section-header-row">
+              <h2>{moverTab === "gainers" ? "Top market movers" : "Top market losers"}</h2>
+              
+              <div className="mover-toggle">
+                <div 
+                  className={`mover-toggle-active ${moverTab}`} 
+                  style={{ transform: `translateX(${moverTab === "gainers" ? "0" : "100"}%)` }}
+                />
+                <button 
+                  className={moverTab === "gainers" ? "active" : ""} 
+                  onClick={() => setMoverTab("gainers")}
+                >
+                  Gainers
+                </button>
+                <button 
+                  className={moverTab === "losers" ? "active" : ""} 
+                  onClick={() => setMoverTab("losers")}
+                >
+                  Losers
+                </button>
+              </div>
+            </div>
 
             <div className="table-card">
               <table>
@@ -265,102 +285,92 @@ export default function Explore() {
                   </tr>
                 </thead>
                 <tbody>
-  {movers.map((m: any) => (
-    <tr
-      key={m.symbol}
-      className="clickable"
-      onClick={() => handleStockClick(m)}
-    >
-      {/* Company column: logo + name + symbol */}
-      <td>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <img
-            src={new URL(`${getImageSrc(m.symbol)}`, import.meta.url).href}
-            onError={(e) => (e.currentTarget.src = stockifylogo)}
-            alt={m.name}
-            className="table-logo"
-          />
-          <div>
-            <div className="table-name">{m.name}</div>
-            <div className="table-sym">{m.symbol.replace(".NS", "")}</div>
-          </div>
-        </div>
-      </td>
+                  {(moverTab === "gainers" ? movers : losers).map((m: any) => (
+                    <tr
+                      key={m.symbol}
+                      className="clickable"
+                      onClick={() => handleStockClick(m)}
+                    >
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          <img
+                            src={new URL(`${getImageSrc(m.symbol)}`, import.meta.url).href}
+                            onError={(e) => (e.currentTarget.src = stockifylogo)}
+                            alt={m.name}
+                            className="table-logo"
+                          />
+                          <div>
+                            <div className="table-name">{m.name}</div>
+                            <div className="table-sym">{m.symbol.replace(".NS", "")}</div>
+                          </div>
+                        </div>
+                      </td>
 
-      {/* Chart column */}
-      <td className="table-chart-cell">
-        <MiniGraph positive={m.percent > 0} />
-      </td>
+                      <td className="table-chart-cell">
+                        <MiniGraph positive={m.percent > 0} />
+                      </td>
 
-      {/* Price + % column */}
-      <td className={m.percent > 0 ? "pos" : "neg"} id="marketprice">
-        {m.price !== null ? `₹${m.price.toLocaleString("en-IN")}` : "—"}
-        <div>
-          {m.percent > 0 ? "+" : ""}{m.percent}%
-        </div>
-      </td>
+                      <td className={m.percent > 0 ? "pos" : "neg"} id="marketprice">
+                        {m.price !== null ? `₹${m.price.toLocaleString("en-IN")}` : "—"}
+                        <div>
+                          {m.percent > 0 ? "+" : ""}{m.percent}%
+                        </div>
+                      </td>
 
-      {/* Volume column */}
-      <td className="vol">
-        {m.volume.toLocaleString("en-IN")}
-      </td>
-    </tr>
-  ))}
-</tbody>
+                      <td className="vol">
+                        {m.volume ? m.volume.toLocaleString("en-IN") : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           </section>
         </div>
 
         {/* RIGHT PANEL */}
-       <aside className="right-panel">
-  <div className="investment-box">
-    <div className="investment-header">
-      <h3>Your Investments</h3>
-      
-    </div>
+        <aside className="right-panel">
+          <div className="investment-box">
+            <div className="investment-header">
+              <h3>Your Investments</h3>
+            </div>
 
-    {invested?.length === 0 ? (
-      <div className="empty-box">
-        You haven't invested yet
-      </div>
-    ) : (
-      <div className="invest-list">
-        {invested.map((s: any) => (
-          <div className="invest-item clickable" onClick={() => handleStockClick(s)} key={s.symbol}>
-  {/* Logo */}
-  <img
-    className="invest-logo"
-    src={new URL(`${getImageSrc(s.symbol)}`, import.meta.url).href}
-    alt={s.name}
-    onError={(e) => (e.currentTarget.src = stockifylogo)}
-  />
+            {invested?.length === 0 ? (
+              <div className="empty-box">
+                You haven't invested yet
+              </div>
+            ) : (
+              <div className="invest-list">
+                {invested.map((s: any) => (
+                  <div className="invest-item clickable" onClick={() => handleStockClick(s)} key={s.symbol}>
+                    <img
+                      className="invest-logo"
+                      src={new URL(`${getImageSrc(s.symbol)}`, import.meta.url).href}
+                      alt={s.name}
+                      onError={(e) => (e.currentTarget.src = stockifylogo)}
+                    />
 
-  {/* Name + symbol */}
-  <div className="invest-text">
-    <strong>{s.name.split(" ")[0]} {s.name.split(" ")[1] || ""}</strong>
-    <span className="inv-sym">{s.symbol.replace(".NS", "")}</span>
-  </div>
+                    <div className="invest-text">
+                      <strong>{s.name.split(" ")[0]} {s.name.split(" ")[1] || ""}</strong>
+                      <span className="inv-sym">{s.symbol.replace(".NS", "")}</span>
+                    </div>
 
-  {/* PnL */}
-  <div className="invest-right">
-    <div className={`invest-pnl ${s.percent >= 0 ? "pos" : "neg"}`}>
-      ₹{s.price?.toLocaleString("en-IN")}
-    </div>
-    <div className={`invest-percent ${s.percent >= 0 ? "pos" : "neg"}`}>
-      {s.percent >= 0 ? "+" : ""}{s.percent}%
-    </div>
-  </div>
-</div>
-
-        ))}
-      </div>
-    )}
-  </div>
-</aside>
-
-
+                    <div className="invest-right">
+                      <div className={`invest-pnl ${s.percent >= 0 ? "pos" : "neg"}`}>
+                        ₹{s.price?.toLocaleString("en-IN")}
+                      </div>
+                      <div className={`invest-percent ${s.percent >= 0 ? "pos" : "neg"}`}>
+                        {s.percent >= 0 ? "+" : ""}{s.percent}%
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
     </div>
   );
 }
+
