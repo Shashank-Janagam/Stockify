@@ -1,4 +1,4 @@
-name: Deploy Stockify to EC2
+name: Deploy Stockify to EC2 (Docker)
 
 on:
   push:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to EC2
+      - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -24,23 +24,13 @@ jobs:
             echo "Pulling latest code..."
             git pull origin main
 
-            echo "Installing backend dependencies..."
-            cd Stockify-Backend
-            npm install
+            echo "Stopping old containers..."
+            docker compose down
 
-            echo "Installing frontend dependencies..."
-            cd ../Stockify-Frontend
-            npm install
-            npm run build
+            echo "Building and starting containers..."
+            docker compose up -d --build
 
-            echo "Reloading backend..."
-            pm2 reload stockify-backend || pm2 restart stockify-backend
+            echo "Cleaning unused images..."
+            docker image prune -f
 
-            echo "reloading stoploss.."
-            cd ../AlgoTrading/stoploss-engine
-            pm2 reload stoploss || pm2 restart stoploss
-
-            echo "Reloading Nginx..."
-            sudo systemctl reload nginx
-
-            echo "Deployment completed."
+            echo "Deployment completed successfully."
