@@ -17,6 +17,11 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const [lastMessage, setLastMessage] = useState<any>(null);
   const ws = useRef<WebSocket | null>(null);
   const subscriptions = useRef<Set<string>>(new Set());
+  const userRef = useRef(user);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
 
@@ -93,8 +98,8 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   async function sendSubscription(topic: string, params: any = {}) {
     if (ws.current?.readyState === WebSocket.OPEN) {
       let token = null;
-      if (user) {
-        token = await user.getIdToken();
+      if (userRef.current) {
+        token = await userRef.current.getIdToken();
       }
       ws.current.send(JSON.stringify({
         type: "SUBSCRIBE",
@@ -104,6 +109,17 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       }));
     }
   }
+
+  // 🔥 Re-subscribe all when user logs in
+  useEffect(() => {
+    if (user && isConnected) {
+      subscriptions.current.forEach(sub => {
+        const [topic, paramsStr] = sub.split("|");
+        const params = paramsStr ? JSON.parse(paramsStr) : {};
+        sendSubscription(topic, params);
+      });
+    }
+  }, [user, isConnected]);
 
   function subscribe(topic: string, params: any = {}) {
     const subKey = `${topic}|${JSON.stringify(params)}`;

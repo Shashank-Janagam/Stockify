@@ -58,21 +58,21 @@ router.get("/", async (req, res) => {
   "ITC.NS"
 ];
 // const moversList = await getNSETopGainers();
-const moversList = [
-  "ADANIENT.NS",
-  "TATAMOTORS.NS",
-  "ONGC.NS",
-  "RELIANCE.NS",
-    "TCS.NS",
-    "INFY.NS",
-    "HDFCBANK.NS",
-    "ICICIBANK.NS",
-    "SBIN.NS",
-    "ITC.NS",
+// const moversList = [
+//   "ADANIENT.NS",
+//   "TATAMOTORS.NS",
+//   "ONGC.NS",
+//   "RELIANCE.NS",
+//     "TCS.NS",
+//     "INFY.NS",
+//     "HDFCBANK.NS",
+//     "ICICIBANK.NS",
+//     "SBIN.NS",
+//     "ITC.NS",
 
-];
-// const moversList = await getNSETopGainers();
- 
+// ];
+const moversList = await getNSETopGainers();
+ console.log(moversList)
   try {
     // console.log("user verified for explore sse")
     // SSE headers

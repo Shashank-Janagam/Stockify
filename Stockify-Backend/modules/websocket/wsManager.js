@@ -6,7 +6,7 @@ import { getYahooIndiaQuote } from "../stocks/yahooIndiaQuote.service.js";
 import { MultiStockYahoo } from "../stocks/multiStockIndia.js";
 import { getDb } from "../../db/mongo.js";
 import { db } from "../../db/sql.js";
-
+import { getNSETopGainers, getNSETopLosers } from "../stocks/multiCurrentMovers.js";
 // We'll need these from holdings.js, so we should export them there or duplicate/refactor
 // For speed, let's assume we can refactor holdings.js to export its logic
 
@@ -16,10 +16,13 @@ export function setHoldingsService(service) {
   holdingsService = service;
 }
 
-export class WebSocketManager {
+export  class WebSocketManager {
   constructor(server) {
     this.wss = new WebSocketServer({ server, path: "/api" });
     this.clients = new Map();
+    this.exploreSubscribers = new Set();
+    this.exploreInterval = null;
+    this.lastExploreData = null;
 
     const heartbeat = setInterval(() => {
       this.wss.clients.forEach((ws) => {
@@ -120,7 +123,7 @@ export class WebSocketManager {
         interval = this.startStockLive(ws, params.symbol);
         break;
       case "EXPLORE_LIVE":
-        interval = this.startExploreLive(ws);
+        this.startExploreLive(ws);
         break;
       case "RECENT_LIVE":
         interval = this.startRecentLive(ws, client);
@@ -147,7 +150,15 @@ export class WebSocketManager {
 
     const subKey = `${topic}:${JSON.stringify(params.symbol || "")}`;
     if (client.subscriptions.has(subKey)) {
-      clearInterval(client.subscriptions.get(subKey));
+      if (topic === "EXPLORE_LIVE") {
+        this.exploreSubscribers.delete(ws);
+        if (this.exploreSubscribers.size === 0 && this.exploreInterval) {
+          clearInterval(this.exploreInterval);
+          this.exploreInterval = null;
+        }
+      } else {
+        clearInterval(client.subscriptions.get(subKey));
+      }
       client.subscriptions.delete(subKey);
       console.log(`🔕 Unsubscribed from ${subKey}`);
     }
@@ -156,7 +167,18 @@ export class WebSocketManager {
   cleanupClient(ws) {
     const client = this.clients.get(ws);
     if (client) {
-      client.subscriptions.forEach((interval) => clearInterval(interval));
+      client.subscriptions.forEach((interval, subKey) => {
+        if (subKey.startsWith("EXPLORE_LIVE")) {
+            this.exploreSubscribers.delete(ws);
+        } else {
+            clearInterval(interval);
+        }
+      });
+
+      if (this.exploreSubscribers.size === 0 && this.exploreInterval) {
+        clearInterval(this.exploreInterval);
+        this.exploreInterval = null;
+      }
     }
     this.clients.delete(ws);
   }
@@ -186,30 +208,60 @@ export class WebSocketManager {
     return setInterval(sendUpdate, 1500);
   }
 
-  startExploreLive(ws) {
-    const mostTradedList = ["HDFCBANK.NS", "TCS.NS", "INFY.NS", "ITC.NS"];
-    const moversList = ["ADANIENT.NS", "TATAMOTORS.NS", "ONGC.NS", "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "ITC.NS"];
+  async startExploreLive(ws) {
+    const client = this.clients.get(ws);
+    if (!client) return;
 
+    this.exploreSubscribers.add(ws);
+    client.subscriptions.set("EXPLORE_LIVE:", true); // Mark as subscribed
+
+    // Send cached data immediately if available
+    if (this.lastExploreData) {
+        ws.send(JSON.stringify({
+            type: "EXPLORE_UPDATE",
+            data: this.lastExploreData
+        }));
+    }
+
+    if (this.exploreInterval) return;
+
+    const mostTradedList = ["HDFCBANK.NS", "TCS.NS", "INFY.NS", "ITC.NS"];
+    
     const sendUpdate = async () => {
       try {
-        const [mostTraded, movers] = await Promise.all([
+        if (this.exploreSubscribers.size === 0) {
+            clearInterval(this.exploreInterval);
+            this.exploreInterval = null;
+            return;
+        }
+
+        const moversList = await getNSETopGainers();
+        const losersList = await getNSETopLosers();
+
+        const [mostTraded, movers, losers] = await Promise.all([
           MultiStockYahoo(mostTradedList),
-          MultiStockYahoo(moversList)
+          MultiStockYahoo(moversList),
+          MultiStockYahoo(losersList)
         ]);
 
-        if (ws.readyState === ws.OPEN) {
-          ws.send(JSON.stringify({
-            type: "EXPLORE_UPDATE",
-            data: { mostTraded, movers }
-          }));
-        }
+        this.lastExploreData = { mostTraded, movers, losers };
+        const payload = JSON.stringify({
+          type: "EXPLORE_UPDATE",
+          data: this.lastExploreData
+        });
+
+        this.exploreSubscribers.forEach(subscriber => {
+          if (subscriber.readyState === subscriber.OPEN) {
+            subscriber.send(payload);
+          }
+        });
       } catch (err) {
-        console.error("WS Explore Update Error:", err);
+        console.error("WS Explore Shared Update Error:", err);
       }
     };
 
     sendUpdate();
-    return setInterval(sendUpdate, 2000);
+    this.exploreInterval = setInterval(sendUpdate, 5000); // 5 sec shared polling
   }
 
   startRecentLive(ws, client) {
@@ -222,11 +274,14 @@ export class WebSocketManager {
         const user = await users.findOne({ _id: client.userId }, { projection: { recentlyViewed: 1 } });
         const recentlyViewed = user?.recentlyViewed || [];
 
-        const { rows: investedRows } = await db.query(
-          `SELECT symbol FROM positions p JOIN stocks s ON p.stock_id = s.id WHERE p.user_id = $1 AND p.status = 'OPEN' GROUP BY s.symbol HAVING SUM(p.remaining_quantity) > 0`,
-          [client.sqlUserId]
-        );
-        const investedSymbols = investedRows.map(r => r.symbol);
+        let investedSymbols = [];
+        if (client.sqlUserId) {
+          const { rows: investedRows } = await db.query(
+            `SELECT symbol FROM positions p JOIN stocks s ON p.stock_id = s.id WHERE p.user_id = $1 AND p.status = 'OPEN' GROUP BY s.symbol HAVING SUM(p.remaining_quantity) > 0`,
+            [client.sqlUserId]
+          );
+          investedSymbols = investedRows.map(r => r.symbol);
+        }
 
         const recentSymbols = recentlyViewed.map(r => r.symbol);
         const allSymbols = [...new Set([...recentSymbols, ...investedSymbols])];

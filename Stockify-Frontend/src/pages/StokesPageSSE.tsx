@@ -12,7 +12,9 @@ import "../Styles/stock.css";
 import StockPerformance from "../components/StockPerformanceFundamentals"
 import AIStockReport from "../components/AIStockReport";
 import { useContext } from "react"
+
 import { AuthContext } from "../auth/AuthProvider";// import type { Stock } from "../data/stocks";
+import StockChart from "../components/StockChart";
 /* =========================
    TYPES
 ========================= */
@@ -20,6 +22,13 @@ type Candle = {
   x: number;
   c: number;
 };
+type Candle2={
+  x:number;
+  o:number;
+  h:number;
+  l:number;
+  c:number;
+}
 type Trade = {
   side: "BUY" | "SELL";
   quantity: number;
@@ -70,6 +79,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
 
   const [timeframe, setTimeframe] = useState("1D");
+  const [chartType, setChartType] = useState<"line" | "candle">("line");
   const [loading, setLoading] = useState(true);
 
   const [lineData, setLineData] = useState<
@@ -214,13 +224,14 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     else {
       fetch(`${HOST}/api/indiaSEE/${symbol}/history?days=1`)
         .then(res => res.json())
-        .then((candles: Candle[]) => {
+        .then((candles: Candle2[]) => {
           setLineData(
             candles.map(d => ({
               x: d.x,
               y: d.c
             }))
           );
+          setData(candles);
           setLoading(false);
         });
     }
@@ -242,6 +253,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
             y: d.c
           }))
         );
+        setData(candles); // Update candlestick data with live candles
         const last = candles[candles.length - 1];
         if (last) setPrice(last.y || last.c);
         setLoading(false);
@@ -254,6 +266,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   /* =========================
      NON-1D → STATIC FETCH
   ========================= */
+  const [data,setData]=useState<Candle2[]>([]);
   useEffect(() => {
     if (timeframe === "1D") return;
 
@@ -261,7 +274,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
     fetch(`${HOST}/api/indiaSEE/${symbol}/history?days=${days}`)
       .then(res => res.json())
-      .then((data: Candle[]) => {
+      .then((data: Candle2[]) => {
         if (!data.length) return;
 
         const first = data[0];
@@ -279,9 +292,21 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
         setBaseline(first.c);
         setChange(last.c - first.c);
         setPercent(((last.c - first.c) / first.c) * 100);
+        setData(data);
       })
       .finally(() => setLoading(false));
   }, [symbol, timeframe]);
+  const formattedData = [...data]
+    .filter((v, i, a) => a.findIndex(t => t.x === v.x) === i) // Unique timestamps
+    .sort((a, b) => a.x - b.x) // Chronological order
+    .map((c) => ({
+      // Shift by 5.5 hours to show IST on the chart axis
+      time: ((c.x / 1000) + (5.5 * 3600)) as any,
+      open: c.o,
+      high: c.h,
+      low: c.l,
+      close: c.c,
+    }));
 
   /* =========================
      RENDER
@@ -299,20 +324,104 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
           percent={percent}
           timeframe={timeframe}
         />
+        <div className="chart-controls" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <TimeframeBar
+            active={timeframe}
+            onChange={setTimeframe}
+          />
+          
+          <div className="chart-type-toggle" style={{ display: "flex", gap: "8px", background: "#f3f4f6", padding: "4px", borderRadius: "8px" }}>
+            <button 
+              onClick={() => setChartType("line")}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "6px",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "13px",
+                fontWeight: "500",
+                backgroundColor: chartType === "line" ? "#ffffff" : "transparent",
+                boxShadow: chartType === "line" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                color: chartType === "line" ? "#00b386" : "#6b7280",
+                transition: "all 0.2s"
+              }}
+            >
+              Line
+            </button>
+            <button 
+              onClick={() => setChartType("candle")}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "6px",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "13px",
+                fontWeight: "500",
+                backgroundColor: chartType === "candle" ? "#ffffff" : "transparent",
+                boxShadow: chartType === "candle" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                color: chartType === "candle" ? "#00b386" : "#6b7280",
+                transition: "all 0.2s"
+              }}
+            >
+              Candles
+            </button>
+          </div>
+
+          <button
+            onClick={() => window.open(`https://www.tradingview.com/chart/?symbol=${exchangeName ?? "NSE"}:${symbol.replace(".NS", "")}`, "_blank")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "8px 16px",
+              borderRadius: "8px",
+              border: "1px solid #e5e7eb",
+              backgroundColor: "#ffffff",
+              color: "#374151",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "#f9fafb";
+              e.currentTarget.style.borderColor = "#d1d5db";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "#ffffff";
+              e.currentTarget.style.borderColor = "#e5e7eb";
+            }}
+          >
+            <span>Terminal</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </button>
+        </div>
+
         {loading && <GraphSkeleton />}
-        {!loading && <StockChartIndia
-          lineData={lineData}
-          timeframe={timeframe}
-          referencePrice={baseline}
-          marketState={marketState ?? ""}
-          trades={trades}
+        
+        {!loading && (
+          <div className="main-chart-container" style={{ height: "400px", width: "100%" }}>
+            {chartType === "line" ? (
+              <StockChartIndia
+                lineData={lineData}
+                timeframe={timeframe}
+                referencePrice={baseline}
+                marketState={marketState ?? ""}
+                trades={trades}
+                percent={percent.toString()} 
+              />
+            ) : (
+              <StockChart data={formattedData} />
+            )
+            }
+          </div>
+        )}
 
-          percent={percent.toString()} />}
-
-        <TimeframeBar
-          active={timeframe}
-          onChange={setTimeframe}
-        />
         <StockPerformance quote={quote} />
 
       </div>
