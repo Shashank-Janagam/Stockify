@@ -64,7 +64,7 @@ app.use("/api/ai", aiRoutes,limiter);
 
 // app.use("/api/indiaSEE",indiaReplay);
 
-app.get("/health", (req, res) => {
+app.get("api/health", (req, res) => {
   res.status(200).send("OK");
 });
 
