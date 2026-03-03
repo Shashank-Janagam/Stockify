@@ -1,4 +1,4 @@
-name: Deploy Stockify to EC2 (Docker)
+name: Deploy Stockify to EC2 (Docker Clean)
 
 on:
   push:
@@ -24,13 +24,14 @@ jobs:
             echo "Pulling latest code..."
             git pull origin main
 
-            echo "Stopping old containers..."
+            echo "Stopping running containers..."
             docker compose down
 
-            echo "Building and starting containers..."
-            docker compose up -d --build
+            echo "Removing unused Docker resources..."
+            docker system prune -af
+            docker builder prune -af
 
-            echo "Cleaning unused images..."
-            docker image prune -f
+            echo "Rebuilding and starting containers..."
+            docker compose up -d --build
 
             echo "Deployment completed successfully."
