@@ -18,10 +18,7 @@ import StockChart from "../components/StockChart";
 /* =========================
    TYPES
 ========================= */
-type Candle = {
-  x: number;
-  c: number;
-};
+
 type Candle2={
   x:number;
   o:number;
@@ -131,7 +128,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     return () => {
       isMounted = false;
     };
-  });
+  }, [user]); // Added [user] dependency to stop infinite loop
   useEffect(() => {
     const updateRecent = async () => {
       if (!companyName || !symbol) return;
@@ -155,6 +152,22 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   const [availableQty, setAvailableQty] = useState<number>(0);
   const [intradayQty, setIntradayQty] = useState<number>(0);
   const [deliveryQty, setDeliveryQty] = useState<number>(0);
+  const [pendingSL, setPendingSL] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${HOST}/api/holdings/pending-stoploss`, {
+      method: "GET",
+      credentials: "include"
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const filtered = data.filter((o: any) => o.symbol === symbol);
+          setPendingSL(filtered);
+        }
+      });
+  }, [symbol, token, refresh]);
 
   useEffect(() => {
     if (!token) return;
@@ -182,6 +195,14 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
   }, [timeframe])
   useEffect(() => {
+    // Only fetch quote if symbol changed OR market is open OR we don't have a quote yet
+    const isMarketOpen = marketState === "REGULAR";
+    if (quote && quote.symbol === symbol && !isMarketOpen && timeframe !== "1D") {
+      // If we already have the quote for this symbol, market is closed, and we're just changing timeframe, 
+      // we don't need to re-fetch the basic quote info unless it's 1D (where we might want latest status).
+      return;
+    }
+
     fetch(`${HOST}/api/indiaSEE/${symbol}/quote`)
       .then(res => res.json())
       .then((q: YahooQuote) => {
@@ -198,11 +219,8 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
             : "NSE";
 
         setExchangeName(exchange);
-
-
-        // setLoading(false);
       });
-  }, [symbol, timeframe]);
+  }, [symbol, timeframe, marketState]); // Added marketState to dependency for safer checks
 
   /* =========================
      1D → SSE (MARKET OPEN)
@@ -225,13 +243,17 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
       fetch(`${HOST}/api/indiaSEE/${symbol}/history?days=1`)
         .then(res => res.json())
         .then((candles: Candle2[]) => {
+          const shifted = candles.map(d => ({
+            ...d,
+            x: d.x + 5.5 * 3600 * 1000
+          }));
           setLineData(
-            candles.map(d => ({
+            shifted.map(d => ({
               x: d.x,
               y: d.c
             }))
           );
-          setData(candles);
+          setData(shifted);
           setLoading(false);
         });
     }
@@ -247,14 +269,18 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     if (lastMessage?.type === "STOCK_UPDATE" && lastMessage.symbol === symbol) {
       const { candles, quote } = lastMessage.data;
       if (candles) {
+        const shifted = candles.map((d: any) => ({
+          ...d,
+          x: d.x + 5.5 * 3600 * 1000
+        }));
         setLineData(
-          candles.map((d: Candle) => ({
+          shifted.map((d: any) => ({
             x: d.x,
             y: d.c
           }))
         );
-        setData(candles); // Update candlestick data with live candles
-        const last = candles[candles.length - 1];
+        setData(shifted); 
+        const last = shifted[shifted.length - 1];
         if (last) setPrice(last.y || last.c);
         setLoading(false);
       }
@@ -277,22 +303,26 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
       .then((data: Candle2[]) => {
         if (!data.length) return;
 
-        const first = data[0];
-        const last = data[data.length - 1];
+        const shifted = data.map(d => ({
+          ...d,
+          x: d.x + 5.5 * 3600 * 1000
+        }));
+
+        const first = shifted[0];
+        const last = shifted[shifted.length - 1];
 
         setLineData(
-          data.map(d => ({
+          shifted.map(d => ({
             x: d.x,
             y: d.c
           }))
         );
 
-
         setPrice(last.c);
         setBaseline(first.c);
         setChange(last.c - first.c);
         setPercent(((last.c - first.c) / first.c) * 100);
-        setData(data);
+        setData(shifted);
       })
       .finally(() => setLoading(false));
   }, [symbol, timeframe]);
@@ -300,8 +330,8 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     .filter((v, i, a) => a.findIndex(t => t.x === v.x) === i) // Unique timestamps
     .sort((a, b) => a.x - b.x) // Chronological order
     .map((c) => ({
-      // Shift by 5.5 hours to show IST on the chart axis
-      time: ((c.x / 1000) + (5.5 * 3600)) as any,
+      // Timestamp already shifted by 5.5 hours at the source
+      time: (c.x / 1000) as any,
       open: c.o,
       high: c.h,
       low: c.l,
@@ -414,6 +444,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
                 marketState={marketState ?? ""}
                 trades={trades}
                 percent={percent.toString()} 
+                pendingSL={pendingSL}
               />
             ) : (
               <StockChart data={formattedData} />

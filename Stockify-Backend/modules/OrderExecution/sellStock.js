@@ -60,7 +60,7 @@ router.get("/holding/:symbol", requireAuth, async (req, res) => {
        ORDER BY created_at ASC`,
       [userId, stockId]
     );
-
+    
     const trades = tradesRes.rows.map((t) => ({
       id: t.id,
       side: t.side,
@@ -69,6 +69,7 @@ router.get("/holding/:symbol", requireAuth, async (req, res) => {
       totalPrice: Number(t.quantity) * Number(t.price),
       createdAtIST: t.created_at,
     }));
+    // console.log(trades)
 
     res.json({ symbol, totalQuantity, intradayQuantity, deliveryQuantity, trades });
   } catch (err) {

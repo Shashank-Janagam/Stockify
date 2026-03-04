@@ -211,9 +211,9 @@ router.post("/buy", requireAuth, async (req, res) => {
     await client.query(
       `INSERT INTO positions
        (user_id, stock_id, position_type, entry_price, total_quantity,
-        remaining_quantity, status, stoploss_enabled, sell_type, created_at)
+        remaining_quantity, status, stoploss_enabled, sell_type, created_at,updated_at)
        VALUES ($1, $2, 'LONG', $3, $4, $5, 'OPEN', false, $6,
-               NOW() AT TIME ZONE 'Asia/Kolkata')`,
+               NOW() AT TIME ZONE 'Asia/Kolkata',NOW() AT TIME ZONE 'Asia/Kolkata')`,
       [userId, stockId, pricePerShare, quantity, quantity, finalProductType]
     );  
 
