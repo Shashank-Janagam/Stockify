@@ -183,12 +183,7 @@ export async function performAutoSquareOff() {
 }
 
 // Run every day at 15:15 IST (3:15 PM) -> '15 15 * * *'
-cron.schedule('15 15 * * 1-5', () => {
-    performAutoSquareOff();
-}, {
-    timezone: "Asia/Kolkata"
-});
 
 // Uncommented below so it runs immediately when you execute `node intradaySquareOff.js`
-
+performAutoSquareOff();
 console.log("[Auto Square-Off] 🚀 Intraday Job scheduled for 15:15 IST (Mon-Fri)");
