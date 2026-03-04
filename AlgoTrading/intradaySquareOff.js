@@ -156,6 +156,10 @@ export async function performAutoSquareOff() {
           await client.query("COMMIT");
 
           // Redis/Cache
+          const uidRes = await db.query(
+            `SELECT uid FROM users WHERE id = $1`,
+            [userId]
+          );
           if (uidRes.rows[0]) {
             await redis.del(`wallet:balance:${uidRes.rows[0].uid}`);
             await redis.del(`ai_portfolio_v3_${userId}`);
@@ -182,8 +186,44 @@ export async function performAutoSquareOff() {
   }
 }
 
-// Run every day at 15:15 IST (3:15 PM) -> '15 15 * * *'
+// NSE Intraday Auto Square-Off — 15:15 IST every weekday
+cron.schedule('15 15 * * 1-5', () => {
+    performAutoSquareOff();
+}, {
+    timezone: "Asia/Kolkata"  // 15:15 IST
+});
 
-// Uncommented below so it runs immediately when you execute `node intradaySquareOff.js`
-performAutoSquareOff();
-console.log("[Auto Square-Off] 🚀 Intraday Job scheduled for 15:15 IST (Mon-Fri)");
+console.log("[Auto Square-Off] 🚀 Job scheduled: 15:15 IST (Mon–Fri)");
+
+// Keep process alive so cron can fire
+process.stdin.resume();
+
+// ─── LIVE COUNTDOWN (per-second, same line) ────────────────
+function getNextTriggerIST() {
+  // Build today's 15:15:00 IST as a UTC Date object
+  const now = new Date();
+  // IST offset: UTC+5:30 = 330 minutes
+  const IST_OFFSET_MS = 330 * 60 * 1000;
+  const nowIST = new Date(now.getTime() + IST_OFFSET_MS);
+
+  // Set target to today's 15:15:00 IST (in UTC terms: 09:45:00 UTC)
+  const target = new Date(Date.UTC(
+    nowIST.getUTCFullYear(), nowIST.getUTCMonth(), nowIST.getUTCDate(),
+    9, 45, 0   // 09:45 UTC = 15:15 IST
+  ));
+
+  // If 15:15 IST already passed today, target tomorrow
+  if (now >= target) target.setUTCDate(target.getUTCDate() + 1);
+  return target;
+}
+
+function printCountdown() {
+  const diffMs = getNextTriggerIST() - new Date();
+  const hh = String(Math.floor(diffMs / 3600000)).padStart(2, '0');
+  const mm = String(Math.floor((diffMs % 3600000) / 60000)).padStart(2, '0');
+  const ss = String(Math.floor((diffMs % 60000) / 1000)).padStart(2, '0');
+  process.stdout.write(`\r⏳ Next square-off (15:15 IST) in: ${hh}h ${mm}m ${ss}s   `);
+}
+
+printCountdown();
+setInterval(printCountdown, 1000);

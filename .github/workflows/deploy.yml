@@ -30,7 +30,6 @@ jobs:
             echo "Installing backend dependencies..."
             cd Stockify-Backend
             npm install
-            pm2 restart Backend || pm2 start server.js --name Backend
 
             echo "Installing frontend dependencies..."
             cd ../Stockify-Frontend
@@ -41,15 +40,15 @@ jobs:
             sudo rm -rf /var/www/stockify/*
             sudo cp -r dist/* /var/www/stockify/
 
-            echo "Setting up Stoploss cron job..."
-            cd ../AlgoTrading/stoploss-engine
-            pm2 delete stoploss || true
-            pm2 start stoploss.js --name stoploss --cron "15 9 * * 1-5" --no-autorestart
+            echo "Reloading backend..."
+            pm2 reload Backend || pm2 restart Backend
 
-            echo "Setting up Intraday Squareoff cron job..."
+            echo "Reloading stoploss..."
+            cd ../AlgoTrading/stoploss-engine
+            pm2 reload stoploss || pm2 restart stoploss
+
             cd ..
-            pm2 delete intraday-squareoff || true
-            pm2 start intradaySquareOff.js --name intraday-squareoff --cron "15 15 * * 1-5" --no-autorestart
+            pm2 reload intraday-squareoff || pm2 restart intraday-squareoff
 
             echo "Reloading Nginx..."
             sudo systemctl reload nginx
