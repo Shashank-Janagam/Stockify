@@ -57,6 +57,5 @@ jobs:
             sudo systemctl reload nginx
             pm2 save
 
-            pm2 save
 
             echo "Deployment completed."
