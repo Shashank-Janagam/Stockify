@@ -186,44 +186,60 @@ export async function performAutoSquareOff() {
   }
 }
 
-// NSE Intraday Auto Square-Off — 15:15 IST every weekday
+/* ════════════════════════════════════════════════════════
+   SCHEDULER  —  fires at 15:15 IST every Mon–Fri
+   node-cron interprets the expression in Asia/Kolkata
+════════════════════════════════════════════════════════ */
 cron.schedule('15 15 * * 1-5', () => {
+    console.log("\n"); // newline so countdown doesn't overwrite the log
     performAutoSquareOff();
 }, {
-    timezone: "Asia/Kolkata"  // 15:15 IST
+    timezone: "Asia/Kolkata"
 });
 
-console.log("[Auto Square-Off] 🚀 Job scheduled: 15:15 IST (Mon–Fri)");
+// Show current IST time on startup
+const startIST = new Date().toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false, day: "2-digit", month: "short", year: "numeric"
+});
+console.log(`[Auto Square-Off] 🚀 Started at: ${startIST} IST`);
+console.log(`[Auto Square-Off] ⏰  Next trigger: 15:15 IST (Mon–Fri)`);
 
 // Keep process alive so cron can fire
 process.stdin.resume();
 
-// ─── LIVE COUNTDOWN (per-second, same line) ────────────────
-function getNextTriggerIST() {
-  // Build today's 15:15:00 IST as a UTC Date object
-  const now = new Date();
-  // IST offset: UTC+5:30 = 330 minutes
-  const IST_OFFSET_MS = 330 * 60 * 1000;
-  const nowIST = new Date(now.getTime() + IST_OFFSET_MS);
+/* ════════════════════════════════════════════════════════
+   LIVE COUNTDOWN  —  ticks every second on the same line
+   Uses IST calendar date to find next 15:15 IST moment
+════════════════════════════════════════════════════════ */
+function getNextTriggerMs() {
+    const now = new Date();
 
-  // Set target to today's 15:15:00 IST (in UTC terms: 09:45:00 UTC)
-  const target = new Date(Date.UTC(
-    nowIST.getUTCFullYear(), nowIST.getUTCMonth(), nowIST.getUTCDate(),
-    9, 45, 0   // 09:45 UTC = 15:15 IST
-  ));
+    // Get current date in IST (UTC+5:30 = +330 min)
+    const istNow = new Date(now.getTime() + 330 * 60 * 1000);
 
-  // If 15:15 IST already passed today, target tomorrow
-  if (now >= target) target.setUTCDate(target.getUTCDate() + 1);
-  return target;
+    // Build "today 09:45:00 UTC" which equals "today 15:15:00 IST"
+    const trigger = new Date(Date.UTC(
+        istNow.getUTCFullYear(),
+        istNow.getUTCMonth(),
+        istNow.getUTCDate(),
+        9, 45, 0   // 09:45 UTC ≡ 15:15 IST
+    ));
+
+    // If already past → roll to next calendar day
+    if (now >= trigger) trigger.setUTCDate(trigger.getUTCDate() + 1);
+
+    return trigger - now; // ms remaining
 }
 
 function printCountdown() {
-  const diffMs = getNextTriggerIST() - new Date();
-  const hh = String(Math.floor(diffMs / 3600000)).padStart(2, '0');
-  const mm = String(Math.floor((diffMs % 3600000) / 60000)).padStart(2, '0');
-  const ss = String(Math.floor((diffMs % 60000) / 1000)).padStart(2, '0');
-  process.stdout.write(`\r⏳ Next square-off (15:15 IST) in: ${hh}h ${mm}m ${ss}s   `);
+    const ms  = getNextTriggerMs();
+    const hh  = String(Math.floor(ms / 3_600_000)).padStart(2, "0");
+    const mm  = String(Math.floor((ms % 3_600_000) / 60_000)).padStart(2, "0");
+    const ss  = String(Math.floor((ms % 60_000) / 1_000)).padStart(2, "0");
+    process.stdout.write(`\r⏳  Next auto square-off (15:15 IST) in: ${hh}h ${mm}m ${ss}s   `);
 }
 
-printCountdown();
-setInterval(printCountdown, 1000);
+printCountdown();                          // show immediately
+setInterval(printCountdown, 1_000);        // update every second
