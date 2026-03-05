@@ -147,7 +147,7 @@ const growwPlugin = {
         const isCritical = currentPrice && distRatio < 0.002; // within 0.2% — imminent!
         
         // Speed scales with urgency: critical = very fast, moderate = medium, far = slow
-        const blinkSpeed = isCritical ? 45 : isModerate ? 65 : 100;
+        const blinkSpeed = isCritical ? 45 : isModerate ? 65 :   100;
         const timeFactor = Date.now() / blinkSpeed;
         
         const isActive = !!(isClose || isHoveredLine);
@@ -346,25 +346,28 @@ const growwPlugin = {
 let dateText: string;
 
 if (timeframe === "1D") {
-  // Intraday
+  // Intraday — x is already IST-shifted as UTC, so read as UTC to avoid double +5:30
   dateText = new Date(point.x).toLocaleTimeString("en-IN", {
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZone: "UTC"
   });
 } else if (["1W", "1M"].includes(timeframe)) {
-  // Short range
+  // Short range — same: x is IST-as-UTC, read as UTC
   dateText = new Date(point.x).toLocaleDateString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
     day: "2-digit",
-    month: "short"
+    month: "short",
+    timeZone: "UTC"
   });
 } else {
-  // 1Y, 3Y, 5Y, ALL
+  // 1Y, 3Y, 5Y, ALL — same: x is IST-as-UTC, read as UTC
   dateText = new Date(point.x).toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
-    year: "numeric"
+    year: "numeric",
+    timeZone: "UTC"
   });
 }
 
@@ -628,18 +631,21 @@ export  function StockChartIndia({
 function getNseMarketWindowIST(anchorTs: number) {
   const d = new Date(anchorTs);
 
+  // All lineData x-values have already been shifted +5.5h in StokesPageSSE
+  // (e.g. 9:15 IST lives at the UTC timestamp for 9:15 "UTC").
+  // So use the IST clock hours directly here to match that convention.
   return {
     marketOpen: Date.UTC(
       d.getUTCFullYear(),
       d.getUTCMonth(),
       d.getUTCDate(),
-      9, 15, 0   // 09:15 IST (already shifted)
+      9, 15, 0   // 09:15 IST stored as 09:15 UTC (data is pre-shifted)
     ),
     marketClose: Date.UTC(
       d.getUTCFullYear(),
       d.getUTCMonth(),
       d.getUTCDate(),
-      15, 30, 0   // 15:30 IST (already shifted)
+      15, 30, 0  // 15:30 IST stored as 15:30 UTC (data is pre-shifted)
     )
   };
 }

@@ -1,12 +1,15 @@
-name: Deploy Stockify to EC2
+name: Deploy Backend to EC2
 
 on:
   push:
+    paths:
+      - 'Stockify-Backend/**'
+      - 'AlgoTrading/**'
     branches:
       - main
 
 jobs:
-  deploy:
+  deploy-backend:
     runs-on: ubuntu-latest
 
     steps:
@@ -30,33 +33,20 @@ jobs:
             echo "Installing backend dependencies..."
             cd Stockify-Backend
             npm install
-            echo "Reloading backend..."
+
+            echo "Restarting backend..."
             pm2 restart Backend || pm2 start server.js --name Backend
 
-
-            echo "Installing frontend dependencies..."
-            cd ../Stockify-Frontend
+            echo "Restarting stoploss engine..."
+            cd ../AlgoTrading
             npm install
-            npm run build
-
-            echo "Updating nginx build folder..."
-            sudo rm -rf /var/www/stockify/*
-            sudo cp -r dist/* /var/www/stockify/
-
-            
-
-            echo "Reloading stoploss..."
-            cd ../AlgoTrading/stoploss-engine
-            pm2 restart stoploss || pm2 start stoploss.js --name stoploss
-
-
-            cd ..
             pm2 restart intraday-squareoff || pm2 start intradaySquareOff.js --name intraday-squareoff
 
 
-            echo "Reloading Nginx..."
-            sudo systemctl reload nginx
+            cd stoploss-engine
+            pm2 restart stoploss || pm2 start stoploss.js --name stoploss
+
+            echo "Restarting squareoff engine..."
+
             pm2 save
-
-
-            echo "Deployment completed."
+            echo "Backend deployment completed."
