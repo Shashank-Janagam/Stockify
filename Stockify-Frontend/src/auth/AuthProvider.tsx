@@ -119,5 +119,4 @@ const [isGoogleOnlyUser, setIsGoogleOnlyUser] = useState(false);
     </AuthContext.Provider>
   );
 }
-
 export default AuthProvider;
