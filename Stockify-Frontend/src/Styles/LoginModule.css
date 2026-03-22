@@ -312,3 +312,14 @@ p{
     transform: translate(-50%, 0) scale(1);
   }
 }
+
+/* Policy links inside login modal */
+.terms a {
+  color: #00b386;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.terms a:hover {
+  text-decoration: underline;
+}

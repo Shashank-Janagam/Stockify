@@ -1,0 +1,545 @@
+/* ====================================================
+   STOCKIFY – POLICY PAGES CSS
+   Matches the app's design: Inter font, #00b386 green,
+   white background, clean light theme
+   ==================================================== */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+/* ---- PAGE WRAPPER ---- */
+.policy-page {
+  min-height: 100vh;
+  background: #f8f9fa;
+  padding: 6rem 1.5rem 4rem;         /* top: leaves room for fixed navbar */
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #111;
+}
+
+/* ---- CONTAINER ---- */
+.policy-container {
+  max-width: 860px;
+  margin: 0 auto;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 2px 24px rgba(0, 0, 0, 0.07);
+  padding: 3rem 3.5rem;
+}
+
+/* ---- HEADER ---- */
+.policy-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.policy-badge {
+  display: inline-block;
+  background: #e8faf5;
+  color: #00b386;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.85rem;
+  border-radius: 99px;
+  margin-bottom: 1rem;
+}
+
+.policy-title {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: #111;
+  margin: 0 0 0.75rem;
+  line-height: 1.2;
+}
+
+.policy-meta {
+  font-size: 0.875rem;
+  color: #888;
+  margin: 0;
+}
+
+.policy-meta span {
+  color: #555;
+  font-weight: 500;
+}
+
+/* ---- INTRO BLOCK ---- */
+.policy-intro {
+  background: #f8f9fa;
+  border-left: 4px solid #00b386;
+  border-radius: 0 10px 10px 0;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.policy-intro p {
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: #444;
+  margin: 0 0 0.75rem;
+}
+
+.policy-intro p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- TABLE OF CONTENTS ---- */
+.policy-toc {
+  background: #f0fdf9;
+  border: 1px solid #d1f0e7;
+  border-radius: 12px;
+  padding: 1.5rem 2rem;
+  margin-bottom: 2.5rem;
+}
+
+.policy-toc h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #00b386;
+  margin: 0 0 0.75rem;
+}
+
+.policy-toc ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem 1.5rem;
+}
+
+.policy-toc li {
+  font-size: 0.875rem;
+}
+
+.policy-toc a {
+  color: #444;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.policy-toc a:hover {
+  color: #00b386;
+}
+
+/* ---- SECTION ---- */
+.policy-section {
+  margin-bottom: 2.75rem;
+  padding-bottom: 2.75rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.policy-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 2rem;
+}
+
+.policy-section h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #111;
+  margin: 0 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e8faf5;
+}
+
+.policy-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #222;
+  margin: 1.5rem 0 0.5rem;
+}
+
+.policy-section p {
+  font-size: 0.95rem;
+  line-height: 1.8;
+  color: #444;
+  margin: 0 0 1rem;
+}
+
+.policy-section ul,
+.policy-section ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.policy-section li {
+  font-size: 0.95rem;
+  line-height: 1.8;
+  color: #444;
+  margin-bottom: 0.35rem;
+}
+
+.policy-section a {
+  color: #00b386;
+  text-decoration: none;
+}
+
+.policy-section a:hover {
+  text-decoration: underline;
+}
+
+/* ---- HIGHLIGHT BOX ---- */
+.policy-highlight-box {
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 10px;
+  padding: 1.2rem 1.5rem;
+  margin: 1rem 0 1.25rem;
+}
+
+.policy-highlight-box strong {
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  color: #7d5a00;
+}
+
+.policy-highlight-box p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #7d5a00;
+}
+
+.policy-highlight-box.danger {
+  background: #fff2f2;
+  border-color: #ffb3b3;
+}
+
+.policy-highlight-box.danger strong,
+.policy-highlight-box.danger p {
+  color: #9b1515;
+}
+
+/* ---- NOTE BOX ---- */
+.policy-note {
+  background: #f0fdf9;
+  border: 1px solid #d1f0e7;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  font-size: 0.875rem;
+  color: #2d6a57;
+  line-height: 1.6;
+  margin-top: 1rem;
+}
+
+/* ---- TABLE ---- */
+.policy-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  margin: 1rem 0 1.25rem;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+}
+
+.policy-table thead th {
+  background: #00b386;
+  color: #fff;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+}
+
+.policy-table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.15s;
+}
+
+.policy-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.policy-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.policy-table tbody td {
+  padding: 0.8rem 1rem;
+  color: #444;
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.policy-table code {
+  background: #f0f0f0;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-family: "Courier New", monospace;
+  color: #e44d26;
+}
+
+/* ---- THIRD PARTY SERVICE CARDS ---- */
+.policy-third-party-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.policy-third-party-card {
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.policy-third-party-card:hover {
+  border-color: #00b386;
+  box-shadow: 0 2px 12px rgba(0, 179, 134, 0.1);
+}
+
+.policy-third-party-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #111;
+  margin-bottom: 0.25rem;
+}
+
+.policy-third-party-role {
+  font-size: 0.8rem;
+  color: #777;
+  margin-bottom: 0.5rem;
+}
+
+.policy-third-party-card a {
+  font-size: 0.8rem;
+  color: #00b386;
+  text-decoration: none;
+}
+
+.policy-third-party-card a:hover {
+  text-decoration: underline;
+}
+
+/* ---- COOKIE CATEGORIES ---- */
+.policy-cookie-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.policy-cookie-category {
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  border: 1px solid transparent;
+}
+
+.policy-cookie-category.essential {
+  background: #f0fdf9;
+  border-color: #d1f0e7;
+}
+
+.policy-cookie-category.preference {
+  background: #f5f0ff;
+  border-color: #ddd1f0;
+}
+
+.policy-cookie-category.analytics {
+  background: #fff8f0;
+  border-color: #f0dfc1;
+}
+
+.policy-cookie-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  color: #777;
+  font-weight: 500;
+}
+
+.policy-cookie-category-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.65rem;
+  border-radius: 99px;
+}
+
+.essential .policy-cookie-category-badge {
+  background: #00b386;
+  color: #fff;
+}
+
+.preference .policy-cookie-category-badge {
+  background: #7c40e8;
+  color: #fff;
+}
+
+.analytics .policy-cookie-category-badge {
+  background: #e87c40;
+  color: #fff;
+}
+
+.policy-cookie-category p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #555;
+  line-height: 1.6;
+}
+
+/* ---- CONTACT CARD ---- */
+.policy-contact-card {
+  background: #f8f9fa;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  font-size: 0.9rem;
+  line-height: 2;
+  color: #444;
+  margin-top: 0.5rem;
+}
+
+.policy-contact-card a {
+  color: #00b386;
+  text-decoration: none;
+}
+
+.policy-contact-card a:hover {
+  text-decoration: underline;
+}
+
+/* ---- ACTION BUTTON (Cookie reset) ---- */
+.policy-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fff;
+  border: 1.5px solid #00b386;
+  color: #00b386;
+  font-family: Inter, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  margin: 0.75rem 0 1.5rem;
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+
+.policy-action-btn:hover {
+  background: #00b386;
+  color: #fff;
+  transform: scale(1.01);
+}
+
+/* ---- FOOTER NAV ---- */
+.policy-footer-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding-top: 2rem;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 2rem;
+}
+
+.policy-footer-nav a {
+  font-size: 0.875rem;
+  color: #777;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.policy-footer-nav a:hover {
+  color: #00b386;
+}
+
+/* ============================================================
+   FOOTER COMPONENT (site-wide)
+   ============================================================ */
+.site-footer {
+  background: #ffffff;
+  border-top: 1px solid #efefef;
+  padding: 2.5rem 2rem 1.5rem;
+  text-align: center;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.site-footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.site-footer-links a {
+  font-size: 0.875rem;
+  color: #777;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.site-footer-links a:hover {
+  color: #00b386;
+}
+
+.site-footer-copy {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin: 0;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 768px) {
+  .policy-container {
+    padding: 2rem 1.5rem;
+    border-radius: 12px;
+  }
+
+  .policy-title {
+    font-size: 1.75rem;
+  }
+
+  .policy-toc ol {
+    grid-template-columns: 1fr;
+  }
+
+  .policy-third-party-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .policy-table {
+    font-size: 0.8rem;
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .policy-section h2 {
+    font-size: 1.15rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .policy-page {
+    padding: 5.5rem 0.75rem 3rem;
+  }
+
+  .policy-container {
+    padding: 1.5rem 1rem;
+  }
+
+  .policy-title {
+    font-size: 1.45rem;
+  }
+
+  .policy-footer-nav {
+    gap: 1rem;
+  }
+}

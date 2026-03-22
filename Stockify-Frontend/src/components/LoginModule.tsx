@@ -5,7 +5,7 @@ import { loginWithEmail,loginWithGoogle , getSignInMethods} from "../auth/login"
 // import { useNavigate } from "react-router-dom";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase"; // adjust path if needed
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../auth/AuthProvider";
 import { useContext } from "react";
 // import { EmailAuthProvider, linkWithCredential } from "firebase/auth";
@@ -249,7 +249,9 @@ function LoginModal({ onClose }: LoginModalProps) {
           </button>
 
           <p className="terms">
-            By proceeding, I agree to T&C, Privacy Policy & Tariff Rates
+            By proceeding, I agree to{" "}
+            <Link to="/terms" onClick={handleClose}>T&C</Link>,{" "}
+            <Link to="/privacy-policy" onClick={handleClose}>Privacy Policy</Link>
           </p>
           {error && <div className="error-popup">⚠️ {error}</div>}
         </div>
@@ -334,7 +336,9 @@ function LoginModal({ onClose }: LoginModalProps) {
 
 
     <p className="terms">
-      By proceeding, I agree to T&C, Privacy Policy & Tariff Rates
+      By proceeding, I agree to{" "}
+      <Link to="/terms" onClick={handleClose}>T&C</Link>,{" "}
+      <Link to="/privacy-policy" onClick={handleClose}>Privacy Policy</Link>
     </p>
     {error && <div className="error-popup">⚠️ {error}</div>}
   </div>
