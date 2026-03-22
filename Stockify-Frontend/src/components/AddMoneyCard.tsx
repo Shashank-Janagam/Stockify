@@ -88,7 +88,7 @@ const HOST=import.meta.env.VITE_HOST_ADDRESS
 
         // 2️⃣ Razorpay options
         const options = {
-        key: "rzp_test_S85ZxvSHIvbK0f", // 🔑 ONLY key_id
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID, // 🔑 ONLY key_id
         amount: order.amount,
         currency: "INR",
         name: "Stockify Wallet",
