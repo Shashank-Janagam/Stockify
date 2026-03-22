@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import NavBar from "./components/Navbar.tsx";
 import LoginModal from "./components/LoginModule.tsx";
 import CookieConsent from "./components/CookieConsent.tsx";
+import Footer from "./components/Footer.tsx";
 import HomePage from "./pages/HomePage.tsx";
 import "./App.css";
 import ProtectedRoute from "./auth/ProtectedRoute.tsx";
@@ -11,10 +12,12 @@ import StockPageSSE from "./pages/StokesPageSSE.tsx";
 import FundsPage from "./pages/FundsPage.tsx";
 import { ExploreSSEProvider } from "./context/ExploreSSEContext";
 import { WebSocketProvider } from "./context/WebSocketContext";
-
 import Portfolio from "./pages/Portfolio.tsx";
 import SetPassword from "./components/SetPassword.tsx";
-
+import PrivacyPolicy from "./pages/PrivacyPolicy.tsx";
+import TermsAndConditions from "./pages/TermsAndConditions.tsx";
+import CookiePolicy from "./pages/CookiePolicy.tsx";
+import Disclaimer from "./pages/Disclaimer.tsx";
 
 
 
@@ -33,8 +36,10 @@ const RouteTitleManager = () => {
       "/": "Stockify | Home",
       "/dashboard": "Stockify | Dashboard",
       "/user/balance": "Stockify | Funds",
-
-
+      "/privacy-policy": "Stockify | Privacy Policy",
+      "/terms": "Stockify | Terms & Conditions",
+      "/cookie-policy": "Stockify | Cookie Policy",
+      "/disclaimer": "Stockify | Disclaimer",
     };
 
     document.title = routeTitles[location.pathname] ?? "Stockify";
@@ -120,8 +125,15 @@ const App = () => {
                 }
               />
 
+              {/* ---- Policy Pages ---- */}
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsAndConditions />} />
+              <Route path="/cookie-policy" element={<CookiePolicy />} />
+              <Route path="/disclaimer" element={<Disclaimer />} />
+
             </Routes>
           </div>
+          <Footer />
         </ExploreSSEProvider>
       </WebSocketProvider>
     </BrowserRouter>
