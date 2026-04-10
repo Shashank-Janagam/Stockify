@@ -32,7 +32,7 @@ export default function Dashboard() {
     <div className="app">
       <header className="top-nav">
         <div className="tabbs">
-          {["Explore", "Holdings", "Positions", "Orders", "Watchlist"].map(t => (
+          {["Explore", "Holdings", "Positions", "Orders"].map(t => (
             <span
               key={t}
               className={tab === t ? "tabbs active" : "tabbs"}

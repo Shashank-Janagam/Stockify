@@ -18,6 +18,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy.tsx";
 import TermsAndConditions from "./pages/TermsAndConditions.tsx";
 import CookiePolicy from "./pages/CookiePolicy.tsx";
 import Disclaimer from "./pages/Disclaimer.tsx";
+import CustomerSupport from "./pages/CustomerSupport.tsx";
 
 
 
@@ -40,6 +41,7 @@ const RouteTitleManager = () => {
       "/terms": "Stockify | Terms & Conditions",
       "/cookie-policy": "Stockify | Cookie Policy",
       "/disclaimer": "Stockify | Disclaimer",
+      "/support": "Stockify | Customer Support",
     };
 
     document.title = routeTitles[location.pathname] ?? "Stockify";
@@ -130,6 +132,7 @@ const App = () => {
               <Route path="/terms" element={<TermsAndConditions />} />
               <Route path="/cookie-policy" element={<CookiePolicy />} />
               <Route path="/disclaimer" element={<Disclaimer />} />
+              <Route path="/support" element={<CustomerSupport />} />
 
             </Routes>
           </div>

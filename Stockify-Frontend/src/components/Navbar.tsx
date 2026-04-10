@@ -173,16 +173,7 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
                     <div className="profile-dropdown-divider" />
 
                     <div className="profile-dropdown-menu">
-                      <button
-                        className="profile-item"
-                        onClick={() => {
-                          navigate("/wallet");
-                          setOpenProfile(false);
-                        }}
-                      >
-                        <span>Stocks, F&O balance</span>
-                        <span className="arrow">›</span>
-                      </button>
+                      
 
                       <button
                         className="profile-item"
@@ -217,16 +208,7 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
                         <span className="arrow">›</span>
                       </button>
 
-                      <button
-                        className="profile-item"
-                        onClick={() => {
-                          navigate("/reports");
-                          setOpenProfile(false);
-                        }}
-                      >
-                        <span>Reports</span>
-                        <span className="arrow">›</span>
-                      </button>
+                      
 
                       {isGoogleOnlyUser && (
                         <button
