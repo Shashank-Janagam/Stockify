@@ -297,9 +297,43 @@
   transition: opacity 0.2s ease;
 }
 
+/* --- Customer Support Sub-menu --- */
+.support-section {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
 
+.support-info-dropdown {
+  background: #f7f9fa;
+  margin: 0 18px 10px 18px;
+  padding: 12px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
+.support-info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
 
+.support-info-item a {
+  color: #00b386;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.support-info-item a:hover {
+  text-decoration: underline;
+}
+
+.support-icon {
+  font-size: 16px;
+}
 
 
 
