@@ -18,7 +18,7 @@ jobs:
         with:
           host: ${{ secrets.ORACLE_PUBLIC_IP }}
           username: ${{ secrets.ORACLE_USER }}
-          key: ${{ secrets.ORACLE_SHH_KEY }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
           script: |
             echo "Connected to Oracle Instance"
 
