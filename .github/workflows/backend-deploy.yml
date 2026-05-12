@@ -25,7 +25,7 @@ jobs:
             export NVM_DIR="$HOME/.nvm"
             source "$NVM_DIR/nvm.sh"
 
-            cd /home/ubuntu/Stockify
+            cd /home/ubuntu/Stockify/Stockify
 
             echo "Pulling latest code..."
             git pull origin main
