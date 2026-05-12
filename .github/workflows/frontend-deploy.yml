@@ -50,12 +50,35 @@ jobs:
 
           echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
+      - name: Debug build output
+        run: |
+          echo "ROOT:"
+          ls -la
 
+          echo "Stockify-Frontend:"
+          ls -la Stockify-Frontend
+
+          echo "Build folder:"
+          ls -la Stockify-Frontend/build || echo "No build folder"
+
+          echo "Dist folder:"
+          ls -la Stockify-Frontend/dist || echo "No dist folder"
       - name: Upload to Oracle Bucket
         run: |
+          if [ -d "Stockify-Frontend/build" ]; then
+            SRC="Stockify-Frontend/build"
+          elif [ -d "Stockify-Frontend/dist" ]; then
+            SRC="Stockify-Frontend/dist"
+          else
+            echo "❌ ERROR: No build output found"
+            exit 1
+          fi
+
+          echo "Uploading from $SRC"
+
           oci os object bulk-upload \
             --bucket-name ${{ secrets.OCI_BUCKET_NAME }} \
             --namespace ${{ secrets.OCI_NAMESPACE }} \
-            --src-dir Stockify-Frontend/build \
+            --src-dir "$SRC" \
             --overwrite
 
