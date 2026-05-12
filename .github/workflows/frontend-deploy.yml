@@ -56,6 +56,6 @@ jobs:
           oci os object bulk-upload \
             --bucket-name ${{ secrets.OCI_BUCKET_NAME }} \
             --namespace ${{ secrets.OCI_NAMESPACE }} \
-            --src-dir Stockify-Frontend/dist \
+            --src-dir Stockify-Frontend/build \
             --overwrite
 
