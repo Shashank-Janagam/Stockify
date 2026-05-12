@@ -26,7 +26,7 @@ import rateLimit from "express-rate-limit";
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 10, // 10 AI calls per minute per IP
+  max: 10, 
 });
 
 const app = express();
