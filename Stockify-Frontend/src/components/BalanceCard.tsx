@@ -40,7 +40,7 @@ export default function BalanceCard({
         console.error("Error fetching transactions:", err);
         setTransactions([]);
       });
-  }, [user, refreshKey, HOST]);
+  }, [ refreshKey]);
 
   /* =========================
      FETCH BALANCE
@@ -73,7 +73,7 @@ export default function BalanceCard({
     return () => {
       mounted = false;
     };
-  }, [user, refreshKey, HOST]);
+  }, [refreshKey]);
 
   /* =========================
      UI STATES
