@@ -1,48 +1,62 @@
-name: Deploy Frontend to S3
+name: Deploy Frontend to Oracle Bucket
 
 on:
-  push:
-    paths:
-      - 'Stockify-Frontend/**'
-    branches:
-      - main
+push:
+paths:
+- 'Stockify-Frontend/**'
+branches:
+- main
 
 jobs:
-  deploy-frontend:
-    runs-on: ubuntu-latest
+deploy-frontend:
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+```
+steps:
+  - name: Checkout code
+    uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+  - name: Setup Node
+    uses: actions/setup-node@v4
+    with:
+      node-version: 22
 
-      - name: Install dependencies
-        run: |
-          cd Stockify-Frontend
-          npm install
+  - name: Install dependencies
+    run: |
+      cd Stockify-Frontend
+      npm install
 
-      - name: Build frontend
-        run: |
-          cd Stockify-Frontend
-          npm run build
+  - name: Build frontend
+    run: |
+      cd Stockify-Frontend
+      npm run build
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
-          aws-region: ap-south-1
+  # 🔥 Install OCI CLI
+  - name: Install OCI CLI
+    run: |
+      pip install oci-cli
 
-      - name: Upload to S3
-        run: |
-          aws s3 sync Stockify-Frontend/dist/ s3://stockify-frontend --delete
+  # 🔐 Configure OCI CLI
+  - name: Configure OCI
+    run: |
+      mkdir -p ~/.oci
 
-      - name: Invalidate CloudFront cache
-        run: |
-          aws cloudfront create-invalidation \
-          --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-          --paths "/*"
+      echo "[DEFAULT]" > ~/.oci/config
+      echo "user=${{ secrets.OCI_USER_OCID }}" >> ~/.oci/config
+      echo "fingerprint=${{ secrets.OCI_FINGERPRINT }}" >> ~/.oci/config
+      echo "tenancy=${{ secrets.OCI_TENANCY_OCID }}" >> ~/.oci/config
+      echo "region=${{ secrets.OCI_REGION }}" >> ~/.oci/config
+      echo "key_file=~/.oci/oci_api_key.pem" >> ~/.oci/config
+
+      echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
+      chmod 600 ~/.oci/oci_api_key.pem
+
+  # 📦 Upload to Oracle Object Storage
+  - name: Upload to Oracle Bucket
+    run: |
+      oci os object bulk-upload \
+        --bucket-name ${{ secrets.OCI_BUCKET_NAME }} \
+        --namespace ${{ secrets.OCI_NAMESPACE }} \
+        --src-dir Stockify-Frontend/dist \
+        --overwrite
+```
