@@ -65,20 +65,10 @@ jobs:
           ls -la Stockify-Frontend/dist || echo "No dist folder"
       - name: Upload to Oracle Bucket
         run: |
-          if [ -d "Stockify-Frontend/build" ]; then
-            SRC="Stockify-Frontend/build"
-          elif [ -d "Stockify-Frontend/dist" ]; then
-            SRC="Stockify-Frontend/dist"
-          else
-            echo "❌ ERROR: No build output found"
-            exit 1
-          fi
-
-          echo "Uploading from $SRC"
+          echo "Uploading dist folder..."
 
           oci os object bulk-upload \
-            --bucket-name ${{ secrets.OCI_BUCKET_NAME }} \
-            --namespace ${{ secrets.OCI_NAMESPACE }} \
-            --src-dir "$SRC" \
+            --bucket-name "${{ secrets.OCI_BUCKET_NAME }}" \
+            --namespace "${{ secrets.OCI_NAMESPACE }}" \
+            --src-dir "Stockify-Frontend/dist" \
             --overwrite
-
