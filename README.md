@@ -1,11 +1,11 @@
-# Stockify
+# PaperBull
 
-Stockify is a full-stack stock market web application with a React + TypeScript frontend and a Node.js + Express backend.
+PaperBull is a full-stack stock market web application with a React + TypeScript frontend and a Node.js + Express backend.
 
 ## Project Structure
 
-- `Stockify-Frontend/` – Vite-based React client.
-- `Stockify-Backend/` – Express API server and data integrations.
+- `PaperBull-Frontend/` – Vite-based React client.
+- `PaperBull-Backend/` – Express API server and data integrations.
 
 ## Prerequisites
 
@@ -19,8 +19,8 @@ Stockify is a full-stack stock market web application with a React + TypeScript 
 From the repository root:
 
 ```bash
-cd Stockify-Backend && npm install
-cd ../Stockify-Frontend && npm install
+cd PaperBull-Backend && npm install
+cd ../PaperBull-Frontend && npm install
 ```
 
 ### 2) Configure environment variables
@@ -34,14 +34,14 @@ Open two terminals.
 ### Terminal 1: Start backend
 
 ```bash
-cd Stockify-Backend
+cd PaperBull-Backend
 npm start
 ```
 
 ### Terminal 2: Start frontend
 
 ```bash
-cd Stockify-Frontend
+cd PaperBull-Frontend
 npm run dev
 ```
 
@@ -49,14 +49,14 @@ Then open the frontend URL shown by Vite (usually `http://localhost:5173`).
 
 ## Available Scripts
 
-### Frontend (`Stockify-Frontend`)
+### Frontend (`PaperBull-Frontend`)
 
 - `npm run dev` – Run development server.
 - `npm run build` – Type-check and build production bundle.
 - `npm run lint` – Run ESLint.
 - `npm run preview` – Preview production build.
 
-### Backend (`Stockify-Backend`)
+### Backend (`PaperBull-Backend`)
 
 - `npm start` – Start API server.
 

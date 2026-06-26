@@ -24,6 +24,11 @@ export  class WebSocketManager {
     this.exploreInterval = null;
     this.lastExploreData = null;
 
+    // Indices shared broadcast
+    this.indicesSubscribers = new Set();
+    this.indicesInterval = null;
+    this.lastIndicesData = null;
+
     const heartbeat = setInterval(() => {
       this.wss.clients.forEach((ws) => {
         if (ws.isAlive === false) return ws.terminate();
@@ -42,6 +47,7 @@ export  class WebSocketManager {
         subscriptions: new Map(), 
         userId: null, 
         token: null,
+        authPromise: null,
         cookies 
       });
 
@@ -94,21 +100,35 @@ export  class WebSocketManager {
     if (!client) return;
 
     // Verify token if needed
-    if (params.token && !client.userId) {
-      try {
-        const decoded = await admin.auth().verifyIdToken(params.token);
-        client.userId = decoded.uid;
-        client.token = params.token;
-        
-        // Resolve SQL userId
-        const userRes = await db.query(`SELECT id FROM users WHERE uid=$1`, [decoded.uid]);
-        if (userRes.rows.length > 0) {
-            client.sqlUserId = userRes.rows[0].id;
+    if (params.token) {
+      if (client.authPromise) {
+        try {
+          await client.authPromise;
+        } catch (err) {
+          // Promise failed, let switch handle or return
         }
-      } catch (err) {
-        console.error("WS Auth Error:", err);
-        ws.send(JSON.stringify({ type: "ERROR", message: "Unauthorized" }));
-        return;
+      } else if (!client.userId) {
+        client.authPromise = (async () => {
+          const decoded = await admin.auth().verifyIdToken(params.token);
+          client.userId = decoded.uid;
+          client.token = params.token;
+          
+          // Resolve SQL userId
+          const userRes = await db.query(`SELECT id FROM users WHERE uid=$1`, [decoded.uid]);
+          if (userRes.rows.length > 0) {
+              client.sqlUserId = userRes.rows[0].id;
+          }
+        })();
+
+        try {
+          await client.authPromise;
+        } catch (err) {
+          console.error("WS Auth Error:", err);
+          ws.send(JSON.stringify({ type: "ERROR", message: "Unauthorized" }));
+          return;
+        } finally {
+          client.authPromise = null;
+        }
       }
     }
 
@@ -137,6 +157,9 @@ export  class WebSocketManager {
       case "REPLAY_LIVE":
         interval = this.startReplayLive(ws, params.symbol, params.speed);
         break;
+      case "INDICES_LIVE":
+        this.startIndicesLive(ws);
+        break;
     }
 
     if (interval) {
@@ -156,6 +179,12 @@ export  class WebSocketManager {
           clearInterval(this.exploreInterval);
           this.exploreInterval = null;
         }
+      } else if (topic === "INDICES_LIVE") {
+        this.indicesSubscribers.delete(ws);
+        if (this.indicesSubscribers.size === 0 && this.indicesInterval) {
+          clearInterval(this.indicesInterval);
+          this.indicesInterval = null;
+        }
       } else {
         clearInterval(client.subscriptions.get(subKey));
       }
@@ -170,6 +199,8 @@ export  class WebSocketManager {
       client.subscriptions.forEach((interval, subKey) => {
         if (subKey.startsWith("EXPLORE_LIVE")) {
             this.exploreSubscribers.delete(ws);
+        } else if (subKey.startsWith("INDICES_LIVE")) {
+            this.indicesSubscribers.delete(ws);
         } else {
             clearInterval(interval);
         }
@@ -178,6 +209,10 @@ export  class WebSocketManager {
       if (this.exploreSubscribers.size === 0 && this.exploreInterval) {
         clearInterval(this.exploreInterval);
         this.exploreInterval = null;
+      }
+      if (this.indicesSubscribers.size === 0 && this.indicesInterval) {
+        clearInterval(this.indicesInterval);
+        this.indicesInterval = null;
       }
     }
     this.clients.delete(ws);
@@ -264,6 +299,61 @@ export  class WebSocketManager {
     this.exploreInterval = setInterval(sendUpdate, 5000); // 5 sec shared polling
   }
 
+  async startIndicesLive(ws) {
+    const client = this.clients.get(ws);
+    if (!client) return;
+
+    this.indicesSubscribers.add(ws);
+    client.subscriptions.set("INDICES_LIVE:", true);
+
+    // Send cached data immediately
+    if (this.lastIndicesData) {
+      ws.send(JSON.stringify({ type: "INDICES_UPDATE", data: this.lastIndicesData }));
+    }
+
+    if (this.indicesInterval) return;
+
+    const INDICES = [
+      { symbol: "^NSEI",   label: "NIFTY 50" },
+      { symbol: "^BSESN",  label: "SENSEX" },
+      { symbol: "^NSEBANK",label: "BANKNIFTY" },
+      { symbol: "NIFTY_MIDCAP_100.NS", label: "MIDCPNIFTY" },
+      { symbol: "NIFTY_FIN_SERVICE.NS", label: "FINNIFTY" },
+    ];
+    const symbols = INDICES.map(i => i.symbol);
+
+    const sendUpdate = async () => {
+      try {
+        if (this.indicesSubscribers.size === 0) {
+          clearInterval(this.indicesInterval);
+          this.indicesInterval = null;
+          return;
+        }
+        const quotes = await MultiStockYahoo(symbols);
+        const mapped = INDICES.map(idx => {
+          const q = quotes.find(q => q.symbol === idx.symbol);
+          return {
+            symbol: idx.symbol,
+            label: idx.label,
+            price: q?.price ?? null,
+            change: q?.change ?? 0,
+            percent: q?.percent ?? 0,
+          };
+        });
+        this.lastIndicesData = mapped;
+        const payload = JSON.stringify({ type: "INDICES_UPDATE", data: mapped });
+        this.indicesSubscribers.forEach(sub => {
+          if (sub.readyState === sub.OPEN) sub.send(payload);
+        });
+      } catch (err) {
+        console.error("WS Indices Update Error:", err);
+      }
+    };
+
+    sendUpdate();
+    this.indicesInterval = setInterval(sendUpdate, 3000);
+  }
+
   startRecentLive(ws, client) {
     if (!client.userId) return null;
 
@@ -313,12 +403,13 @@ export  class WebSocketManager {
   }
 
   startHoldingsLive(ws, client) {
-    if (!client.sqlUserId || !holdingsService) return null;
+    if (!holdingsService) return null;
 
     const sendUpdate = async () => {
       try {
+        if (!client.sqlUserId) return;
         const holdings = await holdingsService.fetchHoldings(client.sqlUserId);
-        const payload = await holdingsService.computeHoldingsPayload(holdings);
+        const payload = await holdingsService.computeHoldingsPayload(holdings, client.sqlUserId);
 
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify({
@@ -336,12 +427,13 @@ export  class WebSocketManager {
   }
 
   startPositionsLive(ws, client) {
-    if (!client.sqlUserId || !holdingsService) return null;
+    if (!holdingsService) return null;
 
     const sendUpdate = async () => {
       try {
+        if (!client.sqlUserId) return;
         const lots = await holdingsService.fetchDetailedPositions(client.sqlUserId);
-        const payload = await holdingsService.computePositionsPayload(lots);
+        const payload = await holdingsService.computePositionsPayload(lots, client.sqlUserId);
 
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify({

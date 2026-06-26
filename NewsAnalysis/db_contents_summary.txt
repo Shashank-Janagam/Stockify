@@ -1,0 +1,34 @@
+PROFILES:
+- RELIANCE.NS: Reliance Industries Limited (Energy)
+  Summary: Reliance Industries Limited operates an integrated energy-to-consumer model, spanning hydrocarbon exploration and production, large‑scale petroleum re...
+
+- TCS.NS: Tata Consultancy Services Limited (Technology)
+  Summary: Tata Consultancy Services Limited is a leading provider of information technology (IT) and IT-enabled services, catering to a diverse range of industr...
+
+- INFY.NS: Infosys Limited (Technology)
+  Summary: Infosys Limited is a leading technology company that provides a comprehensive suite of consulting, technology, outsourcing, and digital services to cl...
+
+- HDFCBANK.NS: HDFC Bank Limited (Financial Services)
+  Summary: HDFC Bank Limited is a leading financial services provider in India and the Middle East, operating through a diverse range of segments including Retai...
+
+- ICICIBANK.NS: ICICI Bank Limited (Financial Services)
+  Summary: ICICI Bank Limited is a diversified financial services company that operates through multiple segments, including Retail Banking, Wholesale Banking, a...
+
+- SBIN.NS: State Bank of India (Financial Services)
+  Summary: State Bank of India (SBI) is India’s largest commercial bank, operating through Treasury, Corporate/Wholesale, Retail, and other banking segments. It ...
+
+- HINDUNILVR.NS: Hindustan Unilever Limited (Consumer Defensive)
+  Summary: Hindustan Unilever Limited is a leading fast-moving consumer goods company specializing in the manufacture and sale of household, personal care, and f...
+
+- ITC.NS: ITC Limited (Consumer Defensive)
+  Summary: ITC Limited operates a diversified consumer‑defensive business model anchored in fast‑moving consumer goods, specialty paper and packaging, and agribu...
+
+- AXISBANK.NS: Axis Bank Limited (Financial Services)
+  Summary: Axis Bank Limited is a leading Indian universal bank that delivers a comprehensive range of financial products and services through four segments—Trea...
+
+
+MAPPINGS:
+- Energy: ['RELIANCE.NS']
+- Technology: ['TCS.NS', 'INFY.NS']
+- Financial Services: ['HDFCBANK.NS', 'ICICIBANK.NS', 'SBIN.NS', 'AXISBANK.NS']
+- Consumer Defensive: ['HINDUNILVR.NS', 'ITC.NS']

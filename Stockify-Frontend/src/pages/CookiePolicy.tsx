@@ -5,7 +5,7 @@ const CookiePolicy = () => {
   const lastUpdated = "March 22, 2025";
 
   const handleClearConsent = () => {
-    localStorage.removeItem("stockify_cookie_consent");
+    localStorage.removeItem("paperbull_cookie_consent");
     alert("Cookie preference cleared. The consent banner will reappear on reload.");
     window.location.reload();
   };
@@ -17,16 +17,16 @@ const CookiePolicy = () => {
           <div className="policy-badge">Legal</div>
           <h1 className="policy-title">Cookie Policy</h1>
           <p className="policy-meta">
-            Last updated: <span>{lastUpdated}</span> · Applies to stockifyindia.shop
+            Last updated: <span>{lastUpdated}</span> · Applies to paperbullindia.shop
           </p>
         </div>
 
         <div className="policy-intro">
           <p>
-            This Cookie Policy explains how <strong>Stockify India</strong> uses cookies and similar
+            This Cookie Policy explains how <strong>PaperBull India</strong> uses cookies and similar
             browser storage technologies on{" "}
-            <a href="https://stockifyindia.shop" target="_blank" rel="noreferrer">
-              stockifyindia.shop
+            <a href="https://paperbullindia.shop" target="_blank" rel="noreferrer">
+              paperbullindia.shop
             </a>
             . This policy should be read alongside our{" "}
             <Link to="/privacy-policy">Privacy Policy</Link>.
@@ -54,7 +54,7 @@ const CookiePolicy = () => {
             provide information to website operators.
           </p>
           <p>
-            Stockify also uses similar storage technologies such as <strong>localStorage</strong> and
+            PaperBull also uses similar storage technologies such as <strong>localStorage</strong> and
             <strong> sessionStorage</strong> to provide a seamless experience. This policy covers all
             such technologies.
           </p>
@@ -70,7 +70,7 @@ const CookiePolicy = () => {
                 <span>Always Active</span>
               </div>
               <p>
-                These cookies are strictly necessary for Stockify to function. Without them, you cannot
+                These cookies are strictly necessary for PaperBull to function. Without them, you cannot
                 log in, maintain a session, or use the trading features. They cannot be disabled.
               </p>
             </div>
@@ -99,7 +99,7 @@ const CookiePolicy = () => {
 
         <section id="cookie-inventory" className="policy-section">
           <h2>3. Cookie Inventory</h2>
-          <p>Here is a complete list of the cookies and storage items used by Stockify:</p>
+          <p>Here is a complete list of the cookies and storage items used by PaperBull:</p>
           <table className="policy-table">
             <thead>
               <tr>
@@ -114,7 +114,7 @@ const CookiePolicy = () => {
               <tr>
                 <td><code>session</code> (HTTP-only)</td>
                 <td>Essential</td>
-                <td>Stockify</td>
+                <td>PaperBull</td>
                 <td>Authenticates your session with the backend using Firebase ID token</td>
                 <td>7 days or session end</td>
               </tr>
@@ -146,7 +146,7 @@ const CookiePolicy = () => {
         <section id="local-storage" className="policy-section">
           <h2>4. Local Storage Usage</h2>
           <p>
-            In addition to cookies, Stockify uses <code>localStorage</code> (browser-side storage that
+            In addition to cookies, PaperBull uses <code>localStorage</code> (browser-side storage that
             persists after closing the browser) for the following:
           </p>
           <table className="policy-table">
@@ -159,7 +159,7 @@ const CookiePolicy = () => {
             </thead>
             <tbody>
               <tr>
-                <td><code>stockify_cookie_consent</code></td>
+                <td><code>paperbull_cookie_consent</code></td>
                 <td>Records that you have acknowledged and accepted our cookie policy</td>
                 <td>Persistent until manually cleared</td>
               </tr>
@@ -174,7 +174,7 @@ const CookiePolicy = () => {
             </tbody>
           </table>
           <div className="policy-note">
-            <strong>Note:</strong> Stockify requires cookies and localStorage to be enabled. If your
+            <strong>Note:</strong> PaperBull requires cookies and localStorage to be enabled. If your
             browser has these disabled, you will see a warning asking you to re-enable them.
           </div>
         </section>
@@ -223,7 +223,7 @@ const CookiePolicy = () => {
           <h3>6.2 Browser Settings</h3>
           <p>
             Most browsers allow you to control cookies through their settings. However, disabling
-            essential cookies will break core Stockify functionality including login and trading.
+            essential cookies will break core PaperBull functionality including login and trading.
           </p>
           <p>Browser-specific cookie management guides:</p>
           <ul>
@@ -263,7 +263,7 @@ const CookiePolicy = () => {
 
           <h3>6.3 Do Not Track</h3>
           <p>
-            Stockify currently does not respond to "Do Not Track" (DNT) browser signals. We will update
+            PaperBull currently does not respond to "Do Not Track" (DNT) browser signals. We will update
             this policy when DNT compliance is implemented.
           </p>
         </section>
@@ -272,9 +272,9 @@ const CookiePolicy = () => {
           <h2>7. Contact</h2>
           <p>For questions about our use of cookies, please contact:</p>
           <div className="policy-contact-card">
-            <div><strong>Stockify India</strong></div>
+            <div><strong>PaperBull India</strong></div>
             <div>Email: <a href="mailto:shashankjanagam04@gmail.com">shashankjanagam04@gmail.com</a></div>
-            <div>Website: <a href="https://stockifyindia.shop" target="_blank" rel="noreferrer">stockifyindia.shop</a></div>
+            <div>Website: <a href="https://paperbullindia.shop" target="_blank" rel="noreferrer">paperbullindia.shop</a></div>
           </div>
         </section>
 

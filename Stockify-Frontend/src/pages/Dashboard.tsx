@@ -1,13 +1,14 @@
 import { useState, useEffect, lazy, Suspense } from "react";
-import Explore from "../components/Explore";
+import Explore from "../components/explore/Explore";
 import "../Styles/dashboard.css";
-import HoldingsPage from "../components/HoldingsPage.tsx";
-import PositionsPage from "../components/PositionsPage.tsx";
-// import OrderHistory from "../components/OrderHistory.tsx"; // Remove static import
+import HoldingsPage from "../components/portfolio/HoldingsPage.tsx";
+import PositionsPage from "../components/portfolio/PositionsPage.tsx";
+import HeaderIndices from "../components/layout/HeaderIndices.tsx";
+// import OrderHistory from "../components/portfolio/OrderHistory.tsx"; // Remove static import
 import { useLocation } from "react-router-dom";
 
 // Lazy load the OrderHistory component
-const OrderHistory = lazy(() => import("../components/OrderHistory.tsx"));
+const OrderHistory = lazy(() => import("../components/portfolio/OrderHistory.tsx"));
 
 
 
@@ -44,6 +45,7 @@ export default function Dashboard() {
         </div>
        
       </header>
+      <HeaderIndices />
       <div className="app2">
 
       {tab === "Explore" && <Explore />}

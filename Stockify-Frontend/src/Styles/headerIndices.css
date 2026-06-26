@@ -1,0 +1,178 @@
+/* =============================================
+   HEADER INDICES TICKER BAR
+   Matches the Groww/Zerodha style live bar
+   shown in the reference screenshot
+============================================= */
+
+/* ── Outer container ── */
+.hi-bar {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  height: 2.4rem;
+  overflow: hidden;
+  width: 100%;
+  position: relative;
+  user-select: none;
+}
+.hi-bar::-webkit-scrollbar {
+  display: none;                  /* Chrome / Safari */
+}
+
+/* ── Fade mask on left / right edges ── */
+.hi-bar::before,
+.hi-bar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  z-index: 2;
+  pointer-events: none;
+}
+.hi-bar::before {
+  left: 0;
+  background: linear-gradient(to right, #ffffff 30%, transparent);
+}
+.hi-bar::after {
+  right: 0;
+  background: linear-gradient(to left, #ffffff 30%, transparent);
+}
+
+/* ── Scrolling track ── */
+.hi-track {
+  display: flex;
+  align-items: stretch;
+  white-space: nowrap;
+  gap: 0;
+  height: 100%;
+  animation: ticker-scroll 35s linear infinite;
+}
+
+@keyframes ticker-scroll {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.hi-bar:hover .hi-track {
+  animation-play-state: paused;
+}
+
+/* ── Individual index card ── */
+.hi-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 22px;
+  border-right: 1px solid #e5e7eb;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+  height: 100%;
+}
+
+.hi-item:hover {
+  background: #f7f8fa;
+}
+
+/* ── Label (e.g. "NIFTY 50") ── */
+.hi-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #374151;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+/* ── Price ── */
+.hi-price {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+  min-width: 65px;
+  text-align: right;
+  display: inline-block;
+}
+
+/* ── Change + Percent ── */
+.hi-change {
+  font-size: 11.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+  min-width: 105px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.hi-pct {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* ── Positive / Negative colours ── */
+.hi-pos {
+  color: #16a34a;
+}
+.hi-neg {
+  color: #dc2626;
+}
+
+/* ======================
+   SKELETON STATE
+====================== */
+.hi-bar--skeleton {
+  gap: 0;
+  overflow: hidden;
+  animation: none;
+}
+
+.hi-item--skeleton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 22px;
+  border-right: 1px solid #e5e7eb;
+  height: 100%;
+}
+
+.hi-sk {
+  display: inline-block;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    #f3f4f6 25%,
+    #e5e7eb 37%,
+    #f3f4f6 63%
+  );
+  background-size: 400% 100%;
+  animation: hi-shimmer 1.4s ease infinite;
+}
+
+.hi-sk--name   { width: 72px;  height: 10px; }
+.hi-sk--price  { width: 60px;  height: 10px; }
+.hi-sk--change { width: 80px;  height: 10px; }
+
+@keyframes hi-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .hi-bar {
+    height: 2.2rem;
+  }
+  .hi-track {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}

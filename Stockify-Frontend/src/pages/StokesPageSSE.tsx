@@ -1,30 +1,31 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import StockHeader from "../components/StockHeader";
-import { StockChartIndia, GraphSkeleton } from "../components/StocksChartIndia";
-import TimeframeBar from "../components/TimeframeBar";
-import OrderPanel from "../components/OrderPanel";
+import StockHeader from "../components/stocks/StockHeader";
+import { StockChartIndia, GraphSkeleton } from "../components/charts/StocksChartIndia";
+import TimeframeBar from "../components/charts/TimeframeBar";
+import OrderPanel from "../components/stocks/OrderPanel";
 // import {useContext} from "react"
 // import { AuthContext } from "../auth/AuthProvider";
 import { useWebSocket } from "../context/WebSocketContext";
-// import StockCandleChartIndia from "../components/StockCandleChartIndia";
 import "../Styles/stock.css";
-import StockPerformance from "../components/StockPerformanceFundamentals"
-import AIStockReport from "../components/AIStockReport";
+import StockPerformance from "../components/stocks/StockPerformanceFundamentals"
+import AIStockReport from "../components/stocks/AIStockReport";
+import CompanyNewsPanel from "../components/stocks/CompanyNewsPanel";
+import CompanyProfile from "../components/stocks/CompanyProfile";
 import { useContext } from "react"
 
 import { AuthContext } from "../auth/AuthProvider";// import type { Stock } from "../data/stocks";
-import StockChart from "../components/StockChart";
+import StockChart from "../components/charts/StockChart";
 /* =========================
    TYPES
 ========================= */
 
-type Candle2={
-  x:number;
-  o:number;
-  h:number;
-  l:number;
-  c:number;
+type Candle2 = {
+  x: number;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
 }
 type Trade = {
   side: "BUY" | "SELL";
@@ -72,6 +73,8 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   }>();
 
   if (!symbol) return null;
+
+  const isIndex = ["^NSEI", "^BSESN", "^NSEBANK", "^CNXMIDCAP", "NIFTY_FIN_SERVICE.NS"].includes(symbol.toUpperCase());
 
 
 
@@ -132,6 +135,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   useEffect(() => {
     const updateRecent = async () => {
       if (!companyName || !symbol) return;
+      if (isIndex) return;
 
       try {
         await fetch(`${HOST}/api/searchUpdates/hit`, {
@@ -203,7 +207,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
       return;
     }
 
-    fetch(`${HOST}/api/indiaSEE/${symbol}/quote`)
+    fetch(`${HOST}/api/stocks/${symbol}/quote`)
       .then(res => res.json())
       .then((q: YahooQuote) => {
         setMarketState(q.marketState);
@@ -240,7 +244,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     }
     // 🔴 MARKET CLOSED → STATIC
     else {
-      fetch(`${HOST}/api/indiaSEE/${symbol}/history?days=1`)
+      fetch(`${HOST}/api/stocks/${symbol}/history?days=1`)
         .then(res => res.json())
         .then((candles: Candle2[]) => {
           const shifted = candles.map(d => ({
@@ -279,7 +283,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
             y: d.c
           }))
         );
-        setData(shifted); 
+        setData(shifted);
         const last = shifted[shifted.length - 1];
         if (last) setPrice(last.y || last.c);
         setLoading(false);
@@ -292,13 +296,13 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   /* =========================
      NON-1D → STATIC FETCH
   ========================= */
-  const [data,setData]=useState<Candle2[]>([]);
+  const [data, setData] = useState<Candle2[]>([]);
   useEffect(() => {
     if (timeframe === "1D") return;
 
     const days = timeframeToDays[timeframe];
 
-    fetch(`${HOST}/api/indiaSEE/${symbol}/history?days=${days}`)
+    fetch(`${HOST}/api/stocks/${symbol}/history?days=${days}`)
       .then(res => res.json())
       .then((data: Candle2[]) => {
         if (!data.length) return;
@@ -344,7 +348,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
   console.log("quote:", quote)
   return (
-    <div className="stock-page">
+    <div className={`stock-page ${isIndex ? 'stock-page--index' : ''}`}>
       <div className="stock-left">
         <StockHeader
           companyName={companyName}
@@ -359,9 +363,9 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
             active={timeframe}
             onChange={setTimeframe}
           />
-          
+
           <div className="chart-type-toggle" style={{ display: "flex", gap: "8px", background: "#f3f4f6", padding: "4px", borderRadius: "8px" }}>
-            <button 
+            <button
               onClick={() => setChartType("line")}
               style={{
                 padding: "6px 12px",
@@ -378,7 +382,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
             >
               Line
             </button>
-            <button 
+            <button
               onClick={() => setChartType("candle")}
               style={{
                 padding: "6px 12px",
@@ -433,7 +437,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
         </div>
 
         {loading && <GraphSkeleton />}
-        
+
         {!loading && (
           <div className="main-chart-container" style={{ height: "400px", width: "100%" }}>
             {chartType === "line" ? (
@@ -443,7 +447,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
                 referencePrice={baseline}
                 marketState={marketState ?? ""}
                 trades={trades}
-                percent={percent.toString()} 
+                percent={percent.toString()}
                 pendingSL={pendingSL}
               />
             ) : (
@@ -453,25 +457,29 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
           </div>
         )}
 
-        <StockPerformance quote={quote} />
+        {!isIndex && <StockPerformance quote={quote} />}
+        {!isIndex && <CompanyProfile symbol={symbol} companyName={companyName} />}
 
       </div>
-      <div className="stock-right">
-        <OrderPanel
-          companyName={companyName}
-          symbol={symbol}
-          price={price ?? 0}
-          changePercent={percent}
-          fullExchangeName={exchangeName ?? "NSE"}
-          onLoginClick={onLoginClick}
-          trades={trades}
-          availableQty={availableQty}
-          intradayQty={intradayQty}
-          deliveryQty={deliveryQty}
-          refresh={refresh}
-          rerefresh={rerefresh}
-        />
-      </div>
+      {!isIndex && (
+        <div className="stock-right">
+          <OrderPanel
+            companyName={companyName}
+            symbol={symbol}
+            price={price ?? 0}
+            changePercent={percent}
+            fullExchangeName={exchangeName ?? "NSE"}
+            onLoginClick={onLoginClick}
+            trades={trades}
+            availableQty={availableQty}
+            intradayQty={intradayQty}
+            deliveryQty={deliveryQty}
+            refresh={refresh}
+            rerefresh={rerefresh}
+          />
+          <CompanyNewsPanel symbol={companyName} />
+        </div>
+      )}
       <AIStockReport symbol={symbol} />
     </div>
   );

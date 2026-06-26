@@ -4,7 +4,7 @@ const yahoo = new YahooFinance({
   suppressNotices: ["yahooSurvey"]
 });
 export async function getYahooIndiaQuote(symbol) {
-  const finalSymbol = symbol.endsWith(".NS")
+  const finalSymbol = (symbol.endsWith(".NS") || symbol.startsWith("^"))
     ? symbol
     : `${symbol}.NS`;
 

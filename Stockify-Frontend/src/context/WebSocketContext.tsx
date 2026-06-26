@@ -16,7 +16,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<any>(null);
   const ws = useRef<WebSocket | null>(null);
-  const subscriptions = useRef<Set<string>>(new Set());
+  const subscriptions = useRef<Map<string, number>>(new Map());
   const userRef = useRef(user);
 
   useEffect(() => {
@@ -57,11 +57,11 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         console.log("✅ WebSocket connected");
         setIsConnected(true);
         // Re-subscribe to existing topics
-        subscriptions.current.forEach(sub => {
+        for (const sub of subscriptions.current.keys()) {
           const [topic, paramsStr] = sub.split("|");
           const params = paramsStr ? JSON.parse(paramsStr) : {};
           sendSubscription(topic, params);
-        });
+        }
       };
 
       socket.onmessage = (event) => {
@@ -113,32 +113,39 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   // 🔥 Re-subscribe all when user logs in
   useEffect(() => {
     if (user && isConnected) {
-      subscriptions.current.forEach(sub => {
+      for (const sub of subscriptions.current.keys()) {
         const [topic, paramsStr] = sub.split("|");
         const params = paramsStr ? JSON.parse(paramsStr) : {};
         sendSubscription(topic, params);
-      });
+      }
     }
   }, [user, isConnected]);
 
   function subscribe(topic: string, params: any = {}) {
     const subKey = `${topic}|${JSON.stringify(params)}`;
-    if (subscriptions.current.has(subKey)) return;
+    const currentCount = subscriptions.current.get(subKey) || 0;
+    subscriptions.current.set(subKey, currentCount + 1);
     
-    subscriptions.current.add(subKey);
-    sendSubscription(topic, params);
+    if (currentCount === 0) {
+      sendSubscription(topic, params);
+    }
   }
 
   function unsubscribe(topic: string, params: any = {}) {
     const subKey = `${topic}|${JSON.stringify(params)}`;
-    subscriptions.current.delete(subKey);
+    const currentCount = subscriptions.current.get(subKey) || 0;
     
-    if (ws.current?.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({
-        type: "UNSUBSCRIBE",
-        topic,
-        ...params
-      }));
+    if (currentCount <= 1) {
+      subscriptions.current.delete(subKey);
+      if (ws.current?.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify({
+          type: "UNSUBSCRIBE",
+          topic,
+          ...params
+        }));
+      }
+    } else {
+      subscriptions.current.set(subKey, currentCount - 1);
     }
   }
 

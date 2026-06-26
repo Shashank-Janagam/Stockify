@@ -1,5 +1,5 @@
 {
-  "name": "stockify-backend",
+  "name": "paperbull-backend",
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",
@@ -25,8 +25,10 @@
     "ioredis": "^5.9.2",
     "mongodb": "^7.0.0",
     "node-cache": "^5.1.2",
+    "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
     "oci-sdk": "^2.126.1",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.18.0",
     "razorpay": "^2.9.6",
     "redis": "^5.11.0",

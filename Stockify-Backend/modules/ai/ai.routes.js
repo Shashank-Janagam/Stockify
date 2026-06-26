@@ -1,23 +1,9 @@
-import express from 'express';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+﻿import express from 'express';
 import redisClient from '../../cache/redisClient.js';
 import requireAuth from '../../Middleware/requireAuth.js';
 import { db } from '../../db/sql.js';
 
 const router = express.Router();
-
-let genAI = null;
-
-try {
-  // Initialize ONLY if an API key is available
-  if (process.env.GEMINI_API_KEY) {
-    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  } else {
-    console.warn("⚠️ GEMINI_API_KEY is missing from environment variables.");
-  }
-} catch (error) {
-  console.error("Failed to initialize Gemini API:", error);
-}
 
 router.post('/analyze-portfolio', requireAuth, async (req, res) => {
   try {
@@ -36,11 +22,12 @@ router.post('/analyze-portfolio', requireAuth, async (req, res) => {
         return res.json(JSON.parse(cachedData));
     }
 
-    if (!genAI) {
-        console.error("❌ AI reporting: Service unavailable (Gemini API key missing)");
+    const apiKey = process.env.LLM_API_KEY || process.env.GROK_API_KEY;
+    if (!apiKey) {
+        console.error("❌ AI reporting: Service unavailable (API key missing)");
         return res.status(503).json({
             error: "AI service unavailable",
-            message: "Gemini API key is not configured on the server."
+            message: "API key is not configured on the server."
         });
     }
 
@@ -86,15 +73,6 @@ router.post('/analyze-portfolio', requireAuth, async (req, res) => {
       avgLossAmount: Number(stats.avg_loss || 0),
       profitFactor: (stats.avg_loss > 0) ? (stats.avg_win / stats.avg_loss) : 0
     };
-
-    // Use Gemini-2.5-flash-lite for cost-efficiency and depth
-    const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.5-flash-lite",
-        generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.1, 
-        }
-    });
 
     const prompt = `
     You are an expert AI Behavioral Finance Analyst. Analyze the user's trading patterns based on their current open positions AND their historical trade data.
@@ -148,8 +126,32 @@ router.post('/analyze-portfolio', requireAuth, async (req, res) => {
     `;
 
     try {
-        const result = await model.generateContent(prompt);
-        let responseText = result.response.text();
+        const baseUrl = process.env.LLM_BASE_URL || process.env.GROK_BASE_URL || "https://api.x.ai/v1";
+        const modelName = process.env.LLM_MODEL || process.env.GROK_MODEL || "openai/gpt-oss-120b";
+        
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: modelName,
+                messages: [
+                    { role: "user", content: prompt }
+                ],
+                response_format: { type: "json_object" },
+                temperature: 0.1
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`LLM API returned status ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        let responseText = data.choices[0].message.content;
 
         // 🛡️ Sanitize: Strip potential markdown code blocks
         responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -161,21 +163,11 @@ router.post('/analyze-portfolio', requireAuth, async (req, res) => {
 
         return res.json(analysis);
 
-    } catch (geminiError) {
-        console.error("Gemini API Error:", geminiError);
-        
-        // Manual Statistical AI Engine as a fallback
-        /* 
-        try {
-            // LOCAL DETERMINISTIC AI ENGINE (Behavioral Modeling)
-            const allItems = [...(positions || []), ...(holdings || [])];
-            ...
-        } catch (localAiError) { ... }
-        */
-        
+    } catch (grokError) {
+        console.error("LLM API Error:", grokError);
         return res.status(500).json({ 
             error: "Failed to generate AI analysis", 
-            details: geminiError.message 
+            details: grokError.message 
         });
     }
 

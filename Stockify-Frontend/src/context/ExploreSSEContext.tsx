@@ -6,6 +6,7 @@ type ExploreContextType = {
   data: any;
   recentData: any[];
   invested: any[];
+  holdingsSummary: any | null;
   ready: boolean;
 };
 
@@ -17,6 +18,7 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
   const [data, setData] = useState<any>(null);
   const [recentData, setRecentData] = useState<any[]>([]);
   const [invested, setInvested] = useState<any[]>([]);
+  const [holdingsSummary, setHoldingsSummary] = useState<any | null>(null);
   const [ready, setReady] = useState(false);
   
   const { subscribe, unsubscribe, lastMessage } = useWebSocket();
@@ -29,15 +31,18 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
       setData(null);
       setRecentData([]);
       setInvested([]);
+      setHoldingsSummary(null);
       return;
     }
 
     subscribe("EXPLORE_LIVE");
     subscribe("RECENT_LIVE");
+    subscribe("HOLDINGS_LIVE");
 
     return () => {
       unsubscribe("EXPLORE_LIVE");
       unsubscribe("RECENT_LIVE");
+      unsubscribe("HOLDINGS_LIVE");
     };
   }, [user]);
 
@@ -58,12 +63,16 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
       setRecentData(lastMessage.data.recentlyViewed ?? []);
       setInvested(lastMessage.data.invested ?? []);
     }
+
+    if (lastMessage.type === "HOLDINGS_UPDATE") {
+      setHoldingsSummary(lastMessage.data.summary ?? null);
+    }
   }, [lastMessage]);
 
 
   return (
     <ExploreSSEContext.Provider
-      value={{ data, recentData, invested, ready }}
+      value={{ data, recentData, invested, holdingsSummary, ready }}
     >
       {children}
     </ExploreSSEContext.Provider>

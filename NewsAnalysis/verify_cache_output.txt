@@ -1,0 +1,32 @@
+HDFCBANK Response:
+{
+  "symbol": "HDFCBANK",
+  "company_name": "HDFC Bank Limited",
+  "sector": "Financial Services",
+  "industry": "Banks - Regional",
+  "website": "https://www.hdfc.bank.in",
+  "summary_text": "HDFC Bank Limited is a leading Indian bank offering a full suite of retail and wholesale banking services across India and select overseas locations such as Bahrain, Hong\u202fKong, Singapore, and Dubai. It provides deposit accounts, a wide range of loan products, credit and debit cards, payments, trade finance, and insurance and investment solutions, all supported by digital channels and an extensive branch and ATM network. Its primary market focus is individuals, SMEs, and large corporates, with particular emphasis on retail banking, credit, and treasury services within the Indian market. Since its incorporation in 1994, the bank operates through diversified segments\u2014including treasury, retail, wholesale, and insurance\u2014to deliver comprehensive financial solutions."
+}
+
+ICICIBANK Response:
+{
+  "symbol": "ICICIBANK",
+  "company_name": "ICICI Bank Limited",
+  "sector": "Financial Services",
+  "industry": "Banks - Regional",
+  "website": "https://www.icici.bank.in",
+  "summary_text": "ICICI Bank Limited is a leading financial services provider in India and internationally, operating through various segments including Retail Banking, Wholesale Banking, and Insurance. The company offers a wide range of products and services, including deposit accounts, loans, credit cards, investment products, and insurance solutions, catering to both retail and corporate customers. Its primary market focus is on India and international markets, with a strong presence in the country's banking and financial services sector. Founded in 1955, ICICI Bank has established itself as a trusted and diversified financial institution."
+}
+
+SIMILAR STOCKS Response:
+{
+  "symbol": "HDFCBANK",
+  "sector": "Financial Services",
+  "similar_stocks": [
+    {
+      "symbol": "ICICIBANK",
+      "company_name": "ICICI Bank Limited"
+    }
+  ]
+}
+

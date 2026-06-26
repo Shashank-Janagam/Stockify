@@ -1,4 +1,5 @@
 import express from "express";
+import axios from "axios";
 import requireAuth from "../../Middleware/requireAuth.js";
 import { db } from "../../db/sql.js";
 import YahooFinance from "yahoo-finance2";
@@ -86,7 +87,7 @@ router.get("/holding/:symbol", requireAuth, async (req, res) => {
 router.post("/sell", requireAuth, async (req, res) => {
   const client = await db.connect();
   try {
-    const { uid } = req.user;
+    const { uid, name: userName, email } = req.user;
 
     const { symbol, quantity, sl_enabled, sl_price, product_type } = req.body;
     const finalProductType =
@@ -95,9 +96,10 @@ router.post("/sell", requireAuth, async (req, res) => {
     if (!quantity || quantity <= 0)
       return res.status(400).json({ error: "Invalid qty" });
 
-    const userRes = await client.query(`SELECT id FROM users WHERE uid=$1`, [uid]);
+    const userRes = await client.query(`SELECT id, "Mobile" FROM users WHERE uid=$1`, [uid]);
     if (userRes.rows.length === 0) return res.status(400).json({ error: "User not found" });
     const userId = userRes.rows[0].id;
+    const userMobile = userRes.rows[0].Mobile;
 
     const stockRes = await client.query(`SELECT id FROM stocks WHERE symbol=$1`, [symbol]);
     if (stockRes.rows.length === 0) return res.status(400).json({ error: "Stock not found" });
@@ -279,6 +281,37 @@ router.post("/sell", requireAuth, async (req, res) => {
           orderId: item.id, newQuantity: item.newQuantity, stopLoss: item.stopLoss
         }));
       }
+    }
+
+    const webhookData = {
+      status: "EXECUTED",
+      side: "SELL",
+      order_type: "MARKET",
+      product_type: finalProductType,
+      sl_pending: false,
+      symbol,
+      quantity,
+      PricePerShare: pricePerShare,
+      totalValue: sellValue,
+      walletBalance: newBalance,
+      userId,
+      orderId,
+      tradeId,
+      uid,
+      email,
+      name: userName || null,
+      mobile: userMobile || null,
+      subject:"PaperBull Order Execution",
+    };
+
+    try {
+      console.log("Sending to n8n");
+      await axios.post(
+        "https://shashankjanagam.app.n8n.cloud/webhook/3714732e-5a5e-4934-ae3f-136680443064",
+        webhookData
+      );
+    } catch (webhookErr) {
+      console.error("Webhook notification failed:", webhookErr.message);
     }
 
     res.json({
