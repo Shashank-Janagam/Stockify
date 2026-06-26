@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+motor
+pymongo
+requests
+python-dotenv
+groq
+pydantic
+yfinance
+pypdf

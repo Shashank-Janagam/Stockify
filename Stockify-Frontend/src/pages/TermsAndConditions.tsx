@@ -12,22 +12,22 @@ const TermsAndConditions = () => {
           <div className="policy-badge">Legal</div>
           <h1 className="policy-title">Terms &amp; Conditions</h1>
           <p className="policy-meta">
-            Last updated: <span>{lastUpdated}</span> · Please read carefully before using Stockify
+            Last updated: <span>{lastUpdated}</span> · Please read carefully before using PaperBull
           </p>
         </div>
 
         <div className="policy-intro">
           <p>
-            These Terms and Conditions ("Terms") govern your access to and use of the Stockify platform
+            These Terms and Conditions ("Terms") govern your access to and use of the PaperBull platform
             available at{" "}
-            <a href="https://stockifyindia.shop" target="_blank" rel="noreferrer">
-              stockifyindia.shop
+            <a href="https://paperbullindia.shop" target="_blank" rel="noreferrer">
+              paperbullindia.shop
             </a>{" "}
-            ("Platform"), operated by <strong>Stockify India</strong> ("we", "us", or "our").
+            ("Platform"), operated by <strong>PaperBull India</strong> ("we", "us", or "our").
           </p>
           <p>
             By creating an account or using any part of this Platform, you agree to be bound by these
-            Terms. If you do not agree, please do not use Stockify.
+            Terms. If you do not agree, please do not use PaperBull.
           </p>
         </div>
 
@@ -54,10 +54,10 @@ const TermsAndConditions = () => {
         <section id="nature-of-service" className="policy-section">
           <h2>1. Nature of Service</h2>
           <div className="policy-highlight-box">
-            <strong>⚠️ Stockify is a paper trading (simulated trading) platform only.</strong>
+            <strong>⚠️ PaperBull is a paper trading (simulated trading) platform only.</strong>
             <p>
-              All trading activity on Stockify uses <strong>virtual (simulated) money</strong>. No real
-              securities are bought or sold. No real financial gains or losses occur. Stockify is a
+              All trading activity on PaperBull uses <strong>virtual (simulated) money</strong>. No real
+              securities are bought or sold. No real financial gains or losses occur. PaperBull is a
               purely educational tool designed to help users learn trading without financial risk.
             </p>
           </div>
@@ -71,7 +71,7 @@ const TermsAndConditions = () => {
 
         <section id="eligibility" className="policy-section">
           <h2>2. Eligibility</h2>
-          <p>To use Stockify, you must:</p>
+          <p>To use PaperBull, you must:</p>
           <ul>
             <li>Be at least <strong>18 years of age</strong> or the age of majority in your jurisdiction.</li>
             <li>Have the legal capacity to enter into binding agreements.</li>
@@ -79,7 +79,7 @@ const TermsAndConditions = () => {
             <li>Provide accurate and truthful information during registration.</li>
           </ul>
           <p>
-            By using Stockify, you represent and warrant that you meet all eligibility requirements. We
+            By using PaperBull, you represent and warrant that you meet all eligibility requirements. We
             reserve the right to terminate accounts that do not meet these criteria.
           </p>
         </section>
@@ -111,7 +111,7 @@ const TermsAndConditions = () => {
         <section id="virtual-funds" className="policy-section">
           <h2>4. Virtual Funds &amp; Payments</h2>
           <div className="policy-highlight-box">
-            <strong>Important:</strong> Real money deposited into Stockify is used to purchase
+            <strong>Important:</strong> Real money deposited into PaperBull is used to purchase
             <em>virtual trading credits</em> only. These credits have no real monetary value and cannot
             be withdrawn, redeemed, or exchanged for real money or assets.
           </div>
@@ -163,7 +163,7 @@ const TermsAndConditions = () => {
         <section id="ai-content" className="policy-section">
           <h2>6. AI-Generated Content</h2>
           <p>
-            Stockify provides AI-generated stock insights and analysis powered by <strong>Google Gemini AI</strong>.
+            PaperBull provides AI-generated stock insights and analysis powered by <strong>Google Gemini AI</strong>.
           </p>
           <ul>
             <li>AI insights are provided <strong>for educational purposes only</strong> and do not constitute financial advice.</li>
@@ -195,15 +195,15 @@ const TermsAndConditions = () => {
           <h2>8. Intellectual Property</h2>
           <ul>
             <li>
-              All content, design, code, logos, and trademarks on Stockify are owned by or licensed to
-              Stockify India. You may not copy, reproduce, or distribute them without written permission.
+              All content, design, code, logos, and trademarks on PaperBull are owned by or licensed to
+              PaperBull India. You may not copy, reproduce, or distribute them without written permission.
             </li>
             <li>
               Stock market data displayed on the Platform is sourced from third-party providers and is
               subject to their respective terms and copyrights.
             </li>
             <li>
-              By using Stockify, you grant us a non-exclusive, royalty-free license to use your anonymized
+              By using PaperBull, you grant us a non-exclusive, royalty-free license to use your anonymized
               usage data to improve the Platform.
             </li>
           </ul>
@@ -230,7 +230,7 @@ const TermsAndConditions = () => {
         <section id="limitation-of-liability" className="policy-section">
           <h2>10. Limitation of Liability</h2>
           <p>
-            TO THE MAXIMUM EXTENT PERMITTED BY LAW, STOCKIFY INDIA SHALL NOT BE LIABLE FOR ANY
+            TO THE MAXIMUM EXTENT PERMITTED BY LAW, PAPERBULL INDIA SHALL NOT BE LIABLE FOR ANY
             INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED
             TO:
           </p>
@@ -242,7 +242,7 @@ const TermsAndConditions = () => {
           </ul>
           <p>
             Our total liability to you shall not exceed the amount you paid in the last 3 months of
-            using the Platform. Since Stockify uses virtual money, this amount may be zero in many cases.
+            using the Platform. Since PaperBull uses virtual money, this amount may be zero in many cases.
           </p>
         </section>
 
@@ -278,7 +278,7 @@ const TermsAndConditions = () => {
           <h2>13. Changes to Terms</h2>
           <p>
             We reserve the right to modify these Terms at any time. Material changes will be communicated
-            by updating the "Last updated" date. Your continued use of Stockify after changes are made
+            by updating the "Last updated" date. Your continued use of PaperBull after changes are made
             constitutes your acceptance of the revised Terms.
           </p>
         </section>
@@ -287,9 +287,9 @@ const TermsAndConditions = () => {
           <h2>14. Contact</h2>
           <p>For questions about these Terms, contact us at:</p>
           <div className="policy-contact-card">
-            <div><strong>Stockify India</strong></div>
+            <div><strong>PaperBull India</strong></div>
             <div>Email: <a href="mailto:shashankjanagam04@gmail.com">shashankjanagam04@gmail.com</a></div>
-            <div>Website: <a href="https://stockifyindia.shop" target="_blank" rel="noreferrer">stockifyindia.shop</a></div>
+            <div>Website: <a href="https://paperbullindia.shop" target="_blank" rel="noreferrer">paperbullindia.shop</a></div>
           </div>
         </section>
 

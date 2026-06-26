@@ -2,16 +2,16 @@ services:
 
   backend:
     build:
-      context: ./Stockify-Backend
-    container_name: stockify-backend
+      context: ./PaperBull-Backend
+    container_name: paperbull-backend
     ports:
       - "4000:4000"
     restart: always
 
   frontend:
     build:
-      context: ./Stockify-Frontend
-    container_name: stockify-frontend
+      context: ./PaperBull-Frontend
+    container_name: paperbull-frontend
     ports:
       - "80:80"
     restart: always

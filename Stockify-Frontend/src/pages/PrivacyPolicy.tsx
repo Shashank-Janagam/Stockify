@@ -18,16 +18,16 @@ const PrivacyPolicy = () => {
 
         <div className="policy-intro">
           <p>
-            Welcome to <strong>Stockify</strong> ("we", "our", or "us"). Your privacy matters to us. This
+            Welcome to <strong>PaperBull</strong> ("we", "our", or "us"). Your privacy matters to us. This
             Privacy Policy explains how we collect, use, store, and protect your personal information when
             you use our paper trading platform at{" "}
-            <a href="https://stockifyindia.shop" target="_blank" rel="noreferrer">
-              stockifyindia.shop
+            <a href="https://paperbullindia.shop" target="_blank" rel="noreferrer">
+              paperbullindia.shop
             </a>
             .
           </p>
           <p>
-            By accessing or using Stockify, you agree to the collection and use of information in
+            By accessing or using PaperBull, you agree to the collection and use of information in
             accordance with this policy.
           </p>
         </div>
@@ -66,7 +66,7 @@ const PrivacyPolicy = () => {
             <li><strong>Device &amp; Browser Data:</strong> IP address, browser type, operating system, and device identifiers for security and analytics purposes.</li>
             <li><strong>Authentication Tokens:</strong> Firebase ID tokens are exchanged with our backend via secure HTTP-only cookies to maintain your session.</li>
             <li><strong>WebSocket Activity:</strong> Real-time stock price subscription requests you make during your session.</li>
-            <li><strong>Cookie Consent:</strong> We store your cookie acceptance preference in <code>localStorage</code> under the key <code>stockify_cookie_consent</code>.</li>
+            <li><strong>Cookie Consent:</strong> We store your cookie acceptance preference in <code>localStorage</code> under the key <code>paperbull_cookie_consent</code>.</li>
           </ul>
 
           <h3>1.3 Information from Third Parties</h3>
@@ -165,7 +165,7 @@ const PrivacyPolicy = () => {
 
         <section id="third-party" className="policy-section">
           <h2>4. Third-Party Services</h2>
-          <p>Stockify integrates with the following third-party services, each with their own privacy policies:</p>
+          <p>PaperBull integrates with the following third-party services, each with their own privacy policies:</p>
           <div className="policy-third-party-grid">
             <div className="policy-third-party-card">
               <div className="policy-third-party-name">Firebase (Google)</div>
@@ -214,7 +214,7 @@ const PrivacyPolicy = () => {
                 <td>Session / 7 days</td>
               </tr>
               <tr>
-                <td><code>stockify_cookie_consent</code></td>
+                <td><code>paperbull_cookie_consent</code></td>
                 <td>Preference</td>
                 <td>Stores your cookie consent decision</td>
                 <td>Persistent (localStorage)</td>
@@ -260,7 +260,7 @@ const PrivacyPolicy = () => {
         <section id="childrens-privacy" className="policy-section">
           <h2>8. Children's Privacy</h2>
           <p>
-            Stockify is not directed at children under the age of <strong>18</strong>. We do not knowingly
+            PaperBull is not directed at children under the age of <strong>18</strong>. We do not knowingly
             collect personal information from minors. If you believe a child has provided us with personal
             information, please contact us immediately and we will delete that information.
           </p>
@@ -270,7 +270,7 @@ const PrivacyPolicy = () => {
           <h2>9. Changes to This Policy</h2>
           <p>
             We may update this Privacy Policy from time to time. We will notify you of significant changes
-            by updating the "Last updated" date at the top of this page. Your continued use of Stockify
+            by updating the "Last updated" date at the top of this page. Your continued use of PaperBull
             after changes are posted constitutes your acceptance of the updated policy.
           </p>
         </section>
@@ -279,9 +279,9 @@ const PrivacyPolicy = () => {
           <h2>10. Contact Us</h2>
           <p>If you have any questions about this Privacy Policy, please reach out to us:</p>
           <div className="policy-contact-card">
-            <div><strong>Stockify India</strong></div>
+            <div><strong>PaperBull India</strong></div>
             <div>Email: <a href="mailto:shashankjanagam04@gmail.com">shashankjanagam04@gmail.com</a></div>
-            <div>Website: <a href="https://stockifyindia.shop" target="_blank" rel="noreferrer">stockifyindia.shop</a></div>
+            <div>Website: <a href="https://paperbullindia.shop" target="_blank" rel="noreferrer">paperbullindia.shop</a></div>
           </div>
         </section>
 

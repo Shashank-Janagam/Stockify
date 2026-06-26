@@ -1,4 +1,5 @@
 import express from "express";
+import axios from "axios";
 import { db } from "../../db/sql.js";
 import requireAuth from "../../Middleware/requireAuth.js";
 import YahooFinance from "yahoo-finance2";
@@ -46,6 +47,7 @@ async function getCurrentPrice(symbol) {
 // ──────────────────────────────────────────────────────────
 router.post("/buy", requireAuth, async (req, res) => {
   const client = await db.connect();
+  console.log("Executing buy order");
 
   try {
     const { uid, name: userName, email } = req.user;
@@ -61,18 +63,20 @@ router.post("/buy", requireAuth, async (req, res) => {
 
     // ── Resolve / create user ──
     let userRes = await client.query(
-      `SELECT id FROM users WHERE uid = $1`,
+      `SELECT id, "Mobile" FROM users WHERE uid = $1`,
       [uid]
     );
     let userId;
+    let userMobile;
     if (userRes.rows.length === 0) {
       await client.query("BEGIN");
       try {
         const ins = await client.query(
-          `INSERT INTO users (uid, name, email) VALUES ($1, $2, $3) RETURNING id`,
+          `INSERT INTO users (uid, name, email) VALUES ($1, $2, $3) RETURNING id, "Mobile"`,
           [uid, userName || "Trader", email]
         );
         userId = ins.rows[0].id;
+        userMobile = ins.rows[0].Mobile;
         await client.query(
           `INSERT INTO wallet_accounts (user_id, available_balance) VALUES ($1, 0)`,
           [userId]
@@ -84,6 +88,7 @@ router.post("/buy", requireAuth, async (req, res) => {
       }
     } else {
       userId = userRes.rows[0].id;
+      userMobile = userRes.rows[0].Mobile;
     }
 
     // ── Resolve / create stock ──
@@ -220,6 +225,38 @@ router.post("/buy", requireAuth, async (req, res) => {
     await client.query("COMMIT");
     await redis.del(`wallet:balance:${uid}`);
     await redis.del(`ai_portfolio_v3_${userId}`);
+
+    const webhookData = {
+      status: "EXECUTED",
+      side: "BUY",
+      order_type: "MARKET",
+      product_type: finalProductType,
+      sl_pending: false,
+      symbol: finalSymbol,
+      quantity,
+      PricePerShare: pricePerShare,
+      totalValue: totalPrice,
+      walletBalance: newBalance,
+      userId,
+      orderId,
+      tradeId,
+      uid,
+      email,
+      name: userName || null,
+      mobile: userMobile || null,
+      subject:"PaperBull Order Execution"
+
+    };
+
+    try {
+      console.log("Sengin to n8n")
+      await axios.post(
+        "https://shashankjanagam.app.n8n.cloud/webhook/3714732e-5a5e-4934-ae3f-136680443064",
+        webhookData
+      );
+    } catch (webhookErr) {
+      console.error("Webhook notification failed:", webhookErr.message);
+    }
 
     res.json({
       status: "EXECUTED",

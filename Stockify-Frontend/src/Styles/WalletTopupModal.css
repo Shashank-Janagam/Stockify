@@ -1,0 +1,556 @@
+/* ═══════════════════════════════════════════════════
+   WALLET TOPUP MODAL — Razorpay-style Landscape Layout
+═══════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* Backdrop */
+.wtm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(10, 15, 28, 0.72);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: wtm-bg-in 0.2s ease-out both;
+}
+
+@keyframes wtm-bg-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── MODAL SHELL (landscape) ── */
+.wtm-modal {
+  display: flex;
+  width: 800px;
+  max-width: calc(100vw - 32px);
+  min-height: 480px;
+  height: auto;
+  max-height: calc(100vh - 40px);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow:
+    0 40px 100px rgba(0,0,0,0.35),
+    0 12px 32px rgba(0,0,0,0.18);
+  animation: wtm-slide-in 0.38s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  font-family: 'Inter', system-ui, sans-serif;
+  position: relative;
+}
+
+@keyframes wtm-slide-in {
+  from { opacity: 0; transform: scale(0.88) translateY(30px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
+}
+
+/* ════════════════════════════════
+   LEFT PANEL — Dark brand sidebar
+════════════════════════════════ */
+.wtm-left {
+  width: 260px;
+  flex-shrink: 0;
+  background: linear-gradient(160deg, #0d1b2a 0%, #1a2c45 60%, #0f2035 100%);
+  display: flex;
+  flex-direction: column;
+  padding: 32px 28px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Decorative glowing orbs */
+.wtm-left::before {
+  content: '';
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 70%);
+  top: -40px;
+  right: -40px;
+  pointer-events: none;
+}
+
+.wtm-left::after {
+  content: '';
+  position: absolute;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+  bottom: 20px;
+  left: -30px;
+  pointer-events: none;
+}
+
+/* Brand */
+.wtm-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+
+.wtm-brand-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(16,185,129,0.4);
+  flex-shrink: 0;
+}
+
+.wtm-brand-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+}
+
+.wtm-brand-sub {
+  font-size: 10.5px;
+  color: rgba(255,255,255,0.4);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  margin-top: 1px;
+}
+
+/* Amount on left panel */
+.wtm-left-amount {
+  margin-bottom: 28px;
+}
+
+.wtm-left-amount-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 6px;
+}
+
+.wtm-left-amount-value {
+  font-size: 36px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.wtm-left-amount-value .wtm-currency {
+  font-size: 22px;
+  font-weight: 600;
+  vertical-align: super;
+  margin-right: 2px;
+  color: rgba(255,255,255,0.7);
+}
+
+/* Verdict pills on left */
+.wtm-left-pills {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: auto;
+}
+
+.wtm-left-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.75);
+  transition: all 0.3s ease;
+}
+
+.wtm-left-pill.allow  { border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.1); color: #6ee7b7; }
+.wtm-left-pill.warn   { border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.1); color: #fcd34d; }
+.wtm-left-pill.block  { border-color: rgba(239,68,68,0.35);  background: rgba(239,68,68,0.1);  color: #fca5a5; }
+.wtm-left-pill.loading { animation: wtm-pill-shimmer 1.5s ease infinite; }
+
+@keyframes wtm-pill-shimmer {
+  0%,100% { opacity: 0.4; }
+  50%      { opacity: 0.9; }
+}
+
+.wtm-left-pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.wtm-left-pill.loading .wtm-left-pill-dot {
+  animation: wtm-blink 1.1s ease-in-out infinite;
+}
+
+.wtm-left-pill.loading:nth-child(2) .wtm-left-pill-dot {
+  animation-delay: 0.4s;
+}
+
+@keyframes wtm-blink {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.15; }
+}
+
+/* Limit Details section on Left Panel */
+.wtm-left-limit {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed rgba(255,255,255,0.15);
+  animation: wtm-result-in 0.4s ease-out both;
+}
+
+.wtm-left-limit-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
+  margin-bottom: 4px;
+}
+
+.wtm-left-limit-value {
+  font-size: 19px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 2px;
+}
+
+.wtm-left-limit-tier {
+  font-size: 11px;
+  color: #6ee7b7;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.wtm-left-winrates {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wtm-left-winrate-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+}
+
+.wtm-left-winrate-row span.val {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* Footer lock */
+.wtm-left-footer {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wtm-left-footer-text {
+  font-size: 10.5px;
+  color: rgba(255,255,255,0.3);
+  line-height: 1.4;
+}
+
+/* ════════════════════════════════
+   RIGHT PANEL — Content area
+════════════════════════════════ */
+.wtm-right {
+  flex: 1;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Top accent bar */
+.wtm-right-bar {
+  height: 3px;
+  background: linear-gradient(90deg, #10b981, #6366f1, #f59e0b, #10b981);
+  background-size: 300% 100%;
+  animation: wtm-bar-flow 3s linear infinite;
+}
+
+@keyframes wtm-bar-flow {
+  from { background-position: 0% 0; }
+  to   { background-position: 300% 0; }
+}
+
+/* Header row */
+.wtm-right-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 16px 20px 0;
+}
+
+.wtm-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+.wtm-close-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+/* Content body */
+.wtm-right-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 36px 24px;
+  text-align: center;
+}
+
+/* ── LOADING ── */
+.wtm-loading-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.wtm-brain-container {
+  width: 76px;
+  height: 76px;
+  position: relative;
+  margin-bottom: 18px;
+}
+
+.wtm-brain-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: #10b981;
+  border-right-color: #6366f1;
+  animation: wtm-spin 1.1s linear infinite;
+}
+
+.wtm-brain-ring-2 {
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-bottom-color: #f59e0b;
+  border-left-color: #10b981;
+  animation: wtm-spin 0.8s linear infinite reverse;
+}
+
+@keyframes wtm-spin { to { transform: rotate(360deg); } }
+
+.wtm-brain-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  animation: wtm-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes wtm-pulse {
+  0%,100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(0.88); opacity: 0.7; }
+}
+
+.wtm-loading-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 6px;
+  letter-spacing: -0.3px;
+}
+
+.wtm-loading-sub {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.55;
+  max-width: 260px;
+}
+
+/* ── RESULT SCREENS ── */
+.wtm-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  animation: wtm-result-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes wtm-result-in {
+  from { opacity: 0; transform: scale(0.82) translateY(10px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
+}
+
+.wtm-result-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  margin-bottom: 14px;
+}
+
+.wtm-icon-approve { background: linear-gradient(135deg,#d1fae5,#a7f3d0); box-shadow: 0 8px 24px rgba(16,185,129,0.25); }
+.wtm-icon-warn    { background: linear-gradient(135deg,#fef3c7,#fde68a); box-shadow: 0 8px 24px rgba(245,158,11,0.25); }
+.wtm-icon-reject  { background: linear-gradient(135deg,#fee2e2,#fecaca); box-shadow: 0 8px 24px rgba(239,68,68,0.25); }
+
+.wtm-result-title {
+  font-size: 21px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 6px;
+  letter-spacing: -0.4px;
+}
+
+.wtm-result-sub {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.55;
+  margin-bottom: 16px;
+  max-width: 290px;
+}
+
+/* AI advice */
+.wtm-advice {
+  width: 100%;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.wtm-advice-approve { background: #f0fdf4; border: 1px solid #bbf7d0; }
+.wtm-advice-warn    { background: #fffbeb; border: 1px solid #fde68a; }
+.wtm-advice-reject  { background: #fff1f2; border: 1px solid #fecdd3; }
+
+.wtm-advice-emoji { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.wtm-advice-text  { font-size: 12.5px; color: #374151; line-height: 1.55; font-style: italic; }
+
+/* Buttons */
+.wtm-btn-group {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.wtm-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 11px;
+  border: none;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  letter-spacing: 0.01em;
+}
+
+.wtm-btn:active { transform: scale(0.97); }
+
+.wtm-btn-primary {
+  background: linear-gradient(135deg,#10b981,#059669);
+  color: white;
+  box-shadow: 0 4px 14px rgba(16,185,129,0.35);
+}
+.wtm-btn-primary:hover { box-shadow: 0 6px 20px rgba(16,185,129,0.45); transform: translateY(-1px); }
+.wtm-btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.wtm-btn-amber {
+  background: linear-gradient(135deg,#f59e0b,#d97706);
+  color: white;
+  box-shadow: 0 4px 14px rgba(245,158,11,0.3);
+}
+.wtm-btn-amber:hover { box-shadow: 0 6px 20px rgba(245,158,11,0.4); transform: translateY(-1px); }
+
+.wtm-btn-ghost {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+.wtm-btn-ghost:hover { background: #f1f5f9; }
+
+/* Confirming spinner */
+.wtm-confirming {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.wtm-mini-spin {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid #e2e8f0;
+  border-top-color: #10b981;
+  animation: wtm-spin 0.8s linear infinite;
+}
+
+/* ── RESPONSIVE: stack on mobile ── */
+@media (max-width: 600px) {
+  .wtm-modal {
+    flex-direction: column;
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    max-height: calc(100vh - 24px);
+    border-radius: 20px 20px 16px 16px;
+  }
+
+  .wtm-left {
+    width: 100%;
+    padding: 20px 24px;
+    min-height: unset;
+  }
+
+  .wtm-left::before, .wtm-left::after { display: none; }
+
+  .wtm-left-amount { margin-bottom: 12px; }
+  .wtm-left-amount-value { font-size: 28px; }
+  .wtm-left-pills { flex-direction: row; flex-wrap: wrap; }
+  .wtm-left-footer { display: none; }
+
+  .wtm-right-body { padding: 16px 24px 24px; }
+  .wtm-btn-group { flex-direction: column; }
+}

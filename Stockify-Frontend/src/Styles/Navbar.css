@@ -10,13 +10,13 @@
   position: fixed;
   top: 0;
   width: 100%;
-  height:4rem;              /* 72px */
+  height: 4rem;              /* 72px */
   background: #ffffff;
   z-index: 1000;
-  gap: 26rem;
   display: flex;
   justify-content: center;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont;
+  border-bottom: 1px solid #efefef;
 }
 
 /* INNER CONTAINER (LOCK WIDTH) */
@@ -24,6 +24,7 @@
   width: 100%;
   max-width: 90rem;            /* 1440px */
   padding: 0 2rem;             /* 32px */
+  height: 100%;
     
   display: flex;
   align-items: center;
@@ -35,20 +36,22 @@
   display: flex;
   align-items: center;
   gap: 2.25rem; 
-  width: 30rem;               /* 36px */
+  width: auto;
 }
 
 /* LOGO */
 .logo {
   display: flex;
   align-items: center;
-  gap: 0.625rem;               /* 10px */
+  gap: 0.25rem;               /* 4px */
 }
 
 .logo-icon {
-  width: 2.5rem;                 /* 32px */
+  width: 3.5rem;
   height: auto;
   border-radius: 10%;
+  margin-right: -1.25rem;
+  margin-bottom: 0.3rem;       /* offset whitespace in logo image */
 }
 
 .logo-text {
@@ -335,7 +338,152 @@
   font-size: 16px;
 }
 
+/* --- Profile Mobile Section --- */
+.profile-mobile-section {
+  padding: 14px 18px;
+  background: #f7f9fa;
+  margin: 12px 18px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 
+.profile-mobile-label {
+  font-size: 12px;
+  color: #7a7a7a;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.profile-mobile-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.profile-mobile-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #222;
+}
+
+.profile-mobile-placeholder {
+  color: #aaa;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.profile-mobile-btn {
+  background: transparent;
+  border: none;
+  color: #00b386;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0;
+  text-decoration: none;
+}
+
+.profile-mobile-btn:hover {
+  text-decoration: underline;
+}
+
+.profile-mobile-input-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.profile-mobile-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #dcdcdc;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  background: white;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+
+.profile-mobile-input:focus {
+  border-color: #00b386;
+}
+
+.profile-mobile-save-btn {
+  background: #00b386;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.profile-mobile-save-btn:hover {
+  background: #009f78;
+}
+
+.profile-mobile-cancel-btn {
+  background: #e4e7ec;
+  color: #333;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.profile-mobile-cancel-btn:hover {
+  background: #d1d5db;
+}
+
+.profile-mobile-hint {
+  font-size: 12px;
+  color: #7a7a7a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.profile-mobile-hint .dot {
+  color: #00b386;
+  font-size: 10px;
+}
+
+
+
+
+
+/* ======================================
+   MEDIUM SCREENS (768px < width <= 1200px)
+   ====================================== */
+@media (min-width: 768px) and (max-width: 1200px) {
+  .nav-inner {
+    padding: 0 1.5rem;
+  }
+  
+  .nav-left {
+    gap: 1.5rem;
+  }
+
+  .main-tabs {
+    gap: 1.25rem;
+  }
+
+  .search-box {
+    width: 12rem;
+  }
+}
 
 /* ======================================
    MOBILE NAVBAR (≤ 768px)
@@ -365,7 +513,8 @@
   }
 
   .logo-icon {
-    width: 28px;
+    width: 36px;
+    margin-right: -8px;       /* offset whitespace on mobile */
   }
 
   /* 🔥 HIDE MAIN TABS (MOBILE UX RULE) */

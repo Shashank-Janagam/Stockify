@@ -19,7 +19,7 @@ const CustomerSupport = () => {
         {/* Intro */}
         <div className="policy-intro">
           <p>
-            Have a question, concern, or issue with your <strong>Stockify</strong> account? Our support
+            Have a question, concern, or issue with your <strong>PaperBull</strong> account? Our support
             team is always available to help. Reach out to us through any of the channels below and we
             will get back to you as quickly as possible.
           </p>
@@ -43,8 +43,8 @@ const CustomerSupport = () => {
             <div className="support-contact-icon">🌐</div>
             <div className="support-contact-label">Website</div>
             <div className="support-contact-value">
-              <a href="https://stockifyindia.shop" target="_blank" rel="noreferrer">
-                stockifyindia.shop
+              <a href="https://paperbullindia.shop" target="_blank" rel="noreferrer">
+                paperbullindia.shop
               </a>
             </div>
             <p className="support-contact-note">
@@ -107,7 +107,7 @@ const CustomerSupport = () => {
             </div>
 
             <div className="support-faq-item">
-              <div className="support-faq-q">Is Stockify safe? How is my data handled?</div>
+              <div className="support-faq-q">Is PaperBull safe? How is my data handled?</div>
               <div className="support-faq-a">
                 Absolutely. All data is encrypted via TLS, and authentication is powered by Firebase.
                 Read our full <Link to="/privacy-policy">Privacy Policy</Link> for complete details.

@@ -11,18 +11,18 @@ const Disclaimer = () => {
           <div className="policy-badge">Legal</div>
           <h1 className="policy-title">Disclaimer</h1>
           <p className="policy-meta">
-            Last updated: <span>{lastUpdated}</span> · Important — please read before using Stockify
+            Last updated: <span>{lastUpdated}</span> · Important — please read before using PaperBull
           </p>
         </div>
 
         <div className="policy-intro">
           <p>
             This Disclaimer applies to all content, features, services, and information provided on the
-            Stockify platform at{" "}
-            <a href="https://stockifyindia.shop" target="_blank" rel="noreferrer">
-              stockifyindia.shop
+            PaperBull platform at{" "}
+            <a href="https://paperbullindia.shop" target="_blank" rel="noreferrer">
+              paperbullindia.shop
             </a>
-            . By accessing or using Stockify, you acknowledge and agree to the limitations described
+            . By accessing or using PaperBull, you acknowledge and agree to the limitations described
             below.
           </p>
         </div>
@@ -30,17 +30,17 @@ const Disclaimer = () => {
         <section className="policy-section">
           <h2>1. No Financial, Investment, or Legal Advice</h2>
           <div className="policy-highlight-box danger">
-            <strong>⚠️ Stockify is NOT a financial advisor, broker, or investment platform.</strong>
+            <strong>⚠️ PaperBull is NOT a financial advisor, broker, or investment platform.</strong>
             <p>
-              Nothing on Stockify — including market data, stock charts, portfolio analysis, AI-generated
+              Nothing on PaperBull — including market data, stock charts, portfolio analysis, AI-generated
               insights, order history, or any other content — constitutes financial advice, investment
               advice, trading advice, legal advice, or any other type of professional advice.
             </p>
           </div>
           <p>
-            All information on Stockify is provided <strong>for educational and entertainment purposes
+            All information on PaperBull is provided <strong>for educational and entertainment purposes
             only</strong>. You should not make real-world financial decisions based on any content,
-            analysis, or simulated results provided by Stockify.
+            analysis, or simulated results provided by PaperBull.
           </p>
           <p>
             For real investment decisions, please consult with a qualified financial advisor who is
@@ -52,7 +52,7 @@ const Disclaimer = () => {
           <h2>2. Simulated Trading Environment</h2>
           <ul>
             <li>
-              Stockify operates an entirely <strong>simulated (paper) trading environment</strong>. All
+              PaperBull operates an entirely <strong>simulated (paper) trading environment</strong>. All
               portfolio values, gains, losses, and order executions are virtual and fictional.
             </li>
             <li>
@@ -61,7 +61,7 @@ const Disclaimer = () => {
               markets differ significantly.
             </li>
             <li>
-              Past virtual performance shown on Stockify is not indicative of future real-world results.
+              Past virtual performance shown on PaperBull is not indicative of future real-world results.
             </li>
           </ul>
         </section>
@@ -70,7 +70,7 @@ const Disclaimer = () => {
           <h2>3. Market Data Accuracy</h2>
           <ul>
             <li>
-              Stock prices, indices, charts, and other market data displayed on Stockify are sourced from
+              Stock prices, indices, charts, and other market data displayed on PaperBull are sourced from
               third-party APIs and market data providers. This data may be delayed, inaccurate, or
               incomplete.
             </li>
@@ -100,20 +100,20 @@ const Disclaimer = () => {
             <li>AI insights are generated based on patterns in available data and do not reflect expert human financial analysis.</li>
             <li>We do not review or validate individual AI responses for accuracy.</li>
             <li>AI-generated content should be treated as a starting point for your own research, not as definitive guidance.</li>
-            <li>Stockify, its owners, and its AI providers are not responsible for decisions made based on AI-generated content.</li>
+            <li>PaperBull, its owners, and its AI providers are not responsible for decisions made based on AI-generated content.</li>
           </ul>
         </section>
 
         <section className="policy-section">
           <h2>5. Third-Party Links &amp; Services</h2>
           <p>
-            Stockify integrates with and may link to third-party services including Google Firebase,
+            PaperBull integrates with and may link to third-party services including Google Firebase,
             Razorpay, market data providers, and others. We are not responsible for:
           </p>
           <ul>
             <li>The content, accuracy, or privacy practices of third-party websites or services.</li>
-            <li>Interruptions or outages in third-party services that affect Stockify's functionality.</li>
-            <li>Any harm or loss caused by your use of third-party services linked from Stockify.</li>
+            <li>Interruptions or outages in third-party services that affect PaperBull's functionality.</li>
+            <li>Any harm or loss caused by your use of third-party services linked from PaperBull.</li>
           </ul>
         </section>
 
@@ -121,7 +121,7 @@ const Disclaimer = () => {
           <h2>6. Service Availability</h2>
           <ul>
             <li>
-              We do not guarantee that Stockify will be available at all times. The Platform may be
+              We do not guarantee that PaperBull will be available at all times. The Platform may be
               subject to downtime for maintenance, updates, or due to circumstances beyond our control.
             </li>
             <li>
@@ -138,7 +138,7 @@ const Disclaimer = () => {
         <section className="policy-section">
           <h2>7. Limitation of Liability</h2>
           <p>
-            To the maximum extent permitted by applicable law, Stockify India, its founders, employees,
+            To the maximum extent permitted by applicable law, PaperBull India, its founders, employees,
             and affiliates shall not be liable for any:
           </p>
           <ul>
@@ -157,12 +157,12 @@ const Disclaimer = () => {
         <section className="policy-section">
           <h2>8. SEBI Compliance Notice</h2>
           <p>
-            Stockify is <strong>not registered with or regulated by the Securities and Exchange Board
+            PaperBull is <strong>not registered with or regulated by the Securities and Exchange Board
             of India (SEBI)</strong> as a stockbroker, investment advisor, or any other registered
             intermediary.
           </p>
           <p>
-            All trading activities on Stockify are purely simulated and do not involve real financial
+            All trading activities on PaperBull are purely simulated and do not involve real financial
             instruments. If you intend to invest real money in the stock market, you must use a
             SEBI-registered broker. Visit the{" "}
             <a href="https://www.sebi.gov.in" target="_blank" rel="noreferrer">
@@ -175,7 +175,7 @@ const Disclaimer = () => {
         <section className="policy-section">
           <h2>9. Indemnification</h2>
           <p>
-            By using Stockify, you agree to indemnify and hold harmless Stockify India and its
+            By using PaperBull, you agree to indemnify and hold harmless PaperBull India and its
             associates from any claims, damages, losses, or expenses (including legal fees) arising
             from:
           </p>
@@ -189,7 +189,7 @@ const Disclaimer = () => {
         <section className="policy-section">
           <h2>10. Acknowledgement</h2>
           <p>
-            By using Stockify, you acknowledge that you have read and understood this Disclaimer, and
+            By using PaperBull, you acknowledge that you have read and understood this Disclaimer, and
             that you agree with and accept its terms. If you do not agree with any part of this
             Disclaimer, please discontinue use of the Platform immediately.
           </p>
@@ -199,9 +199,9 @@ const Disclaimer = () => {
           <h2>11. Contact</h2>
           <p>If you have questions about this Disclaimer, please contact us:</p>
           <div className="policy-contact-card">
-            <div><strong>Stockify India</strong></div>
+            <div><strong>PaperBull India</strong></div>
             <div>Email: <a href="mailto:shashankjanagam04@gmail.com">shashankjanagam04@gmail.com</a></div>
-            <div>Website: <a href="https://stockifyindia.shop" target="_blank" rel="noreferrer">stockifyindia.shop</a></div>
+            <div>Website: <a href="https://paperbullindia.shop" target="_blank" rel="noreferrer">paperbullindia.shop</a></div>
           </div>
         </section>
 

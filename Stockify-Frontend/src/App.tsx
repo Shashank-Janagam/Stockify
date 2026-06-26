@@ -1,9 +1,9 @@
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import NavBar from "./components/Navbar.tsx";
-import LoginModal from "./components/LoginModule.tsx";
-import CookieConsent from "./components/CookieConsent.tsx";
-import Footer from "./components/Footer.tsx";
+import NavBar from "./components/layout/Navbar.tsx";
+import LoginModal from "./components/auth/LoginModule.tsx";
+import CookieConsent from "./components/layout/CookieConsent.tsx";
+import Footer from "./components/layout/Footer.tsx";
 import HomePage from "./pages/HomePage.tsx";
 import "./App.css";
 import ProtectedRoute from "./auth/ProtectedRoute.tsx";
@@ -13,14 +13,14 @@ import FundsPage from "./pages/FundsPage.tsx";
 import { ExploreSSEProvider } from "./context/ExploreSSEContext";
 import { WebSocketProvider } from "./context/WebSocketContext";
 import Portfolio from "./pages/Portfolio.tsx";
-import SetPassword from "./components/SetPassword.tsx";
+import SetPassword from "./components/auth/SetPassword.tsx";
 import PrivacyPolicy from "./pages/PrivacyPolicy.tsx";
 import TermsAndConditions from "./pages/TermsAndConditions.tsx";
 import CookiePolicy from "./pages/CookiePolicy.tsx";
 import Disclaimer from "./pages/Disclaimer.tsx";
 import CustomerSupport from "./pages/CustomerSupport.tsx";
-
-
+import NewsPage from "./pages/NewsPage.tsx";
+import { PortfolioThemeProvider } from "./context/PortfolioThemeContext";
 
 /* ---------------- TITLE MANAGER ---------------- */
 
@@ -28,23 +28,24 @@ const RouteTitleManager = () => {
   const location = useLocation();
 
   useEffect(() => {
-    if (location.pathname.startsWith("/indiaSEE/")) {
-      document.title = "Stockify | Stock Details";
+    if (location.pathname.startsWith("/stocks/")) {
+      document.title = "PaperBull | Stock Details";
       return;
     }
 
     const routeTitles: Record<string, string> = {
-      "/": "Stockify | Home",
-      "/dashboard": "Stockify | Dashboard",
-      "/user/balance": "Stockify | Funds",
-      "/privacy-policy": "Stockify | Privacy Policy",
-      "/terms": "Stockify | Terms & Conditions",
-      "/cookie-policy": "Stockify | Cookie Policy",
-      "/disclaimer": "Stockify | Disclaimer",
-      "/support": "Stockify | Customer Support",
+      "/": "PaperBull | Home",
+      "/dashboard": "PaperBull | Dashboard",
+      "/user/balance": "PaperBull | Funds",
+      "/news": "PaperBull | News & Announcements",
+      "/privacy-policy": "PaperBull | Privacy Policy",
+      "/terms": "PaperBull | Terms & Conditions",
+      "/cookie-policy": "PaperBull | Cookie Policy",
+      "/disclaimer": "PaperBull | Disclaimer",
+      "/support": "PaperBull | Customer Support",
     };
 
-    document.title = routeTitles[location.pathname] ?? "Stockify";
+    document.title = routeTitles[location.pathname] ?? "PaperBull";
   }, [location.pathname]);
 
   return null;
@@ -68,78 +69,81 @@ const App = () => {
   }, []);
 
   return (
-    <BrowserRouter>
-      <WebSocketProvider>
-        <ExploreSSEProvider> {/* 🔥 PERSISTENT SSE */}
-          <RouteTitleManager />
-          
-          <CookieConsent />
+    <PortfolioThemeProvider>
+      <BrowserRouter>
+        <WebSocketProvider>
+          <ExploreSSEProvider> {/* 🔥 PERSISTENT SSE */}
+            <RouteTitleManager />
 
-          <NavBar onLoginClick={() => setShowLogin(true)} />
+            <CookieConsent />
 
-          {showLogin && (
-            <LoginModal onClose={() => setShowLogin(false)} />
-          )}
+            <NavBar onLoginClick={() => setShowLogin(true)} />
 
-          <div className="page-content">
-            <Routes>
-              <Route
-                path="/"
-                element={<HomePage onLoginClick={() => setShowLogin(true)} />}
-              />
+            {showLogin && (
+              <LoginModal onClose={() => setShowLogin(false)} />
+            )}
 
-              <Route
-                path="/indiaSEE/:symbol/:name"
-                element={<StockPageSSE onLoginClick={() => setShowLogin(true)} />}
-              />
+            <div className="page-content">
+              <Routes>
+                <Route
+                  path="/"
+                  element={<HomePage onLoginClick={() => setShowLogin(true)} />}
+                />
 
-              <Route
-                path="/user/balance"
-                element={
-                  <ProtectedRoute>
-                    <FundsPage />
-                  </ProtectedRoute>
-                }
-              />
+                <Route
+                  path="/stocks/:symbol/:name"
+                  element={<StockPageSSE onLoginClick={() => setShowLogin(true)} />}
+                />
 
-              <Route
-                path="/portfolio"
-                element={
-                  <ProtectedRoute>
-                    <Portfolio />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/set-password"
-                element={
-                  <ProtectedRoute>
-                    <SetPassword />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
+                <Route
+                  path="/user/balance"
+                  element={
+                    <ProtectedRoute>
+                      <FundsPage />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* ---- Policy Pages ---- */}
-              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-              <Route path="/terms" element={<TermsAndConditions />} />
-              <Route path="/cookie-policy" element={<CookiePolicy />} />
-              <Route path="/disclaimer" element={<Disclaimer />} />
-              <Route path="/support" element={<CustomerSupport />} />
+                <Route
+                  path="/portfolio"
+                  element={
+                    <ProtectedRoute>
+                      <Portfolio />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/set-password"
+                  element={
+                    <ProtectedRoute>
+                      <SetPassword />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
 
-            </Routes>
-          </div>
-          <Footer />
-        </ExploreSSEProvider>
-      </WebSocketProvider>
-    </BrowserRouter>
+                {/* ---- Policy Pages ---- */}
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<TermsAndConditions />} />
+                <Route path="/cookie-policy" element={<CookiePolicy />} />
+                <Route path="/disclaimer" element={<Disclaimer />} />
+                <Route path="/support" element={<CustomerSupport />} />
+                <Route path="/news" element={<NewsPage />} />
+
+              </Routes>
+            </div>
+            <Footer />
+          </ExploreSSEProvider>
+        </WebSocketProvider>
+      </BrowserRouter>
+    </PortfolioThemeProvider>
   );
 };
 

@@ -1,27 +1,27 @@
-import "../Styles/HomePage.css"
-import homeimage from "../assets/homepage.png"
-import {useContext} from "react"
+﻿import "../Styles/HomePage.css"
+import homeimage from "../assets/logos/bull bgl.png"
+import { useContext } from "react"
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../auth/AuthProvider";
 
-import { AuthContext } from "../auth/AuthProvider";interface HomePageProps {
+interface HomePageProps {
   onLoginClick: () => void;
 }
-const HomePage=({ onLoginClick }: HomePageProps)=>{
-  // const [token, setToken] = useState<string | null>(null);
-    const { user } = useContext(AuthContext);
-    const navigate=useNavigate()
-    
-    function getStarted(){
-      if(user){
-        navigate("/dashboard");
-      }else{
-        onLoginClick();
-      }
+
+const HomePage = ({ onLoginClick }: HomePageProps) => {
+  const { user } = useContext(AuthContext);
+  const navigate = useNavigate();
+  
+  function getStarted() {
+    if (user) {
+      navigate("/dashboard");
+    } else {
+      onLoginClick();
     }
-  
-  
- return (
- <main className="home">
+  }
+
+  return (
+    <main className="home">
       {/* HERO CONTENT */}
       <section className="hero">
         <h1 className="hero-title">Trade. Learn. Repeat.</h1>
@@ -32,7 +32,6 @@ const HomePage=({ onLoginClick }: HomePageProps)=>{
 
       {/* ILLUSTRATION SECTION */}
       <section className="hero-illustration">
-        {/* You can replace this with an SVG or image later */}
         <img src={homeimage} alt="Investment illustration" />
       </section>
     
@@ -43,9 +42,6 @@ const HomePage=({ onLoginClick }: HomePageProps)=>{
       </section>
     </main>
   );
-   
-}
+};
 
-
-
-export default HomePage
+export default HomePage;

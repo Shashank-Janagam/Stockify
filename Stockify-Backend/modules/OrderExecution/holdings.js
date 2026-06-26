@@ -33,56 +33,105 @@ export async function fetchHoldings(userId) {
     FROM positions p
     JOIN stocks s ON p.stock_id = s.id
     WHERE p.user_id = $1
-      AND p.status = 'OPEN'
+      AND (p.status = 'OPEN' OR (p.status = 'CLOSED' AND p.updated_at >= CURRENT_DATE AT TIME ZONE 'Asia/Kolkata'))
       AND p.sell_type = 'Delivery'
-    GROUP BY s.symbol, s.stock_name, s.id
-    HAVING SUM(p.remaining_quantity) > 0`,
+    GROUP BY s.symbol, s.stock_name, s.id`,
     [userId]
   );
   return positions;
 }
 
-export async function computeHoldingsPayload(holdings) {
-  if (holdings.length === 0) {
+export async function computeHoldingsPayload(holdings, userId) {
+  let tradesMap = {};
+  if (userId) {
+    try {
+      const { rows: tradesToday } = await db.query(
+        `SELECT s.symbol, t.side, t.quantity, t.price
+         FROM trades t
+         JOIN stocks s ON t.stock_id = s.id
+         WHERE t.user_id = $1 AND t.created_at >= CURRENT_DATE AT TIME ZONE 'Asia/Kolkata'`,
+        [userId]
+      );
+      tradesToday.forEach(t => {
+        if (!tradesMap[t.symbol]) {
+          tradesMap[t.symbol] = { boughtQty: 0, boughtValue: 0, soldQty: 0, soldValue: 0 };
+        }
+        const qty = Number(t.quantity);
+        const val = qty * Number(t.price);
+        if (t.side === 'BUY') {
+          tradesMap[t.symbol].boughtQty += qty;
+          tradesMap[t.symbol].boughtValue += val;
+        } else if (t.side === 'SELL') {
+          tradesMap[t.symbol].soldQty += qty;
+          tradesMap[t.symbol].soldValue += val;
+        }
+      });
+    } catch (err) {
+      console.error("Error fetching tradesToday for holdings:", err);
+    }
+  }
+
+  // Combine symbols
+  const allSymbols = [...new Set([
+    ...holdings.map(r => r.symbol),
+    ...Object.keys(tradesMap)
+  ])];
+
+  if (allSymbols.length === 0) {
     return {
       summary: { investedValue: 0, currentValue: 0, totalReturns: 0, totalReturnsPercent: 0, dayReturns: 0, dayReturnsPercent: 0 },
       holdings: []
     };
   }
 
-  const symbols = holdings.map(r => r.symbol);
-  const quotesRaw = await yahoo.quote(symbols);
+  const quotesRaw = await yahoo.quote(allSymbols.map(s => s.endsWith(".NS") ? s : `${s}.NS`));
   const quotes = Array.isArray(quotesRaw) ? quotesRaw : [quotesRaw];
   const quoteMap = {};
   quotes.forEach(q => { if (q?.symbol) quoteMap[q.symbol] = q; });
 
   let investedValue = 0, currentValue = 0, dayReturns = 0;
-  const enriched = holdings.map(pos => {
-    const symbol = pos.symbol;
-    const qty = Number(pos.quantity);
-    const avg = Number(pos.avg_price);
+  const enriched = [];
+
+  allSymbols.forEach(symbol => {
+    const pos = holdings.find(r => r.symbol === symbol);
+    const qty = pos ? Number(pos.quantity) : 0;
+    const avg = pos ? Number(pos.avg_price) : 0;
     const quote = quoteMap[symbol] || quoteMap[`${symbol}.NS`];
     const ltp = quote?.regularMarketPrice ?? 0;
     const dayChangePerc = quote?.regularMarketChangePercent ?? 0;
     const dayChange = quote?.regularMarketChange ?? 0;
+    const prevClose = quote?.regularMarketPreviousClose ?? (ltp - dayChange);
 
     const invested = qty * avg;
     const current = qty * ltp;
     const pnl = current - invested;
 
+    const tr = tradesMap[symbol] || { boughtQty: 0, boughtValue: 0, soldQty: 0, soldValue: 0 };
+    const qtyYesterday = Math.max(0, qty - tr.boughtQty + tr.soldQty);
+
+    let todayPnl;
+    if (userId) {
+      todayPnl = (current + tr.soldValue) - (qtyYesterday * prevClose + tr.boughtValue);
+    } else {
+      todayPnl = qty * dayChange;
+    }
+
     investedValue += invested;
     currentValue += current;
-    dayReturns += qty * dayChange;
+    dayReturns += todayPnl;
 
-    return {
-      symbol, name: pos.name, datetime: pos.created_at, quantity: qty,
-      avgPrice: avg,
-      currentPrice: ltp, dayChangePercent: Number(dayChangePerc.toFixed(2)),
-      invested: Number(invested.toFixed(2)), current: Number(current.toFixed(2)),
-      pnl: Number(pnl.toFixed(2)), pnlPercent: invested > 0 ? Number(((pnl / invested) * 100).toFixed(2)) : 0,
-      allocatedQty: Number(pos.allocated_qty || 0),
-      stopLoss: pos.stop_loss ? Number(pos.stop_loss) : null
-    };
+    if (qty > 0) {
+      enriched.push({
+        symbol, name: pos ? pos.name : (quote?.shortName || quote?.longName || symbol), datetime: pos ? pos.created_at : new Date().toISOString(), quantity: qty,
+        avgPrice: avg,
+        currentPrice: ltp, dayChangePercent: Number(dayChangePerc.toFixed(2)),
+        invested: Number(invested.toFixed(2)), current: Number(current.toFixed(2)),
+        pnl: Number(pnl.toFixed(2)), pnlPercent: invested > 0 ? Number(((pnl / invested) * 100).toFixed(2)) : 0,
+        allocatedQty: pos ? Number(pos.allocated_qty || 0) : 0,
+        stopLoss: pos && pos.stop_loss ? Number(pos.stop_loss) : null,
+        dayReturns: Number(todayPnl.toFixed(2))
+      });
+    }
   });
 
   const totalPnL = currentValue - investedValue;
@@ -129,35 +178,77 @@ export async function fetchDetailedPositions(userId) {
       ) as stop_loss
     FROM positions p
     JOIN stocks s ON p.stock_id = s.id
-    WHERE p.user_id = $1 AND p.status = 'OPEN' AND p.remaining_quantity > 0
+    WHERE p.user_id = $1 
+      AND (p.status = 'OPEN' OR (p.status = 'CLOSED' AND p.updated_at >= CURRENT_DATE AT TIME ZONE 'Asia/Kolkata'))
+      AND p.remaining_quantity >= 0
     ORDER BY p.created_at DESC`,
     [userId]
   );
   return rows;
 }
 
-export async function computePositionsPayload(lots) {
-  if (lots.length === 0) {
+export async function computePositionsPayload(lots, userId) {
+  let tradesMap = {};
+  if (userId) {
+    try {
+      const { rows: tradesToday } = await db.query(
+        `SELECT s.symbol, t.side, t.quantity, t.price
+         FROM trades t
+         JOIN stocks s ON t.stock_id = s.id
+         WHERE t.user_id = $1 AND t.created_at >= CURRENT_DATE AT TIME ZONE 'Asia/Kolkata'`,
+        [userId]
+      );
+      tradesToday.forEach(t => {
+        if (!tradesMap[t.symbol]) {
+          tradesMap[t.symbol] = { boughtQty: 0, boughtValue: 0, soldQty: 0, soldValue: 0 };
+        }
+        const qty = Number(t.quantity);
+        const val = qty * Number(t.price);
+        if (t.side === 'BUY') {
+          tradesMap[t.symbol].boughtQty += qty;
+          tradesMap[t.symbol].boughtValue += val;
+        } else if (t.side === 'SELL') {
+          tradesMap[t.symbol].soldQty += qty;
+          tradesMap[t.symbol].soldValue += val;
+        }
+      });
+    } catch (err) {
+      console.error("Error fetching tradesToday for positions:", err);
+    }
+  }
+
+  // Combine symbols
+  const allSymbols = [...new Set([
+    ...lots.map(l => l.symbol),
+    ...Object.keys(tradesMap)
+  ])];
+
+  if (allSymbols.length === 0) {
     return {
       summary: { investedValue: 0, currentValue: 0, totalReturns: 0, totalReturnsPercent: 0, dayReturns: 0, dayReturnsPercent: 0 },
       positions: []
     };
   }
 
-  const symbols = [...new Set(lots.map(l => l.symbol))];
-  const quotesRaw = await yahoo.quote(symbols);
+  const quotesRaw = await yahoo.quote(allSymbols.map(s => s.endsWith(".NS") ? s : `${s}.NS`));
   const quotes = Array.isArray(quotesRaw) ? quotesRaw : [quotesRaw];
   const quoteMap = {};
   quotes.forEach(q => { if (q?.symbol) quoteMap[q.symbol] = q; });
 
   let investedValue = 0, currentValue = 0, dayReturns = 0;
-  const positions = lots.map(lot => {
+  const positions = [];
+
+  const filteredLots = lots.filter(lot => {
+    const qty = Number(lot.quantity);
+    return qty > 0;
+  });
+
+  filteredLots.forEach(lot => {
     const qty = Number(lot.quantity);
     const entry = Number(lot.entry_price);
     const quote = quoteMap[lot.symbol] || quoteMap[`${lot.symbol}.NS`];
     const ltp = quote?.regularMarketPrice ?? 0;
     const dayChangePerc = quote?.regularMarketChangePercent ?? 0;
-    const dayChange = quote?.regularMarketChange ?? 0;
 
     const invested = qty * entry;
     const current = qty * ltp;
@@ -165,9 +256,8 @@ export async function computePositionsPayload(lots) {
 
     investedValue += invested;
     currentValue += current;
-    dayReturns += qty * dayChange;
 
-    return {
+    positions.push({
       id: lot.id, symbol: lot.symbol, name: lot.name,
       productType: lot.product_type, positionType: lot.position_type,
       quantity: qty, entryPrice: entry, ltp,
@@ -178,7 +268,28 @@ export async function computePositionsPayload(lots) {
       stopLoss: lot.stop_loss ? Number(lot.stop_loss) : null,
       stopLossQty: Number(lot.allocated_qty || 0),
       openedAt: lot.opened_at
-    };
+    });
+  });
+
+  // Calculate dayReturns per symbol
+  allSymbols.forEach(symbol => {
+    const symbolLots = lots.filter(l => l.symbol === symbol);
+    const qty = symbolLots.reduce((sum, l) => sum + Number(l.quantity), 0);
+    const quote = quoteMap[symbol] || quoteMap[`${symbol}.NS`];
+    const ltp = quote?.regularMarketPrice ?? 0;
+    const dayChange = quote?.regularMarketChange ?? 0;
+    const prevClose = quote?.regularMarketPreviousClose ?? (ltp - dayChange);
+
+    const tr = tradesMap[symbol] || { boughtQty: 0, boughtValue: 0, soldQty: 0, soldValue: 0 };
+    const qtyYesterday = Math.max(0, qty - tr.boughtQty + tr.soldQty);
+
+    let todayPnl;
+    if (userId) {
+      todayPnl = (qty * ltp + tr.soldValue) - (qtyYesterday * prevClose + tr.boughtValue);
+    } else {
+      todayPnl = qty * dayChange;
+    }
+    dayReturns += todayPnl;
   });
 
   const totalPnL = currentValue - investedValue;
@@ -219,7 +330,7 @@ router.get("/stocks/stream", async (req, res) => {
     const send = async () => {
       try {
         const holdings = await fetchHoldings(userId);
-        const payload = await computeHoldingsPayload(holdings);
+        const payload = await computeHoldingsPayload(holdings, userId);
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
       } catch (err) { console.error("SSE Error:", err); }
     };
@@ -248,7 +359,7 @@ router.get("/positions/stream", async (req, res) => {
     const send = async () => {
       try {
         const lots = await fetchDetailedPositions(userId);
-        const payload = await computePositionsPayload(lots);
+        const payload = await computePositionsPayload(lots, userId);
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
       } catch (err) { console.error("SSE Pos Error:", err); }
     };

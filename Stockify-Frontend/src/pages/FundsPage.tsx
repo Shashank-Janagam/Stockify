@@ -1,5 +1,5 @@
-import BalanceCard from "../components/BalanceCard";
-import AddMoneyCard from "../components/AddMoneyCard";
+import BalanceCard from "../components/funds/BalanceCard";
+import AddMoneyCard from "../components/funds/AddMoneyCard";
 import "../Styles/funds.css";
 import { useState } from "react";
 export default function FundsPage() {

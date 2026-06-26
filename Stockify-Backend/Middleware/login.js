@@ -1,4 +1,4 @@
-import express from "express"
+﻿import express from "express"
 import admin from "./admin.js"
 const router=express.Router()
 router.post("/", async (req, res) => {
@@ -15,10 +15,11 @@ router.post("/", async (req, res) => {
       .auth()
       .createSessionCookie(token, { expiresIn });
 
+    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("session", sessionCookie, {
       httpOnly: true,
-      secure: true, // CHANGE THIS FOR LOCALHOST
-      sameSite: "none"
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax"
     });
 
     res.send({ status: "logged in" });
