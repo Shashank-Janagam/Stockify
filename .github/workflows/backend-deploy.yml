@@ -2,12 +2,9 @@ name: Deploy Backend to Azure VM
 
 on:
   push:
-    paths:
-      - 'Stockify-Backend/**'
-      - 'AlgoTrading/**'
-      - 'NewsAnalysis/**'
     branches:
       - main
+      - ec2
 
 jobs:
   deploy-backend:
