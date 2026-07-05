@@ -41,7 +41,7 @@ interface CompanyProfileProps {
   companyName: string;
 }
 
-export default function CompanyProfile({ symbol, companyName }: CompanyProfileProps) {
+export default function CompanyProfile({ symbol }: CompanyProfileProps) {
   const [profile, setProfile] = useState<CompanyProfileData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
