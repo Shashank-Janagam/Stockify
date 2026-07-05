@@ -5,7 +5,7 @@ services:
     container_name: stockify-backend
     ports:
       - "4000:4000"
-    restart: always
+    restart: unless-stopped
     env_file:
       - ./Stockify-Backend/.env
     environment:
@@ -17,7 +17,7 @@ services:
     container_name: news-analysis
     ports:
       - "5001:5001"
-    restart: always
+    restart: unless-stopped
     env_file:
       - ./Stockify-Backend/.env
     environment:
@@ -29,7 +29,7 @@ services:
     container_name: intraday-squareoff
     ports:
       - "4001:4001"
-    restart: always
+    restart: unless-stopped
     env_file:
       - ./AlgoTrading/.env
 
@@ -38,17 +38,7 @@ services:
       context: ./AlgoTrading
       dockerfile: stoploss-engine/Dockerfile
     container_name: stoploss-engine
-    restart: always
+    restart: unless-stopped
     env_file:
       - ./AlgoTrading/.env
 
-  nginx:
-    build:
-      context: ./nginx
-    container_name: stockify-nginx
-    ports:
-      - "80:80"
-    restart: always
-    depends_on:
-      - backend
-      - news-analysis
