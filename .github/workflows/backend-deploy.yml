@@ -25,10 +25,13 @@ jobs:
             echo "Pulling latest code..."
             git pull origin main
 
-            echo "Building and starting services via Docker Compose..."
-            docker compose up --build -d
+            echo "Building images..."
+            docker compose build
 
-            echo "Cleaning up unused Docker resources..."
+            echo "Starting services..."
+            docker compose up -d
+
+            echo "Removing unused images..."
             docker image prune -f
 
-            echo "Deployment completed successfully."
+            echo "Deployment completed."
