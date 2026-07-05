@@ -40,35 +40,36 @@ const [isGoogleOnlyUser, setIsGoogleOnlyUser] = useState(false);
              if (data.status === "active") isSessionValid = true;
            }
 
-           // 2. If session invalid (race condition or expired), try to restore it
+           // 2. If session invalid (race condition or expired), try to restore it silently
            if (!isSessionValid) {
-             // console.log("Session missing/inactive. Attempting to restore...");
-              handleLogout();
-              return;
+             console.log("Session missing or inactive. Attempting to restore session...");
+             const idToken = await firebaseUser.getIdToken();
+             const loginRes = await fetch(`${HOST}/api/login`, {
+               method: "POST",
+               headers: {
+                 "Content-Type": "application/json"
+               },
+               credentials: "include",
+               body: JSON.stringify({ token: idToken })
+             });
+             
+             if (loginRes.ok) {
+               isSessionValid = true;
+               console.log("Session successfully restored.");
+             }
            }
 
            // 3. Final decision
            if (isSessionValid) {
-
-              const providers =
-                firebaseUser.providerData.map(p => p.providerId);
-
-              const isGoogle =
-                providers.includes("google.com");
-
-              const hasPassword =
-                providers.includes("password");
-
+              const providers = firebaseUser.providerData.map(p => p.providerId);
+              const isGoogle = providers.includes("google.com");
+              const hasPassword = providers.includes("password");
               setIsGoogleOnlyUser(isGoogle && !hasPassword);
-
               setUser(firebaseUser);
+            } else {
+              console.warn("Failed to restore session. Logging out...");
+              await handleLogout();
             }
-            else {
-              await signOut(auth);
-              setUser(null);
-              setIsGoogleOnlyUser(false);
-
-           }
 
         } catch (error) {
            console.error("Session check failed, proceeding with Firebase user:", error);

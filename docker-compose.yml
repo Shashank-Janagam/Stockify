@@ -10,6 +10,7 @@ services:
       - ./Stockify-Backend/.env
     environment:
       - PYTHON_SERVER_URL=http://news-analysis:5001/api/news
+      - NODE_ENV=production
 
   news-analysis:
     build:

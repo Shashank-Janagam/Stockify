@@ -40,7 +40,7 @@ app.use("/api/webhooks/razorpay", express.raw({ type: "application/json" })
 app.use(
   cors({
     origin: ["http://localhost:5173", "http://localhost:5174", "https://wardless-postmyxedematous-jeneva.ngrok-free.dev",
-      "https://www.stockifyindia.app","stockify-india.vercel.app","https://stockifyindia.app"],
+      "https://www.stockifyindia.app","https://stockify-india.vercel.app","https://stockifyindia.app"],
     // ✅ exact origin
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],
