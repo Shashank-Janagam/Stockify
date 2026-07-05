@@ -75,7 +75,7 @@ const feedbackColor: Record<string, string> = {
   perfect_exit: "var(--pc-green)", late_entry: "var(--pc-blue-bright)"
 };
 
-const Layer8_DailyDigest: React.FC<Props> = ({ holdings, loading }) => {
+const Layer8_DailyDigest: React.FC<Props> = ({ loading }) => {
   const [digest, setDigest] = useState<DigestData | null>(null);
   const [fetching, setFetching] = useState(true);
 

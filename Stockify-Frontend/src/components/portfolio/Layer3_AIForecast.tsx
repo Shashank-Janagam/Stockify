@@ -24,7 +24,6 @@ interface Props {
   loading?: boolean;
 }
 
-const SIGNAL_DUMMY: Record<string, ForecastItem> = {};
 
 function buildDummy(holdings: Holding[]): ForecastItem[] {
   const signals: ("BUY" | "HOLD" | "EXIT")[] = ["HOLD", "BUY", "EXIT", "HOLD", "BUY"];

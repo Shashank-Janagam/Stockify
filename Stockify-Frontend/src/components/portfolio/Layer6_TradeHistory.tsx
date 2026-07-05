@@ -42,7 +42,7 @@ const Layer6_TradeHistory: React.FC<Props> = ({ chartData, orders, loading }) =>
   const avgPnL   = sells.length > 0 ? totalPnL / sells.length : 0;
 
   const streaks = buildStreaks(orders);
-  let curStreak = 0, bestWin = 0, bestLoss = 0, cur = 0, isWin = true;
+  let curStreak = 0, cur = 0, isWin = true;
   for (let i = streaks.length - 1; i >= 0; i--) {
     if (i === streaks.length - 1) { isWin = streaks[i].win; cur = 1; }
     else if (streaks[i].win === isWin) cur++;
