@@ -17,6 +17,8 @@ Key design decisions that guarantee reproducible results
 Run:
     uvicorn server1:app --reload --port 8000
 """
+from dotenv import load_dotenv
+load_dotenv()
 
 import os, json, re, random, logging
 import numpy as np
@@ -48,7 +50,7 @@ log = logging.getLogger("paperbull")
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
-GROQ_API_KEY        = ""
+GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL          = "llama-3.3-70b-versatile"
 SEQUENCE_LEN        = 60          # look-back window for LSTM
 FORECAST_DAYS       = 5           # prediction horizon
@@ -146,9 +148,9 @@ def build_sequences_multi(scaled: np.ndarray, seq_len: int, pred_days: int):
     return np.array(X), np.array(y)
 
 
-def train_and_predict(df: pd.DataFrame) -> dict:
+def train_and_predict(df: pd.DataFrame, symbol: str) -> dict:
     """
-    Train multi-feature LSTM on historical data, predict next FORECAST_DAYS
+    Train multi-feature LSTM on historical data (or load cached model), predict next FORECAST_DAYS
     close prices.  Returns { prices: [...], std_devs: [...] }
     """
     # Re-seed inside function so each call is identical given same data
@@ -171,26 +173,55 @@ def train_and_predict(df: pd.DataFrame) -> dict:
     X_train, X_val = X[:split], X[split:]
     y_train, y_val = y[:split], y[split:]
 
-    model = Sequential([
-        LSTM(64, return_sequences=True,
-             input_shape=(SEQUENCE_LEN, n_features)),
-        Dropout(0.2),
-        LSTM(64, return_sequences=False),
-        Dropout(0.2),
-        Dense(32, activation="relu"),
-        Dense(FORECAST_DAYS),                       # predict 5 days at once
-    ])
-    model.compile(optimizer="adam", loss="mse")
+    cached_model_dir = os.path.join(os.path.dirname(__file__), "cached_models")
+    os.makedirs(cached_model_dir, exist_ok=True)
+    model_path = os.path.join(cached_model_dir, f"{symbol.lower()}_lstm.keras")
 
-    es = EarlyStopping(monitor="val_loss", patience=8,
-                       restore_best_weights=True, verbose=0)
-    model.fit(
-        X_train, y_train,
-        validation_data=(X_val, y_val),
-        epochs=EPOCHS, batch_size=BATCH_SIZE,
-        callbacks=[es], verbose=0,
-        shuffle=False,                              # deterministic
-    )
+    is_fresh = False
+    if os.path.exists(model_path):
+        try:
+            from datetime import datetime
+            mtime = datetime.fromtimestamp(os.path.getmtime(model_path))
+            if mtime.date() == datetime.today().date():
+                is_fresh = True
+        except Exception as e:
+            log.warning(f"Error checking cache freshness for {symbol}: {e}")
+
+    if is_fresh:
+        log.info(f"Loading cached LSTM model for {symbol} from {model_path}...")
+        try:
+            model = tf.keras.models.load_model(model_path)
+        except Exception as e:
+            log.warning(f"Failed to load cached model for {symbol}, falling back to training: {e}")
+            is_fresh = False
+
+    if not is_fresh:
+        log.info(f"Training fresh LSTM model for {symbol}...")
+        model = Sequential([
+            LSTM(64, return_sequences=True,
+                 input_shape=(SEQUENCE_LEN, n_features)),
+            Dropout(0.2),
+            LSTM(64, return_sequences=False),
+            Dropout(0.2),
+            Dense(32, activation="relu"),
+            Dense(FORECAST_DAYS),                       # predict 5 days at once
+        ])
+        model.compile(optimizer="adam", loss="mse")
+
+        es = EarlyStopping(monitor="val_loss", patience=8,
+                           restore_best_weights=True, verbose=0)
+        model.fit(
+            X_train, y_train,
+            validation_data=(X_val, y_val),
+            epochs=EPOCHS, batch_size=BATCH_SIZE,
+            callbacks=[es], verbose=0,
+            shuffle=False,                              # deterministic
+        )
+        try:
+            model.save(model_path)
+            log.info(f"Saved trained LSTM model for {symbol} to {model_path}")
+        except Exception as e:
+            log.warning(f"Failed to save model cache for {symbol}: {e}")
 
     # Predict from the last SEQUENCE_LEN rows (all features)
     last_seq = data_scaled[-SEQUENCE_LEN:].reshape(1, SEQUENCE_LEN, n_features)
@@ -364,7 +395,7 @@ def forecast(symbol: str):
 
     # 2. LSTM prediction (seeded, deterministic, multi-feature)
     log.info("Training LSTM for %s …", symbol)
-    lstm_result       = train_and_predict(df)
+    lstm_result       = train_and_predict(df, symbol)
     lstm_prices_raw   = lstm_result["prices"]
     std_devs          = lstm_result["std_devs"]
     lstm_last_close   = lstm_result["lstm_last_close"]
@@ -475,7 +506,7 @@ def portfolio_forecast(symbol: str):
         )
 
     # 2. LSTM prediction
-    lstm_result     = train_and_predict(df)
+    lstm_result     = train_and_predict(df, sym)
     lstm_prices_raw = lstm_result["prices"]
     std_devs        = lstm_result["std_devs"]
     lstm_last_close = lstm_result["lstm_last_close"]

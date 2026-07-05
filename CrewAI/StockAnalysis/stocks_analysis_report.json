@@ -1,0 +1,74 @@
+{
+    "AXISBANK": {
+        "status": "success",
+        "result": {
+            "symbol": "AXISBANK",
+            "final_score": 70,
+            "recommendation": "Hold",
+            "conviction_level": "Medium",
+            "risk_assessment": "Medium risk due to predicted short-term downturn and moderate volatility",
+            "investment_rationale": "The LSTM forecast predicts a bearish direction with 60% confidence, indicating a potential short-term downturn. The stock's current position above the SMA20 and SMA50 could provide a foundation for a potential rebound if it finds support at the ₹1230.3 level. However, the predicted 5-day price change percentage is expected to be negative, which could be exacerbated by the stock's moderate volatility and potential resistance at ₹1400.1. The fundamentals are neutral, with a price-to-book ratio of 1.9682325 and a return on equity of 0.13152. The technicals indicate an uptrend, but the RSI is at 60.14, which is not overly bullish. Overall, we recommend a Hold with a medium conviction level.",
+            "current_price": 1361.4000244140625
+        }
+    },
+    "KOTAKBANK": {
+        "status": "success",
+        "result": {
+            "symbol": "KOTAKBANK",
+            "final_score": 82,
+            "recommendation": "Buy",
+            "conviction_level": "High",
+            "risk_assessment": "The primary risks include the stock being below SMA20 and the neutral RSI-14 reading, which could potentially lead to a reversal or consolidation.",
+            "investment_rationale": "The LSTM forecast predicts a bullish direction for KOTAKBANK with a confidence score of 80%. The predicted 5-day price change percentage indicates a potential uptrend. The stock is currently trading at 394.5, above its SMA50 (387.29) but below SMA20 (396.64). The RSI-14 reading is neutral at 47.24. Fundamentals show a PE ratio of 20.356037 and a forward PE of 14.089286, with a dividend yield of 0.13. The risk level is medium. Based on these factors, the stock is likely to experience a short-term uptrend.",
+            "current_price": 394.5
+        }
+    },
+    "TCS": {
+        "status": "success",
+        "result": {
+            "symbol": "TCS.NS",
+            "final_score": 65,
+            "recommendation": "Consider",
+            "conviction_level": "Medium",
+            "risk_assessment": "The risk level is medium due to the current downtrend and the stock trading below its SMA20 and SMA50, which could indicate ongoing downward pressure if the rebound fails to materialize.",
+            "investment_rationale": "The stock TCS has a bullish predicted direction with an 80% confidence level from the LSTM forecast. The predicted 5-day price change percentage is expected to be positive, indicating a potential short-term rebound. However, the current downtrend and the stock trading below its SMA20 and SMA50 could indicate ongoing downward pressure if the rebound fails to materialize. The RSI levels are oversold, suggesting the stock may be due for a rebound. Based on the fundamentals, the stock has a market capitalization of 7362808119296, an enterprise value of 7065814695936, and a dividend yield of 6.1%. The technical indicators show a current price of 2035.0, SMA20 of 2137.78, and SMA50 of 2256.68. The news sentiment is neutral. Considering these factors, the final score is 65, indicating a 'Consider' recommendation.",
+            "current_price": 2035.0
+        }
+    },
+    "VEDL": {
+        "status": "success",
+        "result": {
+            "symbol": "VEDL",
+            "final_score": 65,
+            "recommendation": "Consider",
+            "conviction_level": "Medium",
+            "risk_assessment": "The stock is currently in a downtrend and its position below its short and medium-term moving averages poses a significant risk of further decline. However, the LSTM forecast suggests a potential rebound in the stock price over the next five days.",
+            "investment_rationale": "The LSTM 5-day forecast for VEDL is bullish with a confidence score of 60%. The predicted prices are [307.59, 301.99, 303.87, 295.83, 311.35] with lower and upper bounds indicating a potential for significant movement. Based on the forecast, news, fundamentals, and technicals, we assign a final score of 65. The stock's current price is 277.85, with a 52-week high of 795.0 and a 52-week low of 268.7. The predicted 5-day price change percentage is approximately 10-12% increase. Considering the bullish LSTM forecast and current market conditions, we recommend a 'Consider' rating with a medium conviction level.",
+            "current_price": 277.8999938964844
+        }
+    },
+    "ONGC": {
+        "status": "success",
+        "result": {
+            "symbol": "ONGC",
+            "final_score": 65,
+            "recommendation": "Consider",
+            "conviction_level": "Medium",
+            "risk_assessment": "The primary risk is the ongoing downtrend and the failure to breach the resistance level of ₹271.15, which could lead to further declines if the support level of ₹227.65 is broken.",
+            "investment_rationale": "The stock ONGC has a bullish predicted direction with an 80% confidence level from the LSTM forecast. The predicted 5-day price change shows a potential rebound. The current RSI-14 is 31.72, indicating an oversold condition, which aligns with the bullish case. However, the technical indicators show a downtrend, and the stock is currently below its SMA20 and SMA50. The fundamental data indicates a relatively low PE ratio of 7.11 and a high dividend yield of 7.88%. Considering these factors, the stock seems poised for a short-term rebound but with medium conviction due to the mixed signals.",
+            "current_price": 234.00999450683594
+        }
+    },
+    "RELIANCE": {
+        "status": "success",
+        "result": {
+            "symbol": "RELIANCE",
+            "final_score": 60,
+            "recommendation": "Hold",
+            "conviction_level": "Medium",
+            "risk_assessment": "The primary risks include the ongoing downtrend and the stock's current position below its short-term moving averages, posing a significant risk of further decline. However, the potential for the stock to bounce back from its current support level could drive prices higher.",
+            "investment_rationale": "The LSTM forecast predicts a neutral direction with a 60% confidence score, indicating a slight upward bias in the short term. The predicted 5-day price change is around 0-2% increase. Considering the current downtrend and the stock's position below its short-term moving averages, there is a risk of further decline. However, the potential for the stock to bounce back from its current support level could drive prices higher. The fundamental analysis shows a stable market capitalization, a reasonable price-to-earnings ratio, and a positive profit margin. The technical indicators suggest a downtrend with the stock currently trading at 1303.6, close to its 20-day SMA of 1301.32. Overall, these factors contribute to a neutral score.",
+            "current_price": 1303.5999755859375
+        }
+    }
+}

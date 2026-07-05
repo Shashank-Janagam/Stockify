@@ -50,6 +50,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     
     function connect() {
       console.log("🔌 Connecting to WebSocket...");
+      console.log("Web Socket url:", WS_URL)
       const socket = new WebSocket(WS_URL);
       ws.current = socket;
 

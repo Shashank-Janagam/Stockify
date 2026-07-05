@@ -54,16 +54,14 @@ router.post("/logout", async (req, res) => {
     res.send({ status: "Logged out" });
 
   } catch (err) {
-    console.log("Logout error:", err);
-
-    // still clear cookie even if verification fails
+        // still clear cookie even if verification fails
 
     res.clearCookie("session");
     res.send({ status: "Logged out" });
   }
 });
 
-router.get("/status", async (req, res) => {
+router.get("/checkLogin", async (req, res) => {
   const sessionCookie = req.cookies.session || "";
   if (!sessionCookie) {
     return res.status(401).json({ status: "inactive" });

@@ -1,4 +1,4 @@
-name: Deploy Backend to Oracle Instance
+name: Deploy Backend to Azure VM
 
 on:
   push:
@@ -13,19 +13,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to Oracle Instance
+      - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.ORACLE_PUBLIC_IP }}
-          username: ${{ secrets.ORACLE_USER }}
-          key: ${{ secrets.ORACLE_SSH_KEY }}
+          host: ${{ secrets.AZURE_VM_IP }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
-            echo "Connected to Oracle Instance"
+            echo "Connected to Azure VM"
 
             export NVM_DIR="$HOME/.nvm"
             source "$NVM_DIR/nvm.sh"
 
-            cd /home/ubuntu/Stockify
+            cd ~/Stockify
 
             echo "Pulling latest code..."
             git pull origin main

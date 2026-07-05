@@ -1,6 +1,6 @@
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import type{User} from "firebase/auth";
-import { createContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useEffect, useState, useRef, type ReactNode } from "react";
 import { auth } from "../firebase";
 
 interface AuthContextType {
@@ -30,7 +30,7 @@ const [isGoogleOnlyUser, setIsGoogleOnlyUser] = useState(false);
            const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
            
            // 1. Check if session is valid
-           const res = await fetch(`${HOST}/api/login/status`, {
+           const res = await fetch(`${HOST}/api/login/checkLogin`, {
              credentials: "include"
            });
            
@@ -43,21 +43,8 @@ const [isGoogleOnlyUser, setIsGoogleOnlyUser] = useState(false);
            // 2. If session invalid (race condition or expired), try to restore it
            if (!isSessionValid) {
              // console.log("Session missing/inactive. Attempting to restore...");
-             try {
-               const token = await firebaseUser.getIdToken();
-               const loginRes = await fetch(`${HOST}/api/login`, {
-                 method: "POST",
-                 headers: { "Content-Type": "application/json" },
-                 credentials: "include",
-                 body: JSON.stringify({ token })
-               });
-
-               if (loginRes.ok) {
-                 isSessionValid = true;
-               }
-             } catch (err) {
-               console.error("Session restoration failed:", err);
-             }
+              handleLogout();
+              return;
            }
 
            // 3. Final decision
@@ -111,6 +98,39 @@ const [isGoogleOnlyUser, setIsGoogleOnlyUser] = useState(false);
       setUser(null);
     }
   };
+
+  const handleLogoutRef = useRef(handleLogout);
+  useEffect(() => {
+    handleLogoutRef.current = handleLogout;
+  }, [handleLogout]);
+
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (input, init) => {
+      try {
+        const response = await originalFetch(input, init);
+        if (response.status === 401) {
+          const urlStr = typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : (input as Request).url || "";
+
+          if (urlStr.includes("/api/") && !urlStr.includes("/api/login")) {
+            console.warn("Session expired on backend (401). Logging out...");
+            handleLogoutRef.current();
+          }
+        }
+        return response;
+      } catch (error) {
+        throw error;
+      }
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, logout: handleLogout,isGoogleOnlyUser }}>

@@ -247,6 +247,7 @@
 .oh-sl      { background: #fef3c7; color: #d97706; }
 .oh-intra   { background: #ede9fe; color: #7c3aed; }
 .oh-regular { background: #f0f9ff; color: #0369a1; }
+.oh-ai-algo { background: linear-gradient(135deg, #fae8ff 0%, #f5d0fe 100%); color: #c026d3; border: 1px solid #f5d0fe; box-shadow: 0 0 4px rgba(240, 171, 252, 0.4); }
 
 /* ═══════════════════════════════════════════
    STATUS PILLS

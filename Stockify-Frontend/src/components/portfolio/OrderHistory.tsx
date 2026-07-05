@@ -176,7 +176,7 @@ function OrdersTab() {
                 </td>
                 {/* Execution / category */}
                 <td>
-                  <span className={`oh-category ${order.category === "STOPLOSS" ? "oh-sl" : order.category === "AUTO_SQUAREOFF" ? "oh-intra" : "oh-regular"}`}>
+                  <span className={`oh-category ${order.category === "STOPLOSS" ? "oh-sl" : order.category === "AUTO_SQUAREOFF" ? "oh-intra" : order.category?.toUpperCase() === "AI ALGO TRADING" ? "oh-ai-algo" : "oh-regular"}`}>
                     {order.category === "AUTO_SQUAREOFF" ? "Auto Squareoff" : order.category || "Regular"}
                   </span>
                 </td>
