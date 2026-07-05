@@ -188,42 +188,46 @@ async def get_all_news(
     }
 
 @app.get("/api/news/stock/{symbol}")
-async def get_stock_news(symbol: str = Path(..., title="The stock symbol")):
-    print(f"Fetching dynamically for {symbol} on user request...")
-    # 1. Always fetch from BSE to ensure we have the absolute latest
-    raw_announcements = await run_in_threadpool(fetch_bse_announcements, symbol)
-    
-    if raw_announcements:
-        # 2. Check what we already have in the DB to avoid re-enriching everything
-        existing_docs = await announcements_collection.find({"symbol": symbol}).to_list(length=1000)
-        existing_ids = {str(doc["bse_id"]) for doc in existing_docs}
+async def get_stock_news(
+    symbol: str = Path(..., title="The stock symbol"),
+    live: bool = Query(False)
+):
+    if live:
+        print(f"Fetching dynamically for {symbol} on user request...")
+        # 1. Always fetch from BSE to ensure we have the absolute latest
+        raw_announcements = await run_in_threadpool(fetch_bse_announcements, symbol)
         
-        ten_days_ago = datetime.now() - timedelta(days=10)
-        new_raw = []
-        for ann in raw_announcements:
-            if str(ann["bse_id"]) not in existing_ids:
-                try:
-                    # Parse date like '2026-05-27T17:59:49.16'
-                    ann_date = datetime.fromisoformat(ann["announced_at"].split('.')[0])
-                    if ann_date >= ten_days_ago:
+        if raw_announcements:
+            # 2. Check what we already have in the DB to avoid re-enriching everything
+            existing_docs = await announcements_collection.find({"symbol": symbol}).to_list(length=1000)
+            existing_ids = {str(doc["bse_id"]) for doc in existing_docs}
+            
+            ten_days_ago = datetime.now() - timedelta(days=10)
+            new_raw = []
+            for ann in raw_announcements:
+                if str(ann["bse_id"]) not in existing_ids:
+                    try:
+                        # Parse date like '2026-05-27T17:59:49.16'
+                        ann_date = datetime.fromisoformat(ann["announced_at"].split('.')[0])
+                        if ann_date >= ten_days_ago:
+                            new_raw.append(ann)
+                    except Exception:
                         new_raw.append(ann)
-                except Exception:
-                    new_raw.append(ann)
-        
-        if new_raw:
-            # 3. Enrich only the new announcements
-            enriched = await run_in_threadpool(enrich_announcements_batch, new_raw)
             
-            # 4. Save the new enriched announcements to MongoDB
-            for ann in enriched:
-                await announcements_collection.update_one(
-                    {"bse_id": ann["bse_id"]},
-                    {"$set": ann},
-                    upsert=True
-                )
-            print(f"Stored {len(enriched)} new announcements for {symbol}")
-            
-    # 5. Return latest news from DB (only from the past 10 days)
+            if new_raw:
+                # 3. Enrich only the new announcements
+                enriched = await run_in_threadpool(enrich_announcements_batch, new_raw)
+                
+                # 4. Save the new enriched announcements to MongoDB
+                for ann in enriched:
+                    await announcements_collection.update_one(
+                        {"bse_id": ann["bse_id"]},
+                        {"$set": ann},
+                        upsert=True
+                    )
+                print(f"Stored {len(enriched)} new announcements for {symbol}")
+                
+    # Return latest news from DB (only from the past 10 days)
     ten_days_ago_iso = (datetime.now() - timedelta(days=10)).isoformat()
     cursor = announcements_collection.find({
         "symbol": symbol,
@@ -484,7 +488,7 @@ async def fetch_news_periodically():
         except Exception as e:
             print(f"Error in background fetch task: {e}")
         
-        await asyncio.sleep(600) # 10 minutes
+        await asyncio.sleep(6000) # 10 minutes
 
 @app.on_event("startup")
 async def startup_event():

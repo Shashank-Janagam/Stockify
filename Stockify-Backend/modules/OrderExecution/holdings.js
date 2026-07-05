@@ -142,6 +142,8 @@ export async function computeHoldingsPayload(holdings, userId) {
     allocationPercent: currentValue > 0 ? Number(((h.current / currentValue) * 100).toFixed(2)) : 0
   }));
 
+  const isMarketClosed = quotes[0]?.marketState && quotes[0].marketState !== "REGULAR";
+
   return {
     summary: {
       investedValue: Number(investedValue.toFixed(2)),
@@ -151,7 +153,8 @@ export async function computeHoldingsPayload(holdings, userId) {
       dayReturns: Number(dayReturns.toFixed(2)),
       dayReturnsPercent: prevValue > 0 ? Number(((dayReturns / prevValue) * 100).toFixed(2)) : 0
     },
-    holdings: finalHoldings
+    holdings: finalHoldings,
+    isMarketClosed
   };
 }
 
@@ -295,6 +298,8 @@ export async function computePositionsPayload(lots, userId) {
   const totalPnL = currentValue - investedValue;
   const prevValue = currentValue - dayReturns;
 
+  const isMarketClosed = quotes[0]?.marketState && quotes[0].marketState !== "REGULAR";
+
   return {
     summary: {
       investedValue: Number(investedValue.toFixed(2)),
@@ -304,7 +309,8 @@ export async function computePositionsPayload(lots, userId) {
       dayReturns: Number(dayReturns.toFixed(2)),
       dayReturnsPercent: prevValue > 0 ? Number(((dayReturns / prevValue) * 100).toFixed(2)) : 0
     },
-    positions
+    positions,
+    isMarketClosed
   };
 }
 

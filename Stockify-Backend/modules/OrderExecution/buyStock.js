@@ -8,6 +8,7 @@ import redis from "../../cache/redisClient.js";
 const router = express.Router();
 
 function normalizeYahooTime(t) {
+  
   if (typeof t === "string") {
     const d = new Date(t);
     if (!isNaN(d.getTime())) return d.toISOString();
@@ -53,7 +54,7 @@ router.post("/buy", requireAuth, async (req, res) => {
     const { uid, name: userName, email } = req.user;
 
     // Always MARKET — ignore order_type / limit_price from frontend
-    const { symbol, quantity, sl_enabled, sl_price, product_type } = req.body;
+    const { symbol, quantity, sl_enabled, sl_price, product_type, category } = req.body;
     const finalProductType =
       product_type === "Intraday" ? "Intraday" : "Delivery";
 
@@ -189,9 +190,9 @@ router.post("/buy", requireAuth, async (req, res) => {
        VALUES ($1, $2, 'BUY', 'MARKET', $3, $4, 'EXECUTED',
                NOW() AT TIME ZONE 'Asia/Kolkata',
                NOW() AT TIME ZONE 'Asia/Kolkata',
-               NOW() AT TIME ZONE 'Asia/Kolkata', $5, 'REGULAR')
+               NOW() AT TIME ZONE 'Asia/Kolkata', $5, $6)
        RETURNING id`,
-      [userId, stockId, quantity, pricePerShare, finalProductType]
+      [userId, stockId, quantity, pricePerShare, finalProductType, category || 'REGULAR']
     );
     const orderId = orderRes.rows[0].id;
 

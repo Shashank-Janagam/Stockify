@@ -89,7 +89,7 @@ router.post("/sell", requireAuth, async (req, res) => {
   try {
     const { uid, name: userName, email } = req.user;
 
-    const { symbol, quantity, sl_enabled, sl_price, product_type } = req.body;
+    const { symbol, quantity, sl_enabled, sl_price, product_type, category } = req.body;
     const finalProductType =
       product_type === "Intraday" ? "Intraday" : "Delivery";
 
@@ -212,9 +212,9 @@ router.post("/sell", requireAuth, async (req, res) => {
        VALUES ($1, $2, 'SELL', 'MARKET', $3, $4, 'EXECUTED',
                NOW() AT TIME ZONE 'Asia/Kolkata',
                NOW() AT TIME ZONE 'Asia/Kolkata',
-               NOW() AT TIME ZONE 'Asia/Kolkata', $5, 'REGULAR')
+               NOW() AT TIME ZONE 'Asia/Kolkata', $5, $6)
        RETURNING id`,
-      [userId, stockId, quantity, pricePerShare, finalProductType]
+      [userId, stockId, quantity, pricePerShare, finalProductType, category || 'REGULAR']
     );
     const orderId = orderRes.rows[0].id;
 

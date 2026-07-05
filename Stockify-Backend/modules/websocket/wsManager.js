@@ -290,13 +290,22 @@ export  class WebSocketManager {
             subscriber.send(payload);
           }
         });
+
+        // 🛑 If market is not live, clear the polling interval to stop spamming Yahoo Finance
+        const marketState = mostTraded[0]?.marketState;
+        if (marketState && marketState !== "REGULAR") {
+          if (this.exploreInterval) {
+            clearInterval(this.exploreInterval);
+            this.exploreInterval = null;
+          }
+        }
       } catch (err) {
         console.error("WS Explore Shared Update Error:", err);
       }
     };
 
+    this.exploreInterval = setInterval(sendUpdate, 2000);
     sendUpdate();
-    this.exploreInterval = setInterval(sendUpdate, 5000); // 5 sec shared polling
   }
 
   async startIndicesLive(ws) {
@@ -325,8 +334,10 @@ export  class WebSocketManager {
     const sendUpdate = async () => {
       try {
         if (this.indicesSubscribers.size === 0) {
-          clearInterval(this.indicesInterval);
-          this.indicesInterval = null;
+          if (this.indicesInterval) {
+            clearInterval(this.indicesInterval);
+            this.indicesInterval = null;
+          }
           return;
         }
         const quotes = await MultiStockYahoo(symbols);
@@ -345,17 +356,29 @@ export  class WebSocketManager {
         this.indicesSubscribers.forEach(sub => {
           if (sub.readyState === sub.OPEN) sub.send(payload);
         });
+
+        // 🛑 If market is not live, clear the polling interval
+        const niftyQuote = quotes.find(q => q.symbol === "^NSEI");
+        const marketState = niftyQuote?.marketState;
+        if (marketState && marketState !== "REGULAR") {
+          if (this.indicesInterval) {
+            clearInterval(this.indicesInterval);
+            this.indicesInterval = null;
+          }
+        }
       } catch (err) {
         console.error("WS Indices Update Error:", err);
       }
     };
 
-    sendUpdate();
     this.indicesInterval = setInterval(sendUpdate, 3000);
+    sendUpdate();
   }
 
   startRecentLive(ws, client) {
     if (!client.userId) return null;
+
+    let timerId = null;
 
     const sendUpdate = async () => {
       try {
@@ -393,17 +416,30 @@ export  class WebSocketManager {
             data: { recentlyViewed: recentQuotes, invested: investedQuotes }
           }));
         }
+
+        // 🛑 If market is not live, clear the polling interval
+        const marketState = quotes[0]?.marketState;
+        if (marketState && marketState !== "REGULAR") {
+          if (timerId) {
+            clearInterval(timerId);
+            const subKey = `RECENT_LIVE:${JSON.stringify("")}`;
+            client.subscriptions.delete(subKey);
+          }
+        }
       } catch (err) {
         console.error("WS Recent Update Error:", err);
       }
     };
 
+    timerId = setInterval(sendUpdate, 2500);
     sendUpdate();
-    return setInterval(sendUpdate, 2500);
+    return timerId;
   }
 
   startHoldingsLive(ws, client) {
     if (!holdingsService) return null;
+
+    let timerId = null;
 
     const sendUpdate = async () => {
       try {
@@ -417,17 +453,28 @@ export  class WebSocketManager {
             data: payload
           }));
         }
+
+        if (payload.isMarketClosed) {
+          if (timerId) {
+            clearInterval(timerId);
+            const subKey = `HOLDINGS_LIVE:${JSON.stringify("")}`;
+            client.subscriptions.delete(subKey);
+          }
+        }
       } catch (err) {
         console.error("WS Holdings Update Error:", err);
       }
     };
 
+    timerId = setInterval(sendUpdate, 4000);
     sendUpdate();
-    return setInterval(sendUpdate, 4000);
+    return timerId;
   }
 
   startPositionsLive(ws, client) {
     if (!holdingsService) return null;
+
+    let timerId = null;
 
     const sendUpdate = async () => {
       try {
@@ -441,13 +488,22 @@ export  class WebSocketManager {
             data: payload
           }));
         }
+
+        if (payload.isMarketClosed) {
+          if (timerId) {
+            clearInterval(timerId);
+            const subKey = `POSITIONS_LIVE:${JSON.stringify("")}`;
+            client.subscriptions.delete(subKey);
+          }
+        }
       } catch (err) {
         console.error("WS Positions Update Error:", err);
       }
     };
 
+    timerId = setInterval(sendUpdate, 4000);
     sendUpdate();
-    return setInterval(sendUpdate, 4000);
+    return timerId;
   }
 
   startReplayLive(ws, symbol, speed = 1000) {
