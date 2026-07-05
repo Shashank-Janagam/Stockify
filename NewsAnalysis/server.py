@@ -40,7 +40,8 @@ async def load_nse_stocks():
     global NSE_STOCKS, STOCK_NAME_MAP
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get("http://localhost:4000/api/stocks/list", timeout=5.0)
+            backend_url = os.getenv("BACKEND_URL", "http://localhost:4000")
+            response = await client.get(f"{backend_url}/api/stocks/list", timeout=5.0)
             if response.status_code == 200:
                 stocks_list = response.json()
                 NSE_STOCKS = {item["symbol"].upper() for item in stocks_list if "symbol" in item}
