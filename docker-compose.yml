@@ -1,33 +1,54 @@
 services:
-
   backend:
     build:
-      context: ./PaperBull-Backend
-    container_name: paperbull-backend
+      context: ./Stockify-Backend
+    container_name: stockify-backend
     ports:
       - "4000:4000"
     restart: always
+    env_file:
+      - ./Stockify-Backend/.env
+    environment:
+      - PYTHON_SERVER_URL=http://news-analysis:5001/api/news
 
-  frontend:
+  news-analysis:
     build:
-      context: ./PaperBull-Frontend
-    container_name: paperbull-frontend
+      context: ./NewsAnalysis
+    container_name: news-analysis
+    ports:
+      - "5001:5001"
+    restart: always
+    env_file:
+      - ./Stockify-Backend/.env
+    environment:
+      - BACKEND_URL=http://backend:4000
+
+  intraday-squareoff:
+    build:
+      context: ./AlgoTrading
+    container_name: intraday-squareoff
+    ports:
+      - "4001:4001"
+    restart: always
+    env_file:
+      - ./AlgoTrading/.env
+
+  stoploss-engine:
+    build:
+      context: ./AlgoTrading
+      dockerfile: stoploss-engine/Dockerfile
+    container_name: stoploss-engine
+    restart: always
+    env_file:
+      - ./AlgoTrading/.env
+
+  nginx:
+    build:
+      context: ./nginx
+    container_name: stockify-nginx
     ports:
       - "80:80"
     restart: always
     depends_on:
       - backend
-
-  stoploss:
-    build:
-      context: ./AlgoTrading
-    container_name: stoploss-engine
-    command: node stoploss-engine/stoploss.js
-    restart: always
-
-  intraday:
-    build:
-      context: ./AlgoTrading
-    container_name: intraday-squareoff
-    command: node intradaySquareOff.js
-    restart: always
+      - news-analysis

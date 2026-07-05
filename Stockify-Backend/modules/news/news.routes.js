@@ -1,7 +1,7 @@
 import express from "express";
 
 const router = express.Router();
-const PYTHON_SERVER_URL = "http://127.0.0.1:5001/api/news";
+const PYTHON_SERVER_URL = process.env.PYTHON_SERVER_URL || "http://127.0.0.1:5001/api/news";
 
 router.use("/", async (req, res) => {
   try {
