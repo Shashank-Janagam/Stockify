@@ -8,3 +8,4 @@ groq
 pydantic
 yfinance
 pypdf
+openai

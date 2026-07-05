@@ -5,6 +5,7 @@ on:
     paths:
       - 'Stockify-Backend/**'
       - 'AlgoTrading/**'
+      - 'NewsAnalysis/**'
     branches:
       - main
 
@@ -30,23 +31,54 @@ jobs:
             echo "Pulling latest code..."
             git pull origin main
 
+            ##################################################
+            # Backend
+            ##################################################
             echo "Installing backend dependencies..."
             cd Stockify-Backend
             npm install
 
-            echo "Restarting backend..."
+            echo "Restarting Backend..."
             pm2 restart Backend || pm2 start server.js --name Backend
 
-            echo "Restarting stoploss engine..."
+            ##################################################
+            # Algo Trading
+            ##################################################
             cd ../AlgoTrading
+
             npm install
+
+            echo "Restarting Intraday Squareoff..."
             pm2 restart intraday-squareoff || pm2 start intradaySquareOff.js --name intraday-squareoff
 
-
             cd stoploss-engine
+
+            echo "Restarting Stoploss..."
             pm2 restart stoploss || pm2 start stoploss.js --name stoploss
 
-            echo "Restarting squareoff engine..."
+            ##################################################
+            # News Analysis (Python)
+            ##################################################
+            cd ~/Stockify/NewsAnalysis
 
+            # Create virtual environment if missing
+            if [ ! -d "venv" ]; then
+              python3 -m venv venv
+            fi
+
+            source venv/bin/activate
+
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            echo "Restarting News Analysis..."
+            pm2 restart news-analysis || pm2 start venv/bin/python --name news-analysis -- server.py
+
+            deactivate
+
+            ##################################################
+            # Save PM2
+            pm2 startup
             pm2 save
-            echo "Backend deployment completed."
+
+            echo "Deployment completed successfully."
