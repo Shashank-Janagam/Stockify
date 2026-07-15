@@ -75,7 +75,7 @@ def fetch_portfolio():
         
     print("[Portfolio] Fetching current holdings...", flush=True)
     try:
-        res = requests.get("http://localhost:4000/api/portfolio/summary", headers=headers, timeout=15)
+        res = requests.get("http://localhost:4000/api/portfolio/summary?fresh=1", headers=headers, timeout=15)
         if res.status_code == 200:
             data = res.json()
             holdings = data.get("holdings", [])
@@ -121,17 +121,9 @@ def execute_sell_order(symbol: str, quantity: int):
         return {"status": "failed", "error": str(e)}
 
 def fetch_lstm_forecast(symbol: str):
-    import requests
+    from lstm_local import get_lstm_forecast
     clean_symbol = symbol.strip().upper().replace(".NS", "").replace(".BO", "")
-    url = f"http://localhost:8000/forecast/{clean_symbol}"
-    try:
-        response = requests.get(url, timeout=120)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return {"error": f"LSTM server returned status {response.status_code}", "forecast_available": False}
-    except Exception as e:
-        return {"error": f"Failed to connect to LSTM server: {str(e)}", "forecast_available": False}
+    return get_lstm_forecast(clean_symbol)
 
 def analyze_stock(symbol: str):
     """Analyzes a single stock and returns its structured JSON output with retry logic."""
@@ -258,12 +250,15 @@ def main():
     # Extract held stock symbols (cleaned of suffixes)
     held_symbols = []
     for h in holdings:
+        qty = h.get("quantity", 0)
+        if qty <= 0:
+            continue
         sym = h.get("symbol", "").strip().upper().replace(".NS", "").replace(".BO", "")
         if sym:
             held_symbols.append(sym)
             
     # Base symbols to analyze
-    base_symbols = []
+    base_symbols = ["RELIANCE", "TCS", "INFY", "KOTAKBANK", "ONGC", "VEDL"]
     
     # Merge symbols without duplicates
     symbols = []
@@ -316,6 +311,8 @@ def main():
     condensed_report_list = []
     report_updated = False
     for sym, data in report.items():
+        if sym not in symbols:
+            continue
         if data.get("status") == "success" and "result" in data:
             res = data["result"]
             score = res.get("final_score")
@@ -352,6 +349,9 @@ def main():
             json.dump(report, f, indent=4, ensure_ascii=False)
             
     condensed_report = "\n".join(condensed_report_list)
+    if not condensed_report.strip():
+        print("\n[Trader] No stocks in the analysis report. Skipping trading agent execution.", flush=True)
+        return
 
     # Format portfolio details as context for the trading agent
     portfolio_text = f"Available cash balance: Rs. {cash:.2f}\n"
@@ -360,6 +360,8 @@ def main():
         for h in holdings:
             sym = h.get("symbol", "").replace(".NS", "").replace(".BO", "")
             qty = h.get("quantity", 0)
+            if qty <= 0:
+                continue
             avg_price = h.get("avgPrice", 0.0)
             curr_price = h.get("currentPrice", 0.0)
             pnl = h.get("pnl", 0.0)
@@ -405,10 +407,12 @@ def main():
             
         decisions = decisions_data["decisions"]
         print(f"\n[Trader] Decided on {len(decisions)} action(s):", flush=True)
+        executed_decisions = []
+        import yfinance as yf
         for d in decisions:
             action = d.get("action", "BUY").upper()
-            sym = d.get("symbol")
-            qty = d.get("quantity")
+            sym = d.get("symbol", "").strip().upper()
+            qty = int(d.get("quantity", 0))
             rat = d.get("rationale", "")
             try:
                 encoding = sys.stdout.encoding or 'utf-8'
@@ -417,12 +421,78 @@ def main():
                 safe_rat = rat
             print(f"  - {action} {qty} shares of {sym} (Rationale: {safe_rat})", flush=True)
             
+            # Programmatically execute the trade with guardrails
+            if action == "BUY":
+                # Check score threshold
+                score = 0
+                if sym in report and "result" in report[sym]:
+                    try:
+                        score = int(report[sym]["result"].get("final_score", 0))
+                    except Exception:
+                        pass
+                if score < 75:
+                    print(f"[Execution] Blocking BUY for {sym} as its score ({score}) is below the 75 threshold.", flush=True)
+                    exec_res = {"status": "failed", "error": "Score below threshold"}
+                else:
+                    # Enforce 10% position sizing
+                    price = 0.0
+                    try:
+                        ticker = sym if sym.endswith(".NS") or sym.endswith(".BO") else f"{sym}.NS"
+                        stock = yf.Ticker(ticker)
+                        history = stock.history(period="1d")
+                        if not history.empty:
+                            price = float(history["Close"].iloc[-1])
+                    except Exception:
+                        pass
+                    if price <= 0.0 and sym in report and "result" in report[sym]:
+                        try:
+                            price = float(report[sym]["result"].get("current_price", 0.0))
+                        except Exception:
+                            pass
+                            
+                    if price > 0.0:
+                        max_alloc = cash * 0.10
+                        safe_qty = int(max_alloc // price)
+                        if qty != safe_qty:
+                            print(f"[Execution] Correcting BUY quantity for {sym} from {qty} to {safe_qty} based on 10% position sizing rule (price: Rs. {price:.2f}, max allocation: Rs. {max_alloc:.2f})", flush=True)
+                            qty = safe_qty
+                    
+                    if qty > 0:
+                        exec_res = execute_buy_order(sym, qty)
+                    else:
+                        exec_res = {"status": "failed", "error": "Calculated quantity is 0"}
+                        
+            elif action == "SELL":
+                # Check holdings
+                held_qty = 0
+                for h in holdings:
+                    h_sym = h.get("symbol", "").replace(".NS", "").replace(".BO", "").strip().upper()
+                    if h_sym == sym:
+                        held_qty = int(h.get("quantity", 0))
+                        break
+                
+                if held_qty > 0:
+                    if qty != held_qty:
+                        print(f"[Execution] Correcting SELL quantity for {sym} from {qty} to {held_qty} to sell the entire position.", flush=True)
+                        qty = held_qty
+                    exec_res = execute_sell_order(sym, qty)
+                else:
+                    print(f"[Execution] Skipping SELL for {sym} as it is not currently held in holdings.", flush=True)
+                    exec_res = {"status": "failed", "error": "Stock not held"}
+            else:
+                exec_res = {"status": "failed", "error": f"Unknown action: {action}"}
+                
+            # Add execution result to the decision log
+            d["quantity"] = qty
+            d["execution_result"] = exec_res
+            executed_decisions.append(d)
+            
         # 3. Save trading actions and execution details
         trading_actions_file = "trading_actions_report.json"
         with open(trading_actions_file, "w", encoding="utf-8") as f:
             json.dump({
                 "summary": decisions_data.get("portfolio_summary", ""),
-                "decisions": decisions
+                "decisions": executed_decisions
             }, f, indent=4, ensure_ascii=False)
         print(f"\n[Trader] Trading actions and executions report saved to {trading_actions_file}", flush=True)
         

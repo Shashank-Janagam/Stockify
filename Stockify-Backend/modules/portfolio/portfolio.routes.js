@@ -6,6 +6,7 @@ const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 import { calculateVWAP, calculateBullScore, calculateDynamicCap, calculateMVOAllocation, calculateEqualWeightAllocation, calculateHRPAllocation } from "./algorithms.js";
 import { calculateVaR, calculateBeta, calculateSharpeRatio } from "../ai/risk.js";
 import redis from "../../cache/redisClient.js";
+import { resolveStockSector } from "../stocks/sectorResolver.js";
 
 const router = express.Router();
 
@@ -197,6 +198,22 @@ router.get("/summary", requireAuth, async (req, res) => {
       } catch (e) { console.error("Yahoo fetch error:", e.message); }
     }
 
+    // Fetch sectors for all symbols in parallel
+    let sectorMap = {};
+    try {
+      const sectorPromises = allSymbols.map(async (symbol) => {
+        const pos = symbolPositions[symbol];
+        const sectorName = await resolveStockSector(symbol, pos?.name || "");
+        return { symbol, sector: sectorName };
+      });
+      const sectorResults = await Promise.all(sectorPromises);
+      sectorResults.forEach(item => {
+        sectorMap[item.symbol] = item.sector;
+      });
+    } catch (e) {
+      console.error("Sector fetch error:", e.message);
+    }
+
     allSymbols.forEach(symbol => {
       const pos = symbolPositions[symbol];
       const qty = pos ? pos.quantity : 0;
@@ -215,7 +232,8 @@ router.get("/summary", requireAuth, async (req, res) => {
         symbol, name: pos.name || symbol, quantity: qty,
         currentPrice: Number(ltp), dayChangePercent: Number(dayChangePercent.toFixed(2)),
         invested: Number(invested.toFixed(2)), current: Number(current.toFixed(2)),
-        pnl: Number(pnl.toFixed(2)), pnlPercent: Number((invested > 0 ? (pnl / invested) * 100 : 0).toFixed(2))
+        pnl: Number(pnl.toFixed(2)), pnlPercent: Number((invested > 0 ? (pnl / invested) * 100 : 0).toFixed(2)),
+        sector: sectorMap[symbol] || "Others"
       });
     });
 

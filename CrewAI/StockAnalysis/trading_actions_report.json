@@ -1,11 +1,26 @@
 {
-    "summary": "Executed buy action for KOTAKBANK with 253529 shares within available cash limits. No sell actions were taken as no stock had a score below 40 or indicated a high-risk case.",
+    "summary": "Buying INFY with a score of 75, allocating 10% of available cash. No sells recommended.",
     "decisions": [
         {
-            "symbol": "KOTAKBANK",
+            "symbol": "INFY",
             "action": "BUY",
-            "quantity": 253529,
-            "rationale": "Buy KOTAKBANK with a score of 82 within available cash limits."
+            "quantity": 9418,
+            "rationale": "Buy INFY with a score of 75, allocating 10% of available cash.",
+            "execution_result": {
+                "status": "success",
+                "detail": {
+                    "status": "EXECUTED",
+                    "side": "BUY",
+                    "order_type": "MARKET",
+                    "product_type": "Delivery",
+                    "sl_pending": false,
+                    "symbol": "INFY.NS",
+                    "quantity": 9418,
+                    "buyPricePerShare": 1068,
+                    "totalPrice": 10058424,
+                    "walletBalance": 90532045.76
+                }
+            }
         }
     ]
 }

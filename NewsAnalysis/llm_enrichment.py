@@ -20,30 +20,49 @@ else:
 def extract_text_from_pdf_url(pdf_url: str, max_chars: int = 3000) -> str:
     if not pdf_url:
         return ""
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://www.bseindia.com/'
-        }
-        res = requests.get(pdf_url, headers=headers, timeout=8, stream=True)
-        if res.status_code == 200:
-            content_length = res.headers.get('Content-Length')
-            if content_length and int(content_length) > 5 * 1024 * 1024:
-                res.close()
-                return ""
+        
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.bseindia.com/',
+        'Accept': 'application/pdf,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+    }
+    
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Using standard requests.get to avoid keep-alive connection pool stale errors
+            res = requests.get(pdf_url, headers=headers, timeout=15, stream=True)
+            if res.status_code == 200:
+                content_length = res.headers.get('Content-Length')
+                if content_length and int(content_length) > 5 * 1024 * 1024:
+                    res.close()
+                    return ""
+                
+                pdf_file = io.BytesIO(res.content)
+                reader = pypdf.PdfReader(pdf_file)
+                text = ""
+                for page in reader.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + "\n"
+                    if len(text) >= max_chars:
+                        break
+                return text[:max_chars]
+            elif res.status_code == 403:
+                print(f"[-] 403 Forbidden from BSE server for PDF: {pdf_url}")
+                break
+        except requests.exceptions.Timeout:
+            print(f"[-] Read timeout from BSE server for PDF: {pdf_url} (Attempt {attempt+1}/{max_retries})")
+        except (requests.exceptions.ConnectionError, ConnectionResetError) as ce:
+            print(f"[-] Connection aborted/reset from BSE server for PDF: {pdf_url} (Attempt {attempt+1}/{max_retries}): {ce}")
+        except Exception as e:
+            print(f"[-] Error extracting PDF from {pdf_url} (Attempt {attempt+1}/{max_retries}): {e}")
             
-            pdf_file = io.BytesIO(res.content)
-            reader = pypdf.PdfReader(pdf_file)
-            text = ""
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
-                if len(text) >= max_chars:
-                    break
-            return text[:max_chars]
-    except Exception as e:
-        print(f"Error extracting PDF from {pdf_url}: {e}")
+        if attempt < max_retries - 1:
+            import time
+            time.sleep(1) # Brief pause before retrying
+            
     return ""
 
 def analyze_text_keywords(text: str) -> str:

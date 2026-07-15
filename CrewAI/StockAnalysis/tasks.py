@@ -326,16 +326,22 @@ trading_task = Task(
     Review the user's current portfolio:
     {user_portfolio}
 
-    Formulate a list of rebalancing actions:
+    Formulate a list of rebalancing actions based strictly on these rules:
     1. SELL ACTIONS: If the user currently holds a stock, and its overall score in the analysis report is less than 40 (score < 40), or if the report highlights a significant high-risk case, decide to SELL the entire position.
     2. BUY ACTIONS: If any stock in the analysis report has a high score (overall score >= 75), decide to BUY it.
     
+    STRICT HOLDINGS RULE FOR SELLS: You must ONLY decide to SELL a stock if it is explicitly listed under the 'Current holdings' in the user's portfolio context. If a stock is not in the holdings list (like ONGC), you must NOT recommend a SELL action for it. The quantity to sell must be EXACTLY the quantity currently held in the holdings (representing selling the entire position). Never guess, assume, or invent quantities.
+    
+    STRICT THRESHOLD RULE: You must ONLY buy stocks with an overall score >= 75. If no stock has a score >= 75, do NOT buy anything. For example, if a stock (like VEDL) has a score of 65, do NOT buy it under any circumstances.
+    
+    STRICT POSITION SIZING RULE: To manage concentration risk, do not allocate more than 10% of the available cash balance to any single stock purchase. For example, if the available cash is Rs. 99,993,435.96, the maximum allocation for a single stock purchase is Rs. 9,999,343.60. The quantity of shares bought should be calculated as floor(max_allocation / current_price).
+    
+    STRICT NO-ACTION RULE: If no stock in the analysis report meets the BUY criteria (score >= 75) and no stock in the user's holdings meets the SELL criteria (score < 40), you must NOT recommend any buy or sell actions. Recommending zero actions (returning decisions as an empty list []) is the expected and correct behavior. Do NOT sell any stock with a score >= 40 unless it has a severe high-risk warning. Do NOT liquidate held stocks if their scores are in the Hold/Consider range (40-80).
+    
     CRITICAL RESTRICTION: The total cost of all BUY actions must not exceed the user's available cash balance listed in their portfolio context. Calculate total purchase costs using the current prices listed in the report.
     
-    EXECUTION: For every BUY or SELL action you decide to take, you MUST call the corresponding tool (Execute Buy Order or Execute Sell Order) to execute the trade immediately.
-    
     Provide:
-    - portfolio_summary: A brief summary of your rebalancing decisions (explaining cash allocation, positions sold/held, and tool execution outcomes).
+    - portfolio_summary: A brief summary of your rebalancing decisions (explaining cash allocation, and positions sold/held).
     - decisions: The list of decisions you executed. Each decision must include `symbol`, `action` ('BUY' or 'SELL'), `quantity`, and `rationale`. If no actions are recommended, return decisions as an empty list [].
     
     CRITICAL: The quantity of shares must be output as a pure number/integer (e.g. 10), NOT as a string (do NOT wrap numbers in quotes).

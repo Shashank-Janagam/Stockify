@@ -1,0 +1,23 @@
+"""
+requirements.txt
+----------------
+Python dependencies for the Transformer stock forecasting project.
+
+Install with:
+    pip install -r requirements.txt
+"""
+
+# Core data
+yfinance>=0.2.40
+pandas>=2.0.0
+numpy>=1.26.0
+
+# Machine learning
+scikit-learn>=1.4.0
+torch>=2.2.0
+
+# Visualisation
+matplotlib>=3.8.0
+
+# Serialisation (already in stdlib for Python ≥ 3.8)
+# pickle — no install needed

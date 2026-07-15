@@ -24,6 +24,7 @@ import portfolioRoutes from "./modules/portfolio/portfolio.routes.js";
 import aiRoutes from "./modules/ai/ai.routes.js";
 import newsRoutes from "./modules/news/news.routes.js";
 import userRoutes from "./modules/user/user.routes.js";
+import sectorAlertsRoutes from "./modules/sectorAlerts/sectorAlerts.routes.js";
 
 import login from "./Middleware/login.js"
 import rateLimit from "express-rate-limit";
@@ -68,6 +69,7 @@ app.use("/api/portfolio", portfolioRoutes);
 app.use("/api/ai", aiRoutes, limiter);
 app.use("/api/news", newsRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/sectorAlerts", sectorAlertsRoutes);
 
 // app.use("/api/stocks",indiaReplay);
 

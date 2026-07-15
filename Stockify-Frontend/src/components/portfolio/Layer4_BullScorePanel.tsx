@@ -5,6 +5,7 @@ interface Holding {
   name: string;
   invested: number;
   current: number;
+  sector?: string;
 }
 
 interface Props {
@@ -49,7 +50,7 @@ const Layer4_BullScorePanel: React.FC<Props> = ({
   const totalInvested = holdings.reduce((s, h) => s + (h.invested || 0), 0);
   const sectorMap: Record<string, number> = {};
   holdings.forEach(h => {
-    const sec = guessSector(h.symbol.replace(".NS","").replace(".BO",""));
+    const sec = h.sector || guessSector(h.symbol.replace(".NS","").replace(".BO",""));
     sectorMap[sec] = (sectorMap[sec] || 0) + (h.invested || 0);
   });
   const sectors = Object.entries(sectorMap)

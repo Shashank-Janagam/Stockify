@@ -4,6 +4,7 @@ import { getYahooIndiaHistory } from "./yahooIndiaHistory.service.js";
 import { getYahooIndiaQuote } from "./yahooIndiaQuote.service.js";
 import redis from "../../cache/redisClient.js";
 import fs from "fs";
+import { resolveStockProfile, getSimilarStocks } from "./profileResolver.js";
 
 const router = express.Router();
 import { db } from "../../db/sql.js";
@@ -204,6 +205,35 @@ router.get("/:symbol/ai-report", async (req, res) => {
     console.error(`AI Report Error (${symbol}):`, error);
     fs.appendFileSync("ai_debug.log", `[${new Date().toISOString()}] ERROR for ${symbol}: ${error.stack || error.message}\n`);
     res.status(500).json({ error: "Failed to generate AI analysis" });
+  }
+});
+
+// Expose profile route
+router.get("/:symbol/profile", async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const profile = await resolveStockProfile(symbol);
+    if (!profile) {
+      return res.status(404).json({ error: "Company profile not found" });
+    }
+    return res.json(profile);
+  } catch (err) {
+    console.error("Profile endpoint error:", err);
+    res.status(500).json({ error: "Failed to retrieve profile" });
+  }
+});
+
+// Expose similar stocks route
+router.get("/:symbol/similar", async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const profile = await resolveStockProfile(symbol);
+    const sector = profile?.sector || "Others";
+    const similar = await getSimilarStocks(symbol, sector);
+    return res.json({ symbol, sector, similar_stocks: similar });
+  } catch (err) {
+    console.error("Similar endpoint error:", err);
+    res.status(500).json({ error: "Failed to retrieve similar stocks" });
   }
 });
 

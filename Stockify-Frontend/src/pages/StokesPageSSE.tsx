@@ -12,6 +12,7 @@ import StockPerformance from "../components/stocks/StockPerformanceFundamentals"
 import AIStockReport from "../components/stocks/AIStockReport";
 import CompanyNewsPanel from "../components/stocks/CompanyNewsPanel";
 import CompanyProfile from "../components/stocks/CompanyProfile";
+import StockSectorAlerts from "../components/stocks/StockSectorAlerts";
 import { useContext } from "react"
 
 import { AuthContext } from "../auth/AuthProvider";// import type { Stock } from "../data/stocks";
@@ -457,6 +458,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
           </div>
         )}
 
+        {!isIndex && <StockSectorAlerts symbol={symbol} />}
         {!isIndex && <StockPerformance quote={quote} />}
         {!isIndex && <CompanyProfile symbol={symbol} companyName={companyName} />}
 
@@ -477,7 +479,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
             refresh={refresh}
             rerefresh={rerefresh}
           />
-          <CompanyNewsPanel symbol={companyName} />
+          <CompanyNewsPanel symbol={symbol} />
         </div>
       )}
       <AIStockReport symbol={symbol} />

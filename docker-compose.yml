@@ -43,3 +43,12 @@ services:
     env_file:
       - ./AlgoTrading/.env
 
+  pressrelease-cron:
+    build:
+      context: ./MultiAgent/PressRelease
+    container_name: pressrelease-cron
+    restart: unless-stopped
+    env_file:
+      - ./MultiAgent/PressRelease/.env
+
+
