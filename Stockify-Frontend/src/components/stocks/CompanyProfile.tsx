@@ -41,19 +41,19 @@ interface CompanyProfileProps {
   companyName: string;
 }
 
-export default function CompanyProfile({ symbol }: CompanyProfileProps) {
+export default function CompanyProfile({ symbol, companyName }: CompanyProfileProps) {
   const [profile, setProfile] = useState<CompanyProfileData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [similarStocks, setSimilarStocks] = useState<SimilarStock[]>([]);
 
-  const PYTHON_HOST = import.meta.env.VITE_PYTHON_API_URL || "http://localhost:5001";
+  const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
 
   useEffect(() => {
     if (!symbol) return;
     setLoading(true);
 
-    fetch(`${PYTHON_HOST}/api/news/stock/${encodeURIComponent(symbol)}/profile`)
+    fetch(`${HOST}/api/stocks/${encodeURIComponent(symbol)}/profile`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch profile");
         return res.json();
@@ -70,11 +70,11 @@ export default function CompanyProfile({ symbol }: CompanyProfileProps) {
         setProfile(null);
       })
       .finally(() => setLoading(false));
-  }, [symbol, PYTHON_HOST]);
+  }, [symbol, HOST]);
 
   useEffect(() => {
     if (!symbol) return;
-    fetch(`${PYTHON_HOST}/api/news/stock/${encodeURIComponent(symbol)}/similar`)
+    fetch(`${HOST}/api/stocks/${encodeURIComponent(symbol)}/similar`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch similar stocks");
         return res.json();
@@ -90,7 +90,7 @@ export default function CompanyProfile({ symbol }: CompanyProfileProps) {
         console.error("Error fetching similar stocks:", err);
         setSimilarStocks([]);
       });
-  }, [symbol, PYTHON_HOST]);
+  }, [symbol, HOST]);
 
   if (loading) {
     return (
@@ -104,14 +104,19 @@ export default function CompanyProfile({ symbol }: CompanyProfileProps) {
     );
   }
 
-  if (!profile || profile.summary_text === "No corporate summary available.") {
+  if (!profile) {
     return null;
   }
 
   const cleanWebsite = profile.website && profile.website !== "N/A" ? profile.website : null;
-  const displaySummary = isExpanded 
-    ? profile.summary_text 
-    : profile.summary_text.slice(0, 300) + (profile.summary_text.length > 300 ? "..." : "");
+  const hasSummary = profile.summary_text && profile.summary_text !== "No corporate summary available." && profile.summary_text.trim() !== "";
+  const displaySummary = hasSummary 
+    ? (isExpanded 
+        ? profile.summary_text 
+        : profile.summary_text.slice(0, 300) + (profile.summary_text.length > 300 ? "..." : ""))
+    : "";
+
+  const displayName = profile.company_name && profile.company_name !== "N/A" ? profile.company_name : (companyName || symbol);
 
   return (
     <div className="company-profile-section">
@@ -150,7 +155,7 @@ export default function CompanyProfile({ symbol }: CompanyProfileProps) {
         </div>
       )}
 
-      <h3 className="section-title">About {profile.company_name}</h3>
+      <h3 className="section-title">About {displayName}</h3>
       
       <div className="profile-meta-badges">
         {profile.sector && profile.sector !== "N/A" && (
@@ -175,31 +180,33 @@ export default function CompanyProfile({ symbol }: CompanyProfileProps) {
         )}
       </div>
 
-      <div className="profile-summary-container">
-        <p className="profile-summary-text">{displaySummary}</p>
-        {profile.summary_text.length > 300 && (
-          <button 
-            className="toggle-summary-btn"
-            onClick={() => setIsExpanded(!isExpanded)}
-          >
-            {isExpanded ? (
-              <>
-                Show Less
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="18 15 12 9 6 15"></polyline>
-                </svg>
-              </>
-            ) : (
-              <>
-                Read More
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </>
-            )}
-          </button>
-        )}
-      </div>
+      {hasSummary && (
+        <div className="profile-summary-container">
+          <p className="profile-summary-text">{displaySummary}</p>
+          {profile.summary_text.length > 300 && (
+            <button 
+              className="toggle-summary-btn"
+              onClick={() => setIsExpanded(!isExpanded)}
+            >
+              {isExpanded ? (
+                <>
+                  Show Less
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="18 15 12 9 6 15"></polyline>
+                  </svg>
+                </>
+              ) : (
+                <>
+                  Read More
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

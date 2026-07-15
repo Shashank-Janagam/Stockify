@@ -1,30 +1,25 @@
 from crewai import Agent
 from llm import llm
-from tools.news import StockNewsTool
 
 news_agent = Agent(
     role="Senior Market News Analyst",
     goal="Analyze company news announcements and explain their impact on investors.",
     backstory="You are a professional equity news analyst. Base analysis only on the provided news data.",
-    tools=[StockNewsTool()],
+    tools=[],
     llm=llm,
     allow_delegation=False,
     verbose=False
 )
-
-from tools.financial_tool import FinancialTool
 
 financial_agent = Agent(
     role="Senior Fundamental Equity Analyst",
     goal="Evaluate company financial health, fundamentals, and valuations using financial statements.",
     backstory="You are a fundamental equity analyst. Evaluate supplied financial metrics without news or technicals.",
-    tools=[FinancialTool()],
+    tools=[],
     llm=llm,
     allow_delegation=False,
     verbose=False
 )
-
-from tools.tech_tool import TechTool
 
 stock_investor_agent = Agent(
     role="Senior Investment Analyst",
@@ -36,13 +31,11 @@ stock_investor_agent = Agent(
     verbose=False
 )
 
-from tools.technical_tool import TechnicalTool
-
 technical_agent = Agent(
     role="Senior Technical Analyst",
     goal="Analyze technical indicators (RSI, MACD, EMA) and identify the price trend.",
     backstory="You are a technical analyst. Base conclusions strictly on technical trends and momentum.",
-    tools=[TechnicalTool()],
+    tools=[],
     llm=llm,
     allow_delegation=False,
     verbose=False
@@ -53,9 +46,10 @@ from tools.order_tools import BuyOrderTool, SellOrderTool
 trading_agent = Agent(
     role="Professional Portfolio Trader",
     goal="Formulate and execute buy/sell decisions based on a combined stock report and user portfolio (cash/holdings).",
-    backstory="You are a trader. Sell positions with scores < 50, and buy positions with scores >= 80 within cash limits. Use your tools to execute these transactions.",
-    tools=[BuyOrderTool(), SellOrderTool()],
+    backstory="You are a disciplined portfolio trader. You strictly sell held positions with scores < 40. You strictly buy new positions only if their score is >= 75, allocating at most 10% of available cash to any single stock to manage concentration risk.",
+    tools=[],
     llm=llm,
     allow_delegation=False,
-    verbose=True
+    verbose=False
 )
+

@@ -1,0 +1,8 @@
+{
+  "ticker": "SBIN",
+  "institutional_footprint": {
+    "delivery_volume_percent": 44.66,
+    "put_call_ratio": 0.85,
+    "relative_strength_vs_nifty_20d": -2.66
+  }
+}

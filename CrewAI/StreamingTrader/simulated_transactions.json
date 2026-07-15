@@ -1,0 +1,12 @@
+[
+    {
+        "timestamp": "10:45:00",
+        "symbol": "KOTAKBANK",
+        "action": "BUY",
+        "quantity": 76,
+        "price": 377.29998779296875,
+        "total_value": 28674.799072265625,
+        "type": "RSI Oversold",
+        "datetime_real": "2026-07-13 23:58:47"
+    }
+]

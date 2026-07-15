@@ -181,8 +181,35 @@ export default function Explore() {
 
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [newsLoading, setNewsLoading] = useState(true);
+  const [sectorAlerts, setSectorAlerts] = useState<any[]>([]);
+  const [sectorAlertsLoading, setSectorAlertsLoading] = useState(true);
 
+  const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
   const PYTHON_HOST = import.meta.env.VITE_PYTHON_API_URL || "http://localhost:5001";
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${HOST}/api/sectorAlerts?limit=5`)
+      .then((res) => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
+      .then((resData) => {
+        if (active && resData.success) {
+          setSectorAlerts(resData.data || []);
+        }
+      })
+      .catch((err) => {
+        console.error("Explore sector alerts fetch error:", err);
+      })
+      .finally(() => {
+        if (active) setSectorAlertsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [HOST]);
 
   useEffect(() => {
     let active = true;
@@ -442,6 +469,90 @@ export default function Explore() {
                 </tbody>
               </table>
             </div>
+          </section>
+
+          {/* MACRO SECTOR ALERTS */}
+          <section className="section reveal reveal-d4" style={{ marginTop: "28px" }}>
+            <h2 className="section-title-groww">Sector Impact Alerts</h2>
+            {sectorAlertsLoading ? (
+              <div className="groww-list" style={{ gap: "12px", padding: "16px" }}>
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className="company-news-sk-item">
+                    <div className="news-sk news-sk-headline" style={{ height: "13px", marginBottom: "8px" }} />
+                    <div className="news-sk news-sk-summary" style={{ height: "20px" }} />
+                  </div>
+                ))}
+              </div>
+            ) : sectorAlerts.length === 0 ? (
+              <div className="groww-empty">
+                <span className="groww-empty-icon">🔔</span>
+                <span>No recent sector alerts</span>
+              </div>
+            ) : (
+              <div className="explore-news-list">
+                {sectorAlerts.slice(0, 3).map((alert) => (
+                  <div key={alert.release_id} className="explore-news-item" style={{ borderLeft: "4px solid #00b386" }}>
+                    <div className="explore-news-meta">
+                      <span className={`importance-chip ${alert.importance.toLowerCase()}`} style={{
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        fontSize: "10px",
+                        fontWeight: 600,
+                        backgroundColor: alert.importance === "High" ? "#fee2e2" : alert.importance === "Medium" ? "#fef3c7" : "#e0f2fe",
+                        color: alert.importance === "High" ? "#dc2626" : alert.importance === "Medium" ? "#d97706" : "#0284c7"
+                      }}>
+                        {alert.importance} Impact
+                      </span>
+                      <span className="explore-news-sym" style={{ marginLeft: "8px", fontSize: "11px", color: "#6b7280" }}>Macro Event</span>
+                    </div>
+                    <div className="explore-news-headline" style={{ fontWeight: 600, marginTop: "6px" }}>
+                      {alert.title}
+                    </div>
+                    <div className="explore-news-summary" style={{ fontSize: "12px", color: "#4b5563", margin: "6px 0", lineHeight: "1.4" }}>
+                      {alert.one_liner}
+                    </div>
+                    
+                    {/* Sectors affected */}
+                    <div className="alert-sectors-list" style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {alert.sectors.map((s: any, idx: number) => (
+                        <div key={idx} style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "8px",
+                          fontSize: "11px",
+                          backgroundColor: "#f9fafb",
+                          padding: "6px 8px",
+                          borderRadius: "6px",
+                          border: "1px solid #f3f4f6"
+                        }}>
+                          <span style={{ fontSize: "12px" }}>
+                            {s.impact === "Positive" ? "🟢" : s.impact === "Negative" ? "🔴" : "🟡"}
+                          </span>
+                          <div>
+                            <span style={{ fontWeight: 600, color: "#1f2937" }}>{s.sector}:</span>{" "}
+                            <span style={{ color: "#4b5563" }}>{s.one_liner}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="explore-news-footer" style={{ marginTop: "8px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "#9ca3af" }}>
+                      <span>{formatDate(alert.date)}</span>
+                      {alert.source_url && (
+                        <a href={alert.source_url} target="_blank" rel="noopener noreferrer" className="explore-pdf-link" style={{ display: "flex", alignItems: "center", color: "#00b386", textDecoration: "none", fontWeight: 500 }}>
+                          Source Page
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "11px", height: "11px", marginLeft: "4px" }}>
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                            <polyline points="15 3 21 3 21 9" />
+                            <line x1="10" y1="14" x2="21" y2="3" />
+                          </svg>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         </div>
 

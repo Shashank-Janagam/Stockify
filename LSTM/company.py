@@ -36,9 +36,13 @@
 # #     print("------------------------------------------------------")
 # #     print(profile)
 
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 import finnhub
 
-finnhub_client = finnhub.Client(api_key="d5cj5r1r01qgl5onejegd5cj5r1r01qgl5onejf0")
+finnhub_client = finnhub.Client(api_key=os.getenv("FINNHUB_KEY", ""))
 
 def get_finnhub_indian_profile(ticker_symbol):
     try:

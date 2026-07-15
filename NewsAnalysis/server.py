@@ -18,14 +18,21 @@ from fastapi.concurrency import run_in_threadpool
 import yfinance as yf
 
 from database import db, announcements_collection, digest_collection, company_profiles_collection, sector_mappings_collection
-from bse_fetcher import fetch_bse_announcements, fetch_overall_market_announcements
+from bse_fetcher import fetch_overall_market_announcements
 from llm_enrichment import enrich_announcements_batch
 
 app = FastAPI(title="Stockify News Analysis API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust in production
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+        "https://api.stockifyindia.app",
+        "https://stockifyindia.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -194,44 +201,59 @@ async def get_stock_news(
     live: bool = Query(False)
 ):
     if live:
-        print(f"Fetching dynamically for {symbol} on user request...")
-        # 1. Always fetch from BSE to ensure we have the absolute latest
-        raw_announcements = await run_in_threadpool(fetch_bse_announcements, symbol)
-        
-        if raw_announcements:
-            # 2. Check what we already have in the DB to avoid re-enriching everything
-            existing_docs = await announcements_collection.find({"symbol": symbol}).to_list(length=1000)
-            existing_ids = {str(doc["bse_id"]) for doc in existing_docs}
+        print(f"Fetching dynamically (overall market) to map for {symbol} on user request...")
+        # 1. Fetch overall market announcements
+        market_announcements = await run_in_threadpool(fetch_overall_market_announcements)
+        if market_announcements:
+            # 2. Map them to stocks using existing resolve logic
+            await resolve_announcement_symbols(market_announcements)
             
-            ten_days_ago = datetime.now() - timedelta(days=10)
-            new_raw = []
-            for ann in raw_announcements:
-                if str(ann["bse_id"]) not in existing_ids:
-                    try:
-                        # Parse date like '2026-05-27T17:59:49.16'
-                        ann_date = datetime.fromisoformat(ann["announced_at"].split('.')[0])
-                        if ann_date >= ten_days_ago:
-                            new_raw.append(ann)
-                    except Exception:
-                        new_raw.append(ann)
+            # 3. Filter for matching announcements
+            symbol_base = symbol.split('.')[0].upper()
+            matching_announcements = []
+            for ann in market_announcements:
+                ann_sym = str(ann.get("symbol", "")).upper()
+                ann_sym_base = ann_sym.split('.')[0]
+                if ann_sym == symbol.upper() or ann_sym_base == symbol_base:
+                    matching_announcements.append(ann)
             
-            if new_raw:
-                # 3. Enrich only the new announcements
-                enriched = await run_in_threadpool(enrich_announcements_batch, new_raw)
+            if matching_announcements:
+                # 4. Check what we already have in the DB to avoid re-enriching everything
+                existing_docs = await announcements_collection.find({
+                    "symbol": {"$regex": f"^{symbol_base}", "$options": "i"}
+                }).to_list(length=1000)
+                existing_ids = {str(doc["bse_id"]) for doc in existing_docs}
                 
-                # 4. Save the new enriched announcements to MongoDB
-                for ann in enriched:
-                    await announcements_collection.update_one(
-                        {"bse_id": ann["bse_id"]},
-                        {"$set": ann},
-                        upsert=True
-                    )
-                print(f"Stored {len(enriched)} new announcements for {symbol}")
+                ten_days_ago = datetime.now() - timedelta(days=10)
+                new_raw = []
+                for ann in matching_announcements:
+                    if str(ann["bse_id"]) not in existing_ids:
+                        try:
+                            # Parse date like '2026-05-27T17:59:49.16'
+                            ann_date = datetime.fromisoformat(ann["announced_at"].split('.')[0])
+                            if ann_date >= ten_days_ago:
+                                new_raw.append(ann)
+                        except Exception:
+                            new_raw.append(ann)
+                
+                if new_raw:
+                    # 5. Enrich only the new matching announcements
+                    enriched = await run_in_threadpool(enrich_announcements_batch, new_raw)
+                    
+                    # 6. Save the new enriched announcements to MongoDB
+                    for ann in enriched:
+                        await announcements_collection.update_one(
+                            {"bse_id": ann["bse_id"]},
+                            {"$set": ann},
+                            upsert=True
+                        )
+                    print(f"Stored {len(enriched)} new announcements dynamically for {symbol}")
                 
     # Return latest news from DB (only from the past 10 days)
     ten_days_ago_iso = (datetime.now() - timedelta(days=10)).isoformat()
+    symbol_base = symbol.split('.')[0].upper()
     cursor = announcements_collection.find({
-        "symbol": symbol,
+        "symbol": {"$in": [symbol.upper(), f"{symbol_base}.NS", f"{symbol_base}.BO", symbol_base]},
         "announced_at": {"$gte": ten_days_ago_iso}
     }).sort("announced_at", -1).limit(20)
     
@@ -268,6 +290,62 @@ def get_company_profile(ticker_symbol: str):
     except Exception as e:
         print(f"Error fetching company profile for {ticker_symbol}: {e}")
         return None
+
+async def classify_sector_with_llm(company_name: str, summary_text: str) -> str:
+    api_key = GROQ_API_KEY
+    if not api_key:
+        return "Other"
+        
+    prompt = f"""
+    Analyze the company name and business description below, and classify it into exactly ONE of the following standard sectors:
+    - Banking
+    - NBFC
+    - Automobile
+    - Real Estate
+    - Infrastructure
+    - IT
+    - Pharma
+    - FMCG
+    - Metals
+    - Energy
+    - Telecommunication
+    - Chemicals
+    - Textiles
+    - Other
+    
+    Company Name: {company_name}
+    Description: {summary_text[:1200]}
+    
+    Respond ONLY with the name of the matched sector (e.g. "Banking" or "IT"). Do not write any other text.
+    """
+    
+    try:
+        openai_client = AsyncOpenAI(api_key=api_key, base_url=LLM_BASE_URL)
+        response = await openai_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that outputs only a single sector name from the allowed list."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0,
+            max_tokens=20
+        )
+        result = response.choices[0].message.content.strip()
+        clean_result = result.replace('"', '').replace("'", "").replace(".", "").strip()
+        
+        valid_sectors = [
+            "Banking", "NBFC", "Automobile", "Real Estate", "Infrastructure", 
+            "IT", "Pharma", "FMCG", "Metals", "Energy", "Telecommunication", 
+            "Chemicals", "Textiles", "Other"
+        ]
+        
+        for sector in valid_sectors:
+            if clean_result.lower() == sector.lower():
+                return sector
+        return "Other"
+    except Exception as e:
+        print(f"Error classifying sector with LLM: {e}")
+        return "Other"
 
 async def enrich_profile_summary_with_llm(profile_data: dict) -> dict:
     if not profile_data or not profile_data.get("summary_text") or profile_data["summary_text"] == "No corporate summary available.":
@@ -344,6 +422,36 @@ async def enrich_profile_summary_with_llm(profile_data: dict) -> dict:
         
     return profile_data
 
+async def generate_summary_with_llm(company_name: str, sector: str) -> str:
+    api_key = GROQ_API_KEY
+    if not api_key:
+        return "No corporate summary available."
+        
+    prompt = f"""
+    Write a concise, professional 3-4 sentence business summary for the company named "{company_name}", which operates in the {sector} sector.
+    Explain what the company primarily does, its key business model or products, and its importance in the market.
+    
+    Output ONLY the summary paragraph. Do not include any conversational prefix, suffix, or headers.
+    """
+    
+    try:
+        openai_client = AsyncOpenAI(api_key=api_key, base_url=LLM_BASE_URL)
+        response = await openai_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": "You are a concise financial analyst assistant that generates complete, professional business summaries."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=250
+        )
+        content = response.choices[0].message.content
+        if content and content.strip():
+            return content.strip()
+    except Exception as e:
+        print(f"Error generating business summary with LLM: {e}")
+    return "No corporate summary available."
+
 async def get_or_create_profile(symbol: str):
     ticker_symbol = symbol.strip().upper()
     symbol_base = ticker_symbol.split('.')[0]
@@ -354,6 +462,39 @@ async def get_or_create_profile(symbol: str):
     
     profile = await company_profiles_collection.find_one({"symbol": {"$in": candidates}})
     if profile:
+        has_no_summary = (
+            not profile.get("summary_text")
+            or profile.get("summary_text") == "No corporate summary available."
+            or profile.get("summary_text").strip() == ""
+        )
+        need_update = False
+        
+        # If cached entry has missing or N/A sector, classify it dynamically using LLM
+        if (not profile.get("sector") or profile.get("sector") == "N/A") and profile.get("summary_text") and profile.get("summary_text") != "No corporate summary available.":
+            print(f"Cached profile for {symbol} has sector 'N/A'. Classifying with LLM...")
+            classified_sector = await classify_sector_with_llm(profile.get("company_name", ""), profile.get("summary_text", ""))
+            if classified_sector and classified_sector != "Other":
+                profile["sector"] = classified_sector
+                need_update = True
+                await sector_mappings_collection.update_one(
+                    {"sector": classified_sector},
+                    {"$addToSet": {"stocks": profile["symbol"]}},
+                    upsert=True
+                )
+                
+        # If cached entry is missing a valid summary, generate one
+        if has_no_summary:
+            print(f"Cached profile for {symbol} has no summary. Generating with LLM...")
+            generated_summary = await generate_summary_with_llm(profile.get("company_name", profile.get("symbol", symbol)), profile.get("sector", "Others"))
+            profile["summary_text"] = generated_summary
+            need_update = True
+
+        if need_update:
+            await company_profiles_collection.update_one(
+                {"symbol": profile["symbol"]},
+                {"$set": {"sector": profile.get("sector"), "summary_text": profile.get("summary_text")}}
+            )
+            
         if "_id" in profile:
             profile["_id"] = str(profile["_id"])
         return profile
@@ -361,8 +502,25 @@ async def get_or_create_profile(symbol: str):
     # Cache miss - fetch live profile
     profile_data = await run_in_threadpool(get_company_profile, ticker_symbol)
     if profile_data:
-        # Enrich summary with LLM using the OpenAI/Groq model
-        profile_data = await enrich_profile_summary_with_llm(profile_data)
+        # If Yahoo Finance did not provide a valid sector, classify using LLM
+        if (not profile_data.get("sector") or profile_data.get("sector") == "N/A") and profile_data.get("summary_text") and profile_data.get("summary_text") != "No corporate summary available.":
+            print(f"Live profile for {symbol} has sector 'N/A'. Classifying with LLM...")
+            classified_sector = await classify_sector_with_llm(profile_data.get("company_name", ""), profile_data.get("summary_text", ""))
+            profile_data["sector"] = classified_sector
+
+        # If Yahoo Finance did not provide a summary text, generate using LLM
+        has_no_summary = (
+            not profile_data.get("summary_text")
+            or profile_data.get("summary_text") == "No corporate summary available."
+            or profile_data.get("summary_text").strip() == ""
+        )
+        if has_no_summary:
+            print(f"Live profile for {symbol} has no summary. Generating with LLM...")
+            generated_summary = await generate_summary_with_llm(profile_data.get("company_name", profile_data.get("symbol", symbol)), profile_data.get("sector", "Others"))
+            profile_data["summary_text"] = generated_summary
+        else:
+            # Enrich summary with LLM using the OpenAI/Groq model
+            profile_data = await enrich_profile_summary_with_llm(profile_data)
         
         # Cache profile details
         await company_profiles_collection.update_one(
@@ -372,7 +530,7 @@ async def get_or_create_profile(symbol: str):
         )
         # Add to sector mapping if valid
         sector = profile_data.get("sector")
-        if sector and sector != "N/A":
+        if sector and sector != "N/A" and sector != "Other":
             await sector_mappings_collection.update_one(
                 {"sector": sector},
                 {"$addToSet": {"stocks": profile_data["symbol"]}},
@@ -489,7 +647,7 @@ async def fetch_news_periodically():
         except Exception as e:
             print(f"Error in background fetch task: {e}")
         
-        await asyncio.sleep(6000) # 10 minutes
+        await asyncio.sleep(600) # 10 minutes
 
 @app.on_event("startup")
 async def startup_event():
