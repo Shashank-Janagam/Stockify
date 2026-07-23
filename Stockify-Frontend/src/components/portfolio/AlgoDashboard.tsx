@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import "../../Styles/AlgoDashboard.css";
 
 type AlgoConfig = {
