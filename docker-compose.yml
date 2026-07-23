@@ -10,6 +10,7 @@ services:
       - ./Stockify-Backend/.env
     environment:
       - PYTHON_SERVER_URL=http://news-analysis:5001/api/news
+      - UPSTOX_WS_URL=ws://upstox-backend:4141
       - NODE_ENV=production
 
   news-analysis:
