@@ -230,7 +230,15 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   /* =========================
      1D → SSE (MARKET OPEN)
   ========================= */
-  const { subscribe, unsubscribe, lastMessage } = useWebSocket();
+  const { subscribe, unsubscribe, lastMessage, pauseBackgroundFeeds, resumeBackgroundFeeds } = useWebSocket();
+
+  // ⏸️ Pause all background feeds while this stock page is active for faster updates
+  useEffect(() => {
+    pauseBackgroundFeeds();
+    return () => {
+      resumeBackgroundFeeds();
+    };
+  }, []);
 
   useEffect(() => {
     if (timeframe !== "1D") return;

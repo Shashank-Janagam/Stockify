@@ -1,0 +1,50 @@
+[
+    {
+        "action": "BUY",
+        "price": 337.14,
+        "qty": 28178,
+        "value": 9499930.92,
+        "type": "IMBALANCE ENTRY (AI Approved)",
+        "time_idx": 9
+    },
+    {
+        "action": "SELL",
+        "price": 337.74,
+        "qty": 28178,
+        "value": 9516837.72,
+        "type": "TAKE PROFIT (+Rs. 0.60)",
+        "time_idx": 10
+    },
+    {
+        "action": "BUY",
+        "price": 338.01,
+        "qty": 28153,
+        "value": 9515995.53,
+        "type": "IMBALANCE ENTRY (AI Approved)",
+        "time_idx": 16
+    },
+    {
+        "action": "SELL",
+        "price": 338.45,
+        "qty": 28153,
+        "value": 9528382.85,
+        "type": "TAKE PROFIT (+Rs. 0.44)",
+        "time_idx": 17
+    },
+    {
+        "action": "BUY",
+        "price": 338.41,
+        "qty": 28154,
+        "value": 9527595.14,
+        "type": "IMBALANCE ENTRY (AI Approved)",
+        "time_idx": 18
+    },
+    {
+        "action": "SELL",
+        "price": 338.1,
+        "qty": 28154,
+        "value": 9518867.4,
+        "type": "STOP LOSS (-Rs. 0.31)",
+        "time_idx": 19
+    }
+]

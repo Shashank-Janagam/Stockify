@@ -78,7 +78,7 @@ def fetch_data(symbol: str) -> pd.DataFrame:
     # Always fetch up to today so the model trains on current data
     today = pd.Timestamp.today().strftime("%Y-%m-%d")
     log.info("Fetching %s up to %s …", ticker, today)
-    df = yf.download(ticker, start="2024-01-01", end=today, interval="1d",
+    df = yf.download(ticker, start="2024-01-01", end="2026-07-16", interval="1d",
                      auto_adjust=True, progress=False)
     if df.empty:
         raise HTTPException(status_code=404,

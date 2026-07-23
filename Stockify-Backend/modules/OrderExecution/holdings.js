@@ -4,6 +4,7 @@ import admin from "../../Middleware/admin.js";
 import { db } from "../../db/sql.js";
 import YahooFinance from "yahoo-finance2";
 import redis from "../../cache/redisClient.js";
+import { upstoxFeedService } from "../websocket/upstoxFeed.service.js";
 
 const router = express.Router();
 const yahoo = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
@@ -84,10 +85,40 @@ export async function computeHoldingsPayload(holdings, userId) {
     };
   }
 
-  const quotesRaw = await yahoo.quote(allSymbols.map(s => s.endsWith(".NS") ? s : `${s}.NS`));
-  const quotes = Array.isArray(quotesRaw) ? quotesRaw : [quotesRaw];
+  upstoxFeedService.subscribe(allSymbols);
   const quoteMap = {};
-  quotes.forEach(q => { if (q?.symbol) quoteMap[q.symbol] = q; });
+  const missingForYahoo = [];
+
+  allSymbols.forEach(s => {
+    const tick = upstoxFeedService.getTick(s);
+    if (tick) {
+      const formattedQuote = {
+        symbol: s.endsWith(".NS") ? s : `${s}.NS`,
+        regularMarketPrice: tick.price,
+        regularMarketChange: tick.change,
+        regularMarketChangePercent: tick.percent,
+        regularMarketPreviousClose: tick.prev_close,
+        regularMarketOpen: tick.open,
+        regularMarketDayHigh: tick.high,
+        regularMarketDayLow: tick.low,
+      };
+      quoteMap[s] = formattedQuote;
+      quoteMap[`${s}.NS`] = formattedQuote;
+      quoteMap[s.replace(/\.NS$/, "")] = formattedQuote;
+    } else {
+      missingForYahoo.push(s.endsWith(".NS") ? s : `${s}.NS`);
+    }
+  });
+
+  if (missingForYahoo.length > 0) {
+    try {
+      const quotesRaw = await yahoo.quote(missingForYahoo);
+      const quotes = Array.isArray(quotesRaw) ? quotesRaw : [quotesRaw];
+      quotes.forEach(q => { if (q?.symbol) quoteMap[q.symbol] = q; });
+    } catch (e) {
+      console.error("Yahoo holdings fallback quote error:", e.message);
+    }
+  }
 
   let investedValue = 0, currentValue = 0, dayReturns = 0;
   const enriched = [];
@@ -233,10 +264,40 @@ export async function computePositionsPayload(lots, userId) {
     };
   }
 
-  const quotesRaw = await yahoo.quote(allSymbols.map(s => s.endsWith(".NS") ? s : `${s}.NS`));
-  const quotes = Array.isArray(quotesRaw) ? quotesRaw : [quotesRaw];
+  upstoxFeedService.subscribe(allSymbols);
   const quoteMap = {};
-  quotes.forEach(q => { if (q?.symbol) quoteMap[q.symbol] = q; });
+  const missingForYahoo = [];
+
+  allSymbols.forEach(s => {
+    const tick = upstoxFeedService.getTick(s);
+    if (tick) {
+      const formattedQuote = {
+        symbol: s.endsWith(".NS") ? s : `${s}.NS`,
+        regularMarketPrice: tick.price,
+        regularMarketChange: tick.change,
+        regularMarketChangePercent: tick.percent,
+        regularMarketPreviousClose: tick.prev_close,
+        regularMarketOpen: tick.open,
+        regularMarketDayHigh: tick.high,
+        regularMarketDayLow: tick.low,
+      };
+      quoteMap[s] = formattedQuote;
+      quoteMap[`${s}.NS`] = formattedQuote;
+      quoteMap[s.replace(/\.NS$/, "")] = formattedQuote;
+    } else {
+      missingForYahoo.push(s.endsWith(".NS") ? s : `${s}.NS`);
+    }
+  });
+
+  if (missingForYahoo.length > 0) {
+    try {
+      const quotesRaw = await yahoo.quote(missingForYahoo);
+      const quotes = Array.isArray(quotesRaw) ? quotesRaw : [quotesRaw];
+      quotes.forEach(q => { if (q?.symbol) quoteMap[q.symbol] = q; });
+    } catch (e) {
+      console.error("Yahoo positions fallback quote error:", e.message);
+    }
+  }
 
   let investedValue = 0, currentValue = 0, dayReturns = 0;
   const positions = [];

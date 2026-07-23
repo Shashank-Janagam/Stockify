@@ -1,12 +1,21 @@
 
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { AuthContext } from "../auth/AuthProvider";
+
+// Topics that are "background" feeds — paused when a specific stock page is open
+const BACKGROUND_TOPICS = ["EXPLORE_LIVE", "RECENT_LIVE", "HOLDINGS_LIVE", "INDICES_LIVE", "POSITIONS_LIVE"];
 
 type WebSocketContextType = {
   subscribe: (topic: string, params?: any) => void;
   unsubscribe: (topic: string, params?: any) => void;
   lastMessage: any;
   isConnected: boolean;
+  /** Call on stock-page mount: pauses all background feeds on the server */
+  pauseBackgroundFeeds: () => void;
+  /** Call on stock-page unmount: resumes all background feeds on the server */
+  resumeBackgroundFeeds: () => void;
+  /** True while background feeds are paused */
+  isFeedsPaused: boolean;
 };
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -15,9 +24,11 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const { user } = useContext(AuthContext);
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<any>(null);
+  const [isFeedsPaused, setIsFeedsPaused] = useState(false);
   const ws = useRef<WebSocket | null>(null);
   const subscriptions = useRef<Map<string, number>>(new Map());
   const userRef = useRef(user);
+  const feedsPausedRef = useRef(false);
 
   useEffect(() => {
     userRef.current = user;
@@ -57,9 +68,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       socket.onopen = () => {
         console.log("✅ WebSocket connected");
         setIsConnected(true);
-        // Re-subscribe to existing topics
+        // Re-subscribe to existing topics (skip background if paused)
         for (const sub of subscriptions.current.keys()) {
           const [topic, paramsStr] = sub.split("|");
+          if (feedsPausedRef.current && BACKGROUND_TOPICS.includes(topic)) continue;
           const params = paramsStr ? JSON.parse(paramsStr) : {};
           sendSubscription(topic, params);
         }
@@ -111,11 +123,22 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  function sendUnsubscription(topic: string, params: any = {}) {
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({
+        type: "UNSUBSCRIBE",
+        topic,
+        ...params
+      }));
+    }
+  }
+
   // 🔥 Re-subscribe all when user logs in
   useEffect(() => {
     if (user && isConnected) {
       for (const sub of subscriptions.current.keys()) {
         const [topic, paramsStr] = sub.split("|");
+        if (feedsPausedRef.current && BACKGROUND_TOPICS.includes(topic)) continue;
         const params = paramsStr ? JSON.parse(paramsStr) : {};
         sendSubscription(topic, params);
       }
@@ -127,7 +150,12 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const currentCount = subscriptions.current.get(subKey) || 0;
     subscriptions.current.set(subKey, currentCount + 1);
     
+    // Don't actually send to server if background feeds are paused and this is a background topic
     if (currentCount === 0) {
+      if (feedsPausedRef.current && BACKGROUND_TOPICS.includes(topic)) {
+        console.log(`⏸️ [WS] Skipping subscribe for paused background topic: ${topic}`);
+        return;
+      }
       sendSubscription(topic, params);
     }
   }
@@ -150,8 +178,42 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  /** Pause all background feed subscriptions on the server (called when entering a stock page) */
+  const pauseBackgroundFeeds = useCallback(() => {
+    if (feedsPausedRef.current) return; // already paused
+    feedsPausedRef.current = true;
+    setIsFeedsPaused(true);
+    console.log("⏸️ [WS] Pausing background feeds for stock page");
+
+    // Send UNSUBSCRIBE for every active background subscription
+    for (const sub of subscriptions.current.keys()) {
+      const [topic, paramsStr] = sub.split("|");
+      if (BACKGROUND_TOPICS.includes(topic)) {
+        const params = paramsStr ? JSON.parse(paramsStr) : {};
+        sendUnsubscription(topic, params);
+      }
+    }
+  }, []);
+
+  /** Resume all background feed subscriptions on the server (called when leaving a stock page) */
+  const resumeBackgroundFeeds = useCallback(() => {
+    if (!feedsPausedRef.current) return; // already running
+    feedsPausedRef.current = false;
+    setIsFeedsPaused(false);
+    console.log("▶️ [WS] Resuming background feeds after stock page");
+
+    // Re-subscribe all background topics that are still in the subscriptions map
+    for (const sub of subscriptions.current.keys()) {
+      const [topic, paramsStr] = sub.split("|");
+      if (BACKGROUND_TOPICS.includes(topic)) {
+        const params = paramsStr ? JSON.parse(paramsStr) : {};
+        sendSubscription(topic, params);
+      }
+    }
+  }, []);
+
   return (
-    <WebSocketContext.Provider value={{ subscribe, unsubscribe, lastMessage, isConnected }}>
+    <WebSocketContext.Provider value={{ subscribe, unsubscribe, lastMessage, isConnected, pauseBackgroundFeeds, resumeBackgroundFeeds, isFeedsPaused }}>
       {children}
     </WebSocketContext.Provider>
   );

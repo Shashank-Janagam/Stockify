@@ -51,4 +51,12 @@ services:
     env_file:
       - ./MultiAgent/PressRelease/.env
 
-
+  upstox-backend:
+    build:
+      context: ./Upstox-Backend
+    container_name: upstox-backend
+    ports:
+      - "4141:4141"
+    restart: unless-stopped
+    env_file:
+      - ./Upstox-Backend/.env

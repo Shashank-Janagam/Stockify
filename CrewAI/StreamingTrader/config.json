@@ -1,6 +1,16 @@
 {
-    "rsi_buy_threshold": 38,
-    "rsi_sell_threshold": 82,
-    "stop_loss_pct": 0.035,
-    "bias": "bullish"
+    "rsi_buy_threshold": 55,
+    "rsi_sell_threshold": 59,
+    "stop_loss_pct": 0.003,
+    "take_profit_pct": 0.012,
+    "trailing_stop_pct": 0.005,
+    "min_signal_score": 2,
+    "bias": "bullish",
+    "buy_fraction": 1.0,
+    "sell_fraction": 1.0,
+    "cooldown_sec": 0.0,
+    "pause_ai": true,
+    "dynamic_rsi": true,
+    "rsi_window": 20,
+    "rsi_sell_offset": 4
 }
