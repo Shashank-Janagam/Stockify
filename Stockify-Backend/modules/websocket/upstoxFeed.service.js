@@ -1,7 +1,7 @@
 import { WebSocket } from "ws";
 
 class UpstoxFeedService {
-  constructor(feedUrl = "ws://localhost:4141") {
+  constructor(feedUrl = process.env.UPSTOX_WS_URL || "ws://localhost:4141") {
     this.feedUrl = feedUrl;
     this.ws = null;
     this.isConnected = false;
