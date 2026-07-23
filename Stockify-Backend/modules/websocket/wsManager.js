@@ -7,6 +7,7 @@ import { MultiStockYahoo } from "../stocks/multiStockIndia.js";
 import { getDb } from "../../db/mongo.js";
 import { db } from "../../db/sql.js";
 import { getNSETopGainers, getNSETopLosers } from "../stocks/multiCurrentMovers.js";
+import { upstoxFeedService } from "./upstoxFeed.service.js";
 // We'll need these from holdings.js, so we should export them there or duplicate/refactor
 // For speed, let's assume we can refactor holdings.js to export its logic
 
@@ -23,11 +24,20 @@ export  class WebSocketManager {
     this.exploreSubscribers = new Set();
     this.exploreInterval = null;
     this.lastExploreData = null;
+    // Tracks currently-subscribed Upstox symbols for the Explore feed
+    this.exploreSymbolsActive = new Set();
 
     // Indices shared broadcast
     this.indicesSubscribers = new Set();
     this.indicesInterval = null;
     this.lastIndicesData = null;
+    this.INDICES = [
+      { symbol: "^NSEI",             label: "NIFTY 50" },
+      { symbol: "^BSESN",            label: "SENSEX" },
+      { symbol: "^NSEBANK",          label: "BANKNIFTY" },
+      { symbol: "NIFTY_MIDCAP_100.NS", label: "MIDCPNIFTY" },
+      { symbol: "NIFTY_FIN_SERVICE.NS", label: "FINNIFTY" },
+    ];
 
     const heartbeat = setInterval(() => {
       this.wss.clients.forEach((ws) => {
@@ -132,7 +142,8 @@ export  class WebSocketManager {
       }
     }
 
-    const subKey = `${topic}:${JSON.stringify(params.symbol || "")}`;
+    const symbolKey = typeof params?.symbol === 'string' ? params.symbol : "";
+    const subKey = `${topic}:${symbolKey}`;
     if (client.subscriptions.has(subKey)) return;
 
     console.log(`📡 Subscribing to ${topic} ${params.symbol || ""}`);
@@ -171,22 +182,35 @@ export  class WebSocketManager {
     const client = this.clients.get(ws);
     if (!client) return;
 
-    const subKey = `${topic}:${JSON.stringify(params.symbol || "")}`;
+    const symbolKey = typeof params?.symbol === 'string' ? params.symbol : "";
+    const subKey = `${topic}:${symbolKey}`;
+    
+    console.log(`[WS DEBUG] Attempting to unsubscribe from subKey: ${subKey}`);
+
     if (client.subscriptions.has(subKey)) {
       if (topic === "EXPLORE_LIVE") {
+        console.log(`[WS DEBUG] EXPLORE_LIVE exact match. Deleting from exploreSubscribers...`);
         this.exploreSubscribers.delete(ws);
-        if (this.exploreSubscribers.size === 0 && this.exploreInterval) {
-          clearInterval(this.exploreInterval);
-          this.exploreInterval = null;
+        console.log(`[WS DEBUG] exploreSubscribers size is now: ${this.exploreSubscribers.size}`);
+        
+        if (this.exploreSubscribers.size === 0) {
+          console.log(`[WS DEBUG] No more explore subscribers. Clearing intervals and unsubscribing from Upstox API.`);
+          if (this.exploreInterval) { clearInterval(this.exploreInterval); this.exploreInterval = null; }
+          // Unsubscribe all explore symbols from Upstox when nobody is watching
+          upstoxFeedService.unsubscribe([...this.exploreSymbolsActive]);
+          this.exploreSymbolsActive.clear();
         }
       } else if (topic === "INDICES_LIVE") {
         this.indicesSubscribers.delete(ws);
-        if (this.indicesSubscribers.size === 0 && this.indicesInterval) {
-          clearInterval(this.indicesInterval);
-          this.indicesInterval = null;
+        if (this.indicesSubscribers.size === 0) {
+          if (this.indicesInterval) { clearInterval(this.indicesInterval); this.indicesInterval = null; }
+          // Unsubscribe index symbols from Upstox when nobody is watching
+          upstoxFeedService.unsubscribe(this.INDICES.map(i => i.symbol));
         }
       } else {
-        clearInterval(client.subscriptions.get(subKey));
+        const handle = client.subscriptions.get(subKey);
+        if (typeof handle === "function") handle();
+        else clearInterval(handle);
       }
       client.subscriptions.delete(subKey);
       console.log(`🔕 Unsubscribed from ${subKey}`);
@@ -202,17 +226,19 @@ export  class WebSocketManager {
         } else if (subKey.startsWith("INDICES_LIVE")) {
             this.indicesSubscribers.delete(ws);
         } else {
-            clearInterval(interval);
+            if (typeof interval === "function") interval();
+            else clearInterval(interval);
         }
       });
 
-      if (this.exploreSubscribers.size === 0 && this.exploreInterval) {
-        clearInterval(this.exploreInterval);
-        this.exploreInterval = null;
+      if (this.exploreSubscribers.size === 0) {
+        if (this.exploreInterval) { clearInterval(this.exploreInterval); this.exploreInterval = null; }
+        upstoxFeedService.unsubscribe([...this.exploreSymbolsActive]);
+        this.exploreSymbolsActive.clear();
       }
-      if (this.indicesSubscribers.size === 0 && this.indicesInterval) {
-        clearInterval(this.indicesInterval);
-        this.indicesInterval = null;
+      if (this.indicesSubscribers.size === 0) {
+        if (this.indicesInterval) { clearInterval(this.indicesInterval); this.indicesInterval = null; }
+        upstoxFeedService.unsubscribe(this.INDICES.map(i => i.symbol));
       }
     }
     this.clients.delete(ws);
@@ -221,11 +247,59 @@ export  class WebSocketManager {
   // --- Topic Implementations ---
 
   startStockLive(ws, symbol) {
+    upstoxFeedService.subscribe([symbol]);
+
+    // Cache the full Yahoo quote (fundamentals) — refresh every 1 minute
+    let cachedYahooQuote = null;
+    let lastYahooFetch = 0;
+    const YAHOO_TTL_MS = 1 * 1000*120; // 1 minute
+
+    const fetchYahooQuote = async () => {
+      const now = Date.now();
+      if (!cachedYahooQuote || now - lastYahooFetch > YAHOO_TTL_MS) {
+        try {
+          cachedYahooQuote = await getYahooIndiaQuote(symbol);
+          lastYahooFetch = now;
+        } catch (err) {
+          // Keep stale cache on error
+          console.error("WS Yahoo quote fetch error:", err.message);
+        }
+      }
+      return cachedYahooQuote;
+    };
+
     const sendUpdate = async () => {
       try {
-        const candlesRaw = await getYahooIndiaHistory(symbol, 1);
+        const [candlesRaw, yahooQuote] = await Promise.all([
+          getYahooIndiaHistory(symbol, 1),
+          fetchYahooQuote()
+        ]);
         const candles = candlesRaw.map(d => ({ x: d.x, c: d.c }));
-        const quote = await getYahooIndiaQuote(symbol);
+
+        const upstoxTick = upstoxFeedService.getTick(symbol);
+        let quote;
+
+        if (upstoxTick) {
+          // Merge: start with full Yahoo quote for fundamentals,
+          // then overlay live Upstox price fields so fundamentals are never missing
+          quote = {
+            ...(yahooQuote || {}),
+            symbol: symbol.endsWith(".NS") ? symbol : `${symbol}.NS`,
+            shortName: upstoxTick.name || yahooQuote?.shortName,
+            longName: upstoxTick.name || yahooQuote?.longName,
+            regularMarketPrice: upstoxTick.price || yahooQuote?.regularMarketPrice,
+            regularMarketChange: upstoxTick.change || yahooQuote?.regularMarketChange,
+            regularMarketChangePercent: upstoxTick.percent || yahooQuote?.regularMarketChangePercent,
+            regularMarketPreviousClose: upstoxTick.prev_close || yahooQuote?.regularMarketPreviousClose,
+            regularMarketOpen: upstoxTick.open || yahooQuote?.regularMarketOpen,
+            regularMarketDayHigh: upstoxTick.high || yahooQuote?.regularMarketDayHigh,
+            regularMarketDayLow: upstoxTick.low || yahooQuote?.regularMarketDayLow,
+            marketState: "REGULAR"
+          };
+        } else {
+          // Upstox not available — use Yahoo quote directly
+          quote = yahooQuote;
+        }
 
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify({
@@ -240,7 +314,27 @@ export  class WebSocketManager {
     };
 
     sendUpdate();
-    return setInterval(sendUpdate, 1500);
+
+    // Event-driven: push to frontend on every Upstox tick for this symbol
+    const cleanSym = symbol.replace(/\.NS$/, "").toUpperCase();
+    const removeListener = upstoxFeedService.onTick((tick) => {
+      if (tick.symbol === cleanSym && ws.readyState === ws.OPEN) {
+        sendUpdate();
+      }
+    });
+
+    // Fallback polling if Upstox is offline
+    let fallbackInterval = null;
+    if (!upstoxFeedService.isConnected) {
+      fallbackInterval = setInterval(sendUpdate, 1500);
+    }
+
+    return () => {
+      removeListener();
+      if (fallbackInterval) clearInterval(fallbackInterval);
+      // Release the Upstox subscription when this client leaves
+      upstoxFeedService.unsubscribe([symbol]);
+    };
   }
 
   async startExploreLive(ws) {
@@ -261,44 +355,58 @@ export  class WebSocketManager {
     if (this.exploreInterval) return;
 
     const mostTradedList = ["HDFCBANK.NS", "TCS.NS", "INFY.NS", "ITC.NS"];
-    
+
     const sendUpdate = async () => {
       try {
         if (this.exploreSubscribers.size === 0) {
-            clearInterval(this.exploreInterval);
-            this.exploreInterval = null;
-            return;
+          clearInterval(this.exploreInterval);
+          this.exploreInterval = null;
+          return;
         }
 
         const moversList = await getNSETopGainers();
         const losersList = await getNSETopLosers();
 
-        const [mostTraded, movers, losers] = await Promise.all([
-          MultiStockYahoo(mostTradedList),
-          MultiStockYahoo(moversList),
-          MultiStockYahoo(losersList)
-        ]);
+        // If the last client unsubscribed while we were waiting for the API, abort immediately!
+        if (this.exploreSubscribers.size === 0) return;
+
+        // Diff subscribe: subscribe only newly-needed symbols, unsubscribe stale ones
+        const neededNow = new Set([...mostTradedList, ...moversList, ...losersList]
+          .map(s => s.replace(/\.NS$/, "").toUpperCase()));
+        const toAdd = [...neededNow].filter(s => !this.exploreSymbolsActive.has(s));
+        const toRemove = [...this.exploreSymbolsActive].filter(s => !neededNow.has(s));
+        if (toAdd.length > 0) upstoxFeedService.subscribe(toAdd);
+        if (toRemove.length > 0) upstoxFeedService.unsubscribe(toRemove);
+        this.exploreSymbolsActive = neededNow;
+
+        const fetchListWithUpstox = (symList) => {
+          return symList.map(sym => {
+            const clean = sym.replace(/\.NS$/, "").toUpperCase();
+            const tick = upstoxFeedService.getTick(clean);
+            const formattedSymbol = (sym.endsWith(".NS") || sym.endsWith(".BO") || sym.startsWith("^"))
+              ? sym
+              : `${sym}.NS`;
+            return {
+              symbol: formattedSymbol,
+              name: tick?.name || clean,
+              price: tick?.price ?? null,
+              change: tick?.change ?? 0,
+              percent: tick?.percent ?? 0,
+              marketState: "REGULAR",
+              volume: null
+            };
+          });
+        };
+
+        const mostTraded = fetchListWithUpstox(mostTradedList);
+        const movers = fetchListWithUpstox(moversList);
+        const losers = fetchListWithUpstox(losersList);
 
         this.lastExploreData = { mostTraded, movers, losers };
-        const payload = JSON.stringify({
-          type: "EXPLORE_UPDATE",
-          data: this.lastExploreData
+        const payload = JSON.stringify({ type: "EXPLORE_UPDATE", data: this.lastExploreData });
+        this.exploreSubscribers.forEach(sub => {
+          if (sub.readyState === sub.OPEN) sub.send(payload);
         });
-
-        this.exploreSubscribers.forEach(subscriber => {
-          if (subscriber.readyState === subscriber.OPEN) {
-            subscriber.send(payload);
-          }
-        });
-
-        // 🛑 If market is not live, clear the polling interval to stop spamming Yahoo Finance
-        const marketState = mostTraded[0]?.marketState;
-        if (marketState && marketState !== "REGULAR") {
-          if (this.exploreInterval) {
-            clearInterval(this.exploreInterval);
-            this.exploreInterval = null;
-          }
-        }
       } catch (err) {
         console.error("WS Explore Shared Update Error:", err);
       }
@@ -322,33 +430,23 @@ export  class WebSocketManager {
 
     if (this.indicesInterval) return;
 
-    const INDICES = [
-      { symbol: "^NSEI",   label: "NIFTY 50" },
-      { symbol: "^BSESN",  label: "SENSEX" },
-      { symbol: "^NSEBANK",label: "BANKNIFTY" },
-      { symbol: "NIFTY_MIDCAP_100.NS", label: "MIDCPNIFTY" },
-      { symbol: "NIFTY_FIN_SERVICE.NS", label: "FINNIFTY" },
-    ];
-    const symbols = INDICES.map(i => i.symbol);
+    // Subscribe once to all index symbols — released when last subscriber leaves
+    upstoxFeedService.subscribe(this.INDICES.map(i => i.symbol));
 
-    const sendUpdate = async () => {
+    const sendUpdate = () => {
       try {
         if (this.indicesSubscribers.size === 0) {
-          if (this.indicesInterval) {
-            clearInterval(this.indicesInterval);
-            this.indicesInterval = null;
-          }
+          if (this.indicesInterval) { clearInterval(this.indicesInterval); this.indicesInterval = null; }
           return;
         }
-        const quotes = await MultiStockYahoo(symbols);
-        const mapped = INDICES.map(idx => {
-          const q = quotes.find(q => q.symbol === idx.symbol);
+        const mapped = this.INDICES.map(idx => {
+          const tick = upstoxFeedService.getTick(idx.symbol);
           return {
             symbol: idx.symbol,
             label: idx.label,
-            price: q?.price ?? null,
-            change: q?.change ?? 0,
-            percent: q?.percent ?? 0,
+            price: tick?.price ?? null,
+            change: tick?.change ?? 0,
+            percent: tick?.percent ?? 0,
           };
         });
         this.lastIndicesData = mapped;
@@ -356,28 +454,20 @@ export  class WebSocketManager {
         this.indicesSubscribers.forEach(sub => {
           if (sub.readyState === sub.OPEN) sub.send(payload);
         });
-
-        // 🛑 If market is not live, clear the polling interval
-        const niftyQuote = quotes.find(q => q.symbol === "^NSEI");
-        const marketState = niftyQuote?.marketState;
-        if (marketState && marketState !== "REGULAR") {
-          if (this.indicesInterval) {
-            clearInterval(this.indicesInterval);
-            this.indicesInterval = null;
-          }
-        }
       } catch (err) {
         console.error("WS Indices Update Error:", err);
       }
     };
 
-    this.indicesInterval = setInterval(sendUpdate, 3000);
+    this.indicesInterval = setInterval(sendUpdate, 1000);
     sendUpdate();
   }
 
   startRecentLive(ws, client) {
     if (!client.userId) return null;
 
+    // Track which symbols this client has subscribed to Upstox
+    client.recentUpstoxSymbols = new Set();
     let timerId = null;
 
     const sendUpdate = async () => {
@@ -400,13 +490,45 @@ export  class WebSocketManager {
         const allSymbols = [...new Set([...recentSymbols, ...investedSymbols])];
 
         if (allSymbols.length === 0) {
-            if (ws.readyState === ws.OPEN) {
-                ws.send(JSON.stringify({ type: "RECENT_UPDATE", data: { recentlyViewed: [], invested: [] } }));
-            }
-            return;
+          if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify({ type: "RECENT_UPDATE", data: { recentlyViewed: [], invested: [] } }));
+          }
+          return;
         }
 
-        const quotes = await MultiStockYahoo(allSymbols);
+        // Diff: subscribe new symbols only, unsubscribe stale ones
+        const neededNow = new Set(allSymbols.map(s => s.replace(/\.NS$/, "").toUpperCase()));
+        const toAdd = [...neededNow].filter(s => !client.recentUpstoxSymbols.has(s));
+        const toRemove = [...client.recentUpstoxSymbols].filter(s => !neededNow.has(s));
+        if (toAdd.length > 0) upstoxFeedService.subscribe(toAdd);
+        if (toRemove.length > 0) upstoxFeedService.unsubscribe(toRemove);
+        client.recentUpstoxSymbols = neededNow;
+
+        const quotes = await (async () => {
+          const upstoxQuotes = [];
+          const missing = [];
+          allSymbols.forEach(sym => {
+            const tick = upstoxFeedService.getTick(sym);
+            if (tick) {
+              upstoxQuotes.push({
+                symbol: sym,
+                name: tick.name,
+                price: tick.price,
+                change: tick.change,
+                percent: tick.percent,
+                marketState: "REGULAR"
+              });
+            } else {
+              missing.push(sym);
+            }
+          });
+          if (missing.length > 0) {
+            const yahooQuotes = await MultiStockYahoo(missing);
+            return [...upstoxQuotes, ...yahooQuotes];
+          }
+          return upstoxQuotes;
+        })();
+
         const recentQuotes = quotes.filter(q => recentSymbols.includes(q.symbol));
         const investedQuotes = quotes.filter(q => investedSymbols.includes(q.symbol));
 
@@ -416,16 +538,6 @@ export  class WebSocketManager {
             data: { recentlyViewed: recentQuotes, invested: investedQuotes }
           }));
         }
-
-        // 🛑 If market is not live, clear the polling interval
-        const marketState = quotes[0]?.marketState;
-        if (marketState && marketState !== "REGULAR") {
-          if (timerId) {
-            clearInterval(timerId);
-            const subKey = `RECENT_LIVE:${JSON.stringify("")}`;
-            client.subscriptions.delete(subKey);
-          }
-        }
       } catch (err) {
         console.error("WS Recent Update Error:", err);
       }
@@ -433,7 +545,15 @@ export  class WebSocketManager {
 
     timerId = setInterval(sendUpdate, 2500);
     sendUpdate();
-    return timerId;
+
+    // Cleanup function: release Upstox subscriptions when this client disconnects
+    return () => {
+      clearInterval(timerId);
+      if (client.recentUpstoxSymbols?.size > 0) {
+        upstoxFeedService.unsubscribe([...client.recentUpstoxSymbols]);
+        client.recentUpstoxSymbols.clear();
+      }
+    };
   }
 
   startHoldingsLive(ws, client) {

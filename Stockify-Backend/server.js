@@ -7,6 +7,7 @@ import { WebSocketServer } from "ws";
 import cookieParser from "cookie-parser";
 import { connectMongo } from "./db/mongo.js";
 import { WebSocketManager } from "./modules/websocket/wsManager.js";
+import { upstoxFeedService } from "./modules/websocket/upstoxFeed.service.js";
 
 import indiaLiveRoutes from "./modules/stocks/indiaLive.routes.js"
 import searchResults from "./modules/Search/searchResults.js";
@@ -25,6 +26,7 @@ import aiRoutes from "./modules/ai/ai.routes.js";
 import newsRoutes from "./modules/news/news.routes.js";
 import userRoutes from "./modules/user/user.routes.js";
 import sectorAlertsRoutes from "./modules/sectorAlerts/sectorAlerts.routes.js";
+import algoRoutes from "./modules/algo/algo.routes.js";
 
 import login from "./Middleware/login.js"
 import rateLimit from "express-rate-limit";
@@ -70,6 +72,7 @@ app.use("/api/ai", aiRoutes, limiter);
 app.use("/api/news", newsRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/sectorAlerts", sectorAlertsRoutes);
+app.use("/api/algo", algoRoutes);
 
 // app.use("/api/stocks",indiaReplay);
 
@@ -82,6 +85,7 @@ async function startServer() {
   try {
     await connectMongo();
 
+    upstoxFeedService.connect();
     const server = http.createServer(app);
     wsManager.current = new WebSocketManager(server);
     import("./modules/websocket/wsManager.js").then(m => m.setHoldingsService(holdings));

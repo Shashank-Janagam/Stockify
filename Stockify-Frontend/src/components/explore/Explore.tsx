@@ -152,7 +152,9 @@ function getStockRoute(symbol: string, name: string) {
     return `/stocks/${symbol1}/${slug}`;
   }
 
-  return `/us/${symbol1}/${slug}`;
+  // Default Indian stock route
+  const formattedSymbol = `${symbol1}.NS`;
+  return `/stocks/${formattedSymbol}/${slug}`;
 }
 
 function toTitleCase(str: string) {

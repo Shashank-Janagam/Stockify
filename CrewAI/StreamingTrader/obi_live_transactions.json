@@ -1,0 +1,82 @@
+[
+    {
+        "action": "BUY",
+        "price": 336.06,
+        "qty": 28268,
+        "value": 9499744.08,
+        "type": "IMBALANCE ENTRY",
+        "timestamp": "10:11:24"
+    },
+    {
+        "action": "SELL",
+        "price": 335.46,
+        "qty": 28268,
+        "value": 9482783.28,
+        "type": "STOP LOSS (-Rs. 0.60)",
+        "timestamp": "10:12:32"
+    },
+    {
+        "action": "BUY",
+        "price": 335.61,
+        "qty": 28258,
+        "value": 9483667.38,
+        "type": "IMBALANCE ENTRY",
+        "timestamp": "10:13:37"
+    },
+    {
+        "action": "SELL",
+        "price": 335.47,
+        "qty": 28258,
+        "value": 9479711.260000002,
+        "type": "STOP LOSS (-Rs. 0.14)",
+        "timestamp": "10:13:40"
+    },
+    {
+        "action": "BUY",
+        "price": 336.06,
+        "qty": 28209,
+        "value": 9479916.540000001,
+        "type": "IMBALANCE ENTRY",
+        "timestamp": "10:15:38"
+    },
+    {
+        "action": "SELL",
+        "price": 335.53,
+        "qty": 28209,
+        "value": 9464965.77,
+        "type": "STOP LOSS (-Rs. 0.53)",
+        "timestamp": "10:16:25"
+    },
+    {
+        "action": "BUY",
+        "price": 335.39,
+        "qty": 28223,
+        "value": 9465711.969999999,
+        "type": "IMBALANCE ENTRY",
+        "timestamp": "10:17:30"
+    },
+    {
+        "action": "SELL",
+        "price": 335.24,
+        "qty": 28223,
+        "value": 9461478.52,
+        "type": "STOP LOSS (-Rs. 0.15)",
+        "timestamp": "10:17:33"
+    },
+    {
+        "action": "BUY",
+        "price": 335.55,
+        "qty": 28198,
+        "value": 9461838.9,
+        "type": "IMBALANCE ENTRY",
+        "timestamp": "10:17:56"
+    },
+    {
+        "action": "SELL",
+        "price": 335.41,
+        "qty": 28198,
+        "value": 9457891.180000002,
+        "type": "STOP LOSS (-Rs. 0.14)",
+        "timestamp": "10:18:03"
+    }
+]

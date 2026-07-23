@@ -4,13 +4,11 @@ import "../Styles/dashboard.css";
 import HoldingsPage from "../components/portfolio/HoldingsPage.tsx";
 import PositionsPage from "../components/portfolio/PositionsPage.tsx";
 import HeaderIndices from "../components/layout/HeaderIndices.tsx";
-// import OrderHistory from "../components/portfolio/OrderHistory.tsx"; // Remove static import
+import AlgoDashboard from "../components/portfolio/AlgoDashboard.tsx";
 import { useLocation } from "react-router-dom";
 
 // Lazy load the OrderHistory component
 const OrderHistory = lazy(() => import("../components/portfolio/OrderHistory.tsx"));
-
-
 
 export default function Dashboard() {
   const location = useLocation();
@@ -26,20 +24,21 @@ export default function Dashboard() {
     }
   }, [location.state]);
 
- useEffect(() => {
+  useEffect(() => {
     sessionStorage.setItem("CurrentDashboard", tab);
   }, [tab]);
+
   return (
     <div className="app">
       <header className="top-nav">
         <div className="tabbs">
-          {["Explore", "Holdings", "Positions", "Orders"].map(t => (
+          {["Explore", "Holdings", "Positions", "Orders", "Streaming Algo"].map(t => (
             <span
               key={t}
               className={tab === t ? "tabbs active" : "tabbs"}
               onClick={() => setTab(t)}
             >
-              {t}
+              {t === "Streaming Algo" ? "⚡ Streaming Algo" : t}
             </span>
           ))}
         </div>
@@ -56,7 +55,7 @@ export default function Dashboard() {
           <OrderHistory />
         </Suspense>
       )}
-
+      {tab === "Streaming Algo" && <AlgoDashboard />}
 
     </div>
     </div>

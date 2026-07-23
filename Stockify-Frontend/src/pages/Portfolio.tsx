@@ -3,7 +3,7 @@ import "../Styles/Portfolio.css";
 import { AuthContext } from "../auth/AuthProvider";
 import { PortfolioThemeProvider, usePortfolioTheme } from "../context/PortfolioThemeContext";
 import { Line } from "react-chartjs-2";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale,
   PointElement, LineElement, Title, Filler, ArcElement,
@@ -22,6 +22,7 @@ import Layer8_DailyDigest        from "../components/portfolio/Layer8_DailyDiges
 import HoldingsPage  from "../components/portfolio/HoldingsPage";
 import PositionsPage from "../components/portfolio/PositionsPage";
 import OrderHistory  from "../components/portfolio/OrderHistory";
+import AlgoDashboard from "../components/portfolio/AlgoDashboard";
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -63,7 +64,7 @@ type Order = {
   updated_at_ist?: string | null;
 };
 
-type Tab = "overview" | "holdings" | "positions" | "orders";
+type Tab = "overview" | "holdings" | "positions" | "orders" | "algo";
 const TIME_RANGES = ["1W","1M","6M","1Y","ALL"] as const;
 
 const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
@@ -100,9 +101,18 @@ const PortfolioInner = () => {
   const [lastRecomputed,  setLastRecomputed]  = useState<string | null>(null);
   const [recomputeMsg,    setRecomputeMsg]    = useState<string>("");
 
-  const [tab,       setTab]       = useState<Tab>("overview");
+  const [searchParams] = useSearchParams();
+  const initialTab = (searchParams.get("tab") as Tab) || "overview";
+  const [tab,       setTab]       = useState<Tab>(initialTab);
   const [timeRange, setTimeRange] = useState("1M");
   const liveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab") as Tab;
+    if (tabParam && ["overview", "holdings", "positions", "orders", "algo"].includes(tabParam)) {
+      setTab(tabParam);
+    }
+  }, [searchParams]);
 
   /* ── Live stats fetch (always fresh, no cache) ── */
   const fetchLiveStats = useCallback(async () => {
@@ -259,6 +269,7 @@ const PortfolioInner = () => {
   const tabCounts: Record<Tab, number | undefined> = {
     overview:  undefined, holdings: holdings.length,
     positions: undefined, orders:   orders.length,
+    algo:      undefined,
   };
 
   /* ── Layer section renderer ── */
@@ -446,10 +457,11 @@ const PortfolioInner = () => {
 
         {/* Tab Nav */}
         <div className="pc-tab-nav">
-          {(["overview","holdings","positions","orders"] as Tab[]).map(t => {
+          {(["overview","holdings","positions","orders","algo"] as Tab[]).map(t => {
             const labels: Record<Tab,string> = {
               overview: "Overview", holdings: "Holdings",
               positions: "Positions", orders: "Orders",
+              algo: "⚡ Streaming Algo",
             };
             return (
               <button key={t}
@@ -472,6 +484,7 @@ const PortfolioInner = () => {
         {tab === "holdings"  && <div className="pc-layer"><div className="pc-layer-body" style={{ padding: 0 }}><HoldingsPage /></div></div>}
         {tab === "positions" && <div className="pc-layer"><div className="pc-layer-body" style={{ padding: 0 }}><PositionsPage /></div></div>}
         {tab === "orders"    && <div className="pc-layer"><div className="pc-layer-body" style={{ padding: 0 }}><OrderHistory /></div></div>}
+        {tab === "algo"      && <div className="pc-layer"><div className="pc-layer-body" style={{ padding: 0 }}><AlgoDashboard /></div></div>}
 
         {tab === "overview" && (
           <>
