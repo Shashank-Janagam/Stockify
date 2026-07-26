@@ -3,6 +3,7 @@ import { useContext, useState, useMemo, useEffect } from "react";
 import paperbulllogo from "../../assets/imageinv.png";
 import { useExploreSSE } from "../../context/ExploreSSEContext";
 import { AuthContext } from "../../auth/AuthProvider";
+import { isMarketLive } from "../../utils/dateUtils";
 
 import "../../Styles/explore.css";
 import "../../Styles/NewsPage.css";
@@ -291,8 +292,8 @@ export default function Explore() {
         <div className="welcome-left">
           <div className="welcome-greeting">{getGreeting()}, {firstName}</div>
           <div className="welcome-sub">
-            <span className="live-dot" />
-            Markets are live · PaperBull Command Center
+            <span className={isMarketLive() ? "live-dot" : "offline-dot"} />
+            Markets are {isMarketLive() ? "live" : "offline"} · PaperBull Command Center
           </div>
         </div>
 

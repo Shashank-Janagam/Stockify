@@ -110,10 +110,11 @@ export async function computeHoldingsPayload(holdings, userId) {
     }
   });
 
+  let quotes = [];
   if (missingForYahoo.length > 0) {
     try {
       const quotesRaw = await yahoo.quote(missingForYahoo);
-      const quotes = Array.isArray(quotesRaw) ? quotesRaw : [quotesRaw];
+      quotes = Array.isArray(quotesRaw) ? quotesRaw : [quotesRaw];
       quotes.forEach(q => { if (q?.symbol) quoteMap[q.symbol] = q; });
     } catch (e) {
       console.error("Yahoo holdings fallback quote error:", e.message);
@@ -289,10 +290,11 @@ export async function computePositionsPayload(lots, userId) {
     }
   });
 
+  let quotes = [];
   if (missingForYahoo.length > 0) {
     try {
       const quotesRaw = await yahoo.quote(missingForYahoo);
-      const quotes = Array.isArray(quotesRaw) ? quotesRaw : [quotesRaw];
+      quotes = Array.isArray(quotesRaw) ? quotesRaw : [quotesRaw];
       quotes.forEach(q => { if (q?.symbol) quoteMap[q.symbol] = q; });
     } catch (e) {
       console.error("Yahoo positions fallback quote error:", e.message);

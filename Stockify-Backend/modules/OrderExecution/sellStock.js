@@ -272,6 +272,9 @@ router.post("/sell", requireAuth, async (req, res) => {
     await client.query("COMMIT");
     await redis.del(`wallet:balance:${uid}`);
     await redis.del(`ai_portfolio_v3_${userId}`);
+    await redis.del(`portfolio:summary:${uid}`);
+    await redis.del(`portfolio:ai-eval:${uid}`);
+    await redis.del(`portfolio:forecasts:${uid}`);
 
     for (const item of itemsToNotify) {
       if (item.action === "DELETE") {

@@ -1,6 +1,6 @@
 {
-    "rsi_buy_threshold": 55,
-    "rsi_sell_threshold": 59,
+    "rsi_buy_threshold": 58,
+    "rsi_sell_threshold": 62,
     "stop_loss_pct": 0.003,
     "take_profit_pct": 0.012,
     "trailing_stop_pct": 0.005,
@@ -12,5 +12,22 @@
     "pause_ai": true,
     "dynamic_rsi": true,
     "rsi_window": 20,
-    "rsi_sell_offset": 4
+    "rsi_sell_offset": 4,
+    "symbols": [
+        "KOTAKBANK"
+    ],
+    "stock_configs": {
+        "INFY": {
+            "rsi_buy_threshold": 53,
+            "rsi_sell_threshold": 57
+        },
+        "TCS": {
+            "rsi_buy_threshold": 58,
+            "rsi_sell_threshold": 62
+        },
+        "KOTAKBANK": {
+            "rsi_buy_threshold": 46,
+            "rsi_sell_threshold": 50
+        }
+    }
 }

@@ -11,8 +11,215 @@ from sklearn.metrics import classification_report
 import requests
 import logging
 from dotenv import load_dotenv
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 load_dotenv()
+
+latest_dashboard_state = {}
+
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBI Scalper Dashboard</title>
+    <style>
+        body { margin: 0; font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; overflow: hidden; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .container { max-width: 1000px; margin: 40px auto; display: flex; flex-direction: column; gap: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; }
+        .title { font-size: 24px; font-weight: bold; color: #38bdf8; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+        .metric-card { text-align: center; }
+        .metric-value { font-size: 28px; font-weight: bold; margin-top: 5px; }
+        .metric-label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .order-book-container { display: flex; gap: 30px; margin-top: 20px; }
+        .order-book-side { flex: 1; }
+        .order-book-header { font-size: 14px; font-weight: bold; margin-bottom: 15px; text-align: center; letter-spacing: 1px; }
+        .bids-header { color: #4ade80; }
+        .asks-header { color: #f87171; }
+        .ob-row { display: flex; justify-content: space-between; padding: 8px 15px; margin-bottom: 5px; background: rgba(255,255,255,0.03); border-radius: 6px; font-family: monospace; font-size: 16px; }
+        .ob-row.bid { color: #4ade80; border-left: 3px solid #4ade80; }
+        .ob-row.ask { color: #f87171; border-right: 3px solid #f87171; }
+        
+        .imbalance-section { margin-top: 30px; }
+        .imbalance-header { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 10px; }
+        .imbalance-bar-container { height: 24px; background: #334155; border-radius: 12px; overflow: hidden; display: flex; }
+        .imbalance-bid-bar { background: linear-gradient(90deg, transparent, #4ade80); transition: width 0.3s ease; }
+        .imbalance-ask-bar { background: linear-gradient(270deg, transparent, #f87171); transition: width 0.3s ease; }
+        .imbalance-center { width: 2px; background: #fff; height: 100%; z-index: 10; }
+        
+        .up { color: #4ade80; }
+        .down { color: #f87171; }
+        .flat { color: #fbbf24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="glass-panel header">
+            <div class="title">OBI Scalper Terminal</div>
+            <div id="status" style="font-size: 14px; color: #94a3b8;">Connecting...</div>
+        </div>
+        
+        <div class="glass-panel metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Symbol</div>
+                <div id="m-symbol" class="metric-value">--</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">LTP (Rs.)</div>
+                <div id="m-price" class="metric-value">--</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Realized PnL</div>
+                <div id="m-pnl" class="metric-value">--</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Cash (Rs.)</div>
+                <div id="m-cash" class="metric-value">--</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Position</div>
+                <div id="m-position" class="metric-value flat">FLAT</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Total Trades</div>
+                <div id="m-trades" class="metric-value">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Tick Progress</div>
+                <div id="m-progress" class="metric-value">--</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Imbalance Ratio</div>
+                <div id="m-imbalance" class="metric-value">0.000</div>
+            </div>
+        </div>
+        
+        <div class="glass-panel imbalance-section">
+            <div class="imbalance-header">
+                <div class="down">SELL PRESSURE (Asks)</div>
+                <div class="up">BUY PRESSURE (Bids)</div>
+            </div>
+            <div class="imbalance-bar-container" id="imb-container">
+                <div class="imbalance-ask-bar" id="imb-ask" style="width: 50%;"></div>
+                <div class="imbalance-bid-bar" id="imb-bid" style="width: 50%;"></div>
+            </div>
+        </div>
+        
+        <div class="order-book-container">
+            <div class="glass-panel order-book-side">
+                <div class="order-book-header bids-header">BIDS (Buyers)</div>
+                <div class="ob-row"><span style="color:#94a3b8;font-size:12px;">Qty</span><span style="color:#94a3b8;font-size:12px;">Price (Rs.)</span></div>
+                <div id="bids-list"></div>
+            </div>
+            
+            <div class="glass-panel order-book-side">
+                <div class="order-book-header asks-header">ASKS (Sellers)</div>
+                <div class="ob-row"><span style="color:#94a3b8;font-size:12px;">Price (Rs.)</span><span style="color:#94a3b8;font-size:12px;">Qty</span></div>
+                <div id="asks-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchState() {
+            try {
+                const res = await fetch('/state');
+                const data = await res.json();
+                
+                if (data && data.symbol) {
+                    document.getElementById('status').innerText = 'LIVE \u25CF';
+                    document.getElementById('status').style.color = '#4ade80';
+                    
+                    document.getElementById('m-symbol').innerText = data.symbol;
+                    document.getElementById('m-price').innerText = data.price.toFixed(2);
+                    
+                    const pnlEl = document.getElementById('m-pnl');
+                    pnlEl.innerText = (data.pnl >= 0 ? '+' : '') + data.pnl.toFixed(2);
+                    pnlEl.className = 'metric-value ' + (data.pnl >= 0 ? 'up' : 'down');
+                    
+                    document.getElementById('m-cash').innerText = data.cash.toFixed(2);
+                    
+                    const posEl = document.getElementById('m-position');
+                    if (data.position) {
+                        posEl.innerText = 'LONG (' + data.position.qty + ' @ ' + data.position.buy_price.toFixed(2) + ')';
+                        posEl.className = 'metric-value up';
+                    } else {
+                        posEl.innerText = 'FLAT';
+                        posEl.className = 'metric-value flat';
+                    }
+                    
+                    document.getElementById('m-trades').innerText = data.trades_count;
+                    document.getElementById('m-progress').innerText = data.tick_idx + ' / ' + data.total_ticks;
+                    
+                    const imbEl = document.getElementById('m-imbalance');
+                    imbEl.innerText = (data.imbalance >= 0 ? '+' : '') + data.imbalance.toFixed(4);
+                    imbEl.className = 'metric-value ' + (data.imbalance > 0.75 ? 'up' : (data.imbalance < -0.75 ? 'down' : 'flat'));
+                    
+                    // Imbalance Bar (Mapping -1 to 1 into percentages)
+                    const bidPct = Math.max(0, Math.min(100, (data.imbalance + 1.0) / 2.0 * 100));
+                    const askPct = 100 - bidPct;
+                    document.getElementById('imb-ask').style.width = askPct + '%';
+                    document.getElementById('imb-bid').style.width = bidPct + '%';
+                    
+                    // Order Book
+                    let bidsHtml = '';
+                    for(let i=0; i<5; i++) {
+                        bidsHtml += '<div class="ob-row bid"><span>' + data.bid_depth.qty[i] + '</span><span>' + data.bid_depth.price[i].toFixed(2) + '</span></div>';
+                    }
+                    document.getElementById('bids-list').innerHTML = bidsHtml;
+                    
+                    let asksHtml = '';
+                    for(let i=0; i<5; i++) {
+                        asksHtml += '<div class="ob-row ask"><span>' + data.ask_depth.price[i].toFixed(2) + '</span><span>' + data.ask_depth.qty[i] + '</span></div>';
+                    }
+                    document.getElementById('asks-list').innerHTML = asksHtml;
+                }
+            } catch (err) {
+                document.getElementById('status').innerText = 'OFFLINE \u25CB';
+                document.getElementById('status').style.color = '#f87171';
+            }
+        }
+        
+        setInterval(fetchState, 250);
+        fetchState();
+    </script>
+</body>
+</html>
+"""
+
+class DashboardHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass
+        
+    def do_GET(self):
+        if self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(HTML_TEMPLATE.encode('utf-8'))
+        elif self.path == '/state':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(latest_dashboard_state).encode('utf-8'))
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+def run_dashboard_server():
+    server_address = ('', 8080)
+    httpd = HTTPServer(server_address, DashboardHandler)
+    print("\\n\\033[96m🚀 Web Dashboard running at http://localhost:8080\\033[0m")
+    httpd.serve_forever()
+
+threading.Thread(target=run_dashboard_server, daemon=True).start()
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -24,7 +231,7 @@ BYPASS_HEADERS = {"x-bypass-auth": "true", "Content-Type": "application/json"}
 
 # Global state for Live trading
 backend_online = True
-simulated_cash = 10000000.0  # Default local balance: 10M Rs
+simulated_cash = 100000.0  # Default local balance: 10M Rs
 simulated_holdings = []
 
 # ANSI Terminal Styling Codes
@@ -36,54 +243,25 @@ COLOR_BLUE = "\033[94m"
 COLOR_RESET = "\033[0m"
 COLOR_BOLD = "\033[1m"
 
-def clear_screen():
-    os.system("cls" if os.name == "nt" else "clear")
-
 def render_dashboard(symbol, tick_idx, total_ticks, price, imbalance, bid_depth, ask_depth, position, cash, trades_count, pnl):
-    clear_screen()
-    print(f"{COLOR_CYAN}{COLOR_BOLD}========================================================================{COLOR_RESET}")
-    print(f"{COLOR_CYAN}{COLOR_BOLD}      === HFT ORDER BOOK IMBALANCE (OBI) SCALPER TERMINAL ===             {COLOR_RESET}")
-    print(f"{COLOR_CYAN}{COLOR_BOLD}========================================================================{COLOR_RESET}")
+    global latest_dashboard_state
+    latest_dashboard_state = {
+        "symbol": symbol,
+        "tick_idx": tick_idx,
+        "total_ticks": total_ticks,
+        "price": price,
+        "imbalance": imbalance,
+        "bid_depth": bid_depth,
+        "ask_depth": ask_depth,
+        "position": position,
+        "cash": cash,
+        "trades_count": trades_count,
+        "pnl": pnl
+    }
     
-    # 1. Market Status Bar
-    pos_str = f"{COLOR_GREEN}LONG @ Rs. {position['buy_price']:.2f} ({position['qty']} sh){COLOR_RESET}" if position else f"{COLOR_YELLOW}FLAT{COLOR_RESET}"
-    print(f"Stock: {COLOR_BOLD}{symbol}{COLOR_RESET} | Price: {COLOR_BOLD}Rs. {price:.2f}{COLOR_RESET} | Position: {pos_str}")
-    print(f"Cash: {COLOR_BOLD}Rs. {cash:.2f}{COLOR_RESET} | Total Trades: {COLOR_BOLD}{trades_count}{COLOR_RESET} | Realized PnL: {COLOR_GREEN if pnl >= 0 else COLOR_RED}Rs. {pnl:+.2f}{COLOR_RESET}")
-    print(f"Progress: Bar Tick {tick_idx}/{total_ticks}")
-    print(f"{COLOR_CYAN}------------------------------------------------------------------------{COLOR_RESET}")
-
-    # 2. Live Order Book Grid
-    print(f"{COLOR_BOLD}                  LIVE 5-LEVEL MARKET DEPTH WINDOW{COLOR_RESET}")
-    print("      BIDS (Buyers)                              ASKS (Sellers)")
-    print(f" {COLOR_GREEN}Qty (Shares)   Price (Rs.){COLOR_RESET}               {COLOR_RED}Price (Rs.)   Qty (Shares){COLOR_RESET}")
-    print(" --------------------------               --------------------------")
-    
-    for i in range(5):
-        bid_qty_str = f"{bid_depth['qty'][i]:>12}"
-        bid_px_str = f"{bid_depth['price'][i]:>12.2f}"
-        ask_px_str = f"{ask_depth['price'][i]:<12.2f}"
-        ask_qty_str = f"{ask_depth['qty'][i]:<12}"
-        print(f" {COLOR_GREEN}{bid_qty_str}   {bid_px_str}{COLOR_RESET}  <- Level {i+1} ->  {COLOR_RED}{ask_px_str}   {ask_qty_str}{COLOR_RESET}")
-        
-    print(f"{COLOR_CYAN}------------------------------------------------------------------------{COLOR_RESET}")
-
-    # 3. Imbalance Indicator Bar
-    # Map imbalance [-1, 1] to [0, 40] chars
-    bar_width = 40
-    fill_len = int((imbalance + 1.0) / 2.0 * bar_width)
-    fill_len = max(0, min(fill_len, bar_width))
-    bar_str = "#" * fill_len + "-" * (bar_width - fill_len)
-    
-    if imbalance > 0.75:
-        imbalance_color = COLOR_GREEN
-    elif imbalance < -0.75:
-        imbalance_color = COLOR_RED
-    else:
-        imbalance_color = COLOR_YELLOW
-        
-    print(f"Imbalance Ratio: {imbalance_color}{imbalance:+.4f}{COLOR_RESET}")
-    print(f"[{imbalance_color}{bar_str}{COLOR_RESET}]")
-    print(f" {COLOR_RED}<-- SELL PRESSURE (ASKs){COLOR_RESET}                 {COLOR_GREEN}BUY PRESSURE (BIDs) -->{COLOR_RESET}")
+    # Tiny terminal log to confirm activity without cluttering the screen
+    pos_str = f"LONG ({position['qty']})" if position else "FLAT"
+    print(f"\\r[LIVE TICK {tick_idx}] {symbol} @ Rs. {price:.2f} | Pos: {pos_str} | PnL: Rs. {pnl:+.2f} | Imbalance: {imbalance:+.2f}    ", end="", flush=True)
 def simulate_ticks_and_order_book(df_bars, ticks_per_bar):
     """
     Generates tick prices, bid/ask depths, and imbalances from 1-minute bars.
@@ -463,7 +641,7 @@ def fetch_portfolio(clean_symbol=None):
             backend_online = True
             simulated_cash = cash
             
-            res_h = requests.get(f"{BACKEND_URL}/api/portfolio/summary?fresh=1", headers=BYPASS_HEADERS, timeout=10)
+            res_h = requests.get(f"{BACKEND_URL}/api/portfolio/summary", headers=BYPASS_HEADERS, timeout=10)
             if res_h.status_code == 200:
                 holdings = res_h.json().get("holdings", [])
                 
@@ -588,8 +766,21 @@ def execute_sell(ticker: str, clean_symbol: str, quantity: int, current_price: f
     logger.error(f"[LOCAL SIMULATION] SELL FAILED: Stock {clean_symbol} is not held in portfolio.")
     return False, "Stock not held"
 
+def fetch_historical_data(symbol="TCS.NS"):
+    try:
+        data = yf.download(symbol, period="2d", interval="1m")
+        if data.empty:
+            logger.error(f"Failed to download historical data for {symbol}.")
+            return None
+        return data
+    except Exception as e:
+        logger.error(f"Exception downloading historical data: {e}")
+        return None
 
 def run_live_obi_scalping(symbol="SBIN", polling_interval=5.0, imbalance_threshold=0.75, target_profit=None, stop_loss=None, target_pct=0.0005, sl_pct=0.000375, ai_threshold=0.52, ticks_per_bar=20, seed=42, use_ai=True):
+    global backend_online
+    backend_online = False  # Explicitly disable backend server usage
+    
     ticker = symbol if (symbol.endswith(".NS") or symbol.endswith(".BO")) else f"{symbol}.NS"
     clean_symbol = ticker.replace(".NS", "").replace(".BO", "")
     
@@ -597,19 +788,23 @@ def run_live_obi_scalping(symbol="SBIN", polling_interval=5.0, imbalance_thresho
         np.random.seed(seed)
         
     print(f"Initializing Live OBI Scalper for {ticker} ...")
-    df = yf.download(ticker, period="2d", interval="1m", progress=False)
-    if df.empty:
-        print("Failed to download historical data.")
-        sys.exit(1)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
+    df = fetch_historical_data(ticker)
+    
+    df_train = None
+    if df is not None and not df.empty:
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+            
+        unique_dates = sorted(list(set(df.index.date)))
+        if len(unique_dates) >= 2:
+            df_train = df[df.index.date == unique_dates[-2]].copy()
+        else:
+            split_idx = int(len(df) * 0.7)
+            df_train = df.iloc[:split_idx].copy()
         
-    unique_dates = sorted(list(set(df.index.date)))
-    if len(unique_dates) >= 2:
-        df_train = df[df.index.date == unique_dates[-2]].copy()
+        avg_price = float(df["Close"].mean())
     else:
-        split_idx = int(len(df) * 0.7)
-        df_train = df.iloc[:split_idx].copy()
+        avg_price = 2235.0 # fallback
         
     # Query portfolio details
     cash, holdings = fetch_portfolio(clean_symbol)
@@ -652,70 +847,103 @@ def run_live_obi_scalping(symbol="SBIN", polling_interval=5.0, imbalance_thresho
         
     overall_idx = 0
     
+    import websocket
+    try:
+        ws = websocket.create_connection("ws://localhost:4141")
+        ws.send(json.dumps({"action": "subscribe", "symbols": [clean_symbol]}))
+        print(f"Connected to WS 4141 for {clean_symbol}")
+    except Exception as e:
+        print(f"Websocket connection failed: {e}")
+        return
+
     while True:
         try:
+            try:
+                msg = ws.recv()
+            except Exception as e:
+                logger.error(f"Websocket error: {e}. Reconnecting in 3s...")
+                time.sleep(3)
+                try:
+                    ws = websocket.create_connection("ws://localhost:4141")
+                    ws.send(json.dumps({"action": "subscribe", "symbols": [clean_symbol]}))
+                except Exception:
+                    pass
+                continue
+            
             import datetime
             now_ist = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=5, minutes=30)))
             is_weekend = now_ist.weekday() >= 5
             is_out_of_hours = now_ist.time() < datetime.time(9, 15) or now_ist.time() > datetime.time(15, 30)
             
-            df_live = yf.download(ticker, period="2d", interval="1m", progress=False)
-            if df_live.empty:
-                logger.warning(f"No market data returned for {ticker}. Retrying in {polling_interval}s...")
-                time.sleep(polling_interval)
+            data = json.loads(msg)
+            if data.get("type") != "LIVE_TICK":
                 continue
                 
-            if isinstance(df_live.columns, pd.MultiIndex):
-                df_live.columns = df_live.columns.get_level_values(0)
-                
-            df_live = df_live.sort_index().dropna(subset=["Close"])
-            if df_live.empty:
-                logger.warning("Empty data after cleaning. Retrying...")
-                time.sleep(polling_interval)
-                continue
-                
-            current_bar = df_live.iloc[-1]
-            price = round(float(current_bar["Close"]), 2)
+            price = round(float(data["ltp"]), 2)
             tick_history.append(price)
             
-            t = overall_idx / 12.0
-            wave_imbalance = 2.5 * np.sin(t) + np.random.normal(0, 0.5)
-            
-            nudge = 0.04 * wave_imbalance
-            price = round(float(price + nudge), 2)
-            
+            if "bids" in data and "asks" in data and len(data["bids"]) > 0:
+                bids_sorted = sorted(data["bids"], key=lambda x: x["price"], reverse=True)
+                asks_sorted = sorted(data["asks"], key=lambda x: x["price"])
+                
+                bid_px = [b["price"] for b in bids_sorted[:5]]
+                bid_qtys = [b["qty"] for b in bids_sorted[:5]]
+                
+                ask_px = [a["price"] for a in asks_sorted[:5]]
+                ask_qtys = [a["qty"] for a in asks_sorted[:5]]
+                
+                while len(bid_px) < 5:
+                    bid_px.append(0.0)
+                    bid_qtys.append(0)
+                while len(ask_px) < 5:
+                    ask_px.append(0.0)
+                    ask_qtys.append(0)
+                
+                total_bid_qty = data.get("total_bid_qty") or sum(bid_qtys)
+                total_ask_qty = data.get("total_ask_qty") or sum(ask_qtys)
+                imbalance = (total_bid_qty - total_ask_qty) / (total_bid_qty + total_ask_qty) if (total_bid_qty + total_ask_qty) > 0 else 0
+                
+                bid_depth = {"price": bid_px, "qty": bid_qtys}
+                ask_depth = {"price": ask_px, "qty": ask_qtys}
+            else:
+                t = overall_idx / 2.0
+                wave_imbalance = 2.5 * np.sin(t) + np.random.normal(0, 0.5)
+                
+                nudge = 0.04 * wave_imbalance
+                price = round(float(price + nudge), 2)
+                
+                spread = 0.05
+                bid_px = [round(price - spread - i * 0.05, 2) for i in range(5)]
+                ask_px = [round(price + spread + i * 0.05, 2) for i in range(5)]
+                
+                bid_qtys = []
+                ask_qtys = []
+                for i in range(5):
+                    decay = 0.85 ** i
+                    b_base = np.random.randint(800, 2500) * decay
+                    a_base = np.random.randint(800, 2500) * decay
+                    
+                    if wave_imbalance > 0:
+                        b_qty = b_base * (1 + wave_imbalance * 2.5)
+                        a_qty = a_base * (1 / (1 + wave_imbalance * 1.5))
+                    else:
+                        b_qty = b_base * (1 / (1 + abs(wave_imbalance) * 1.5))
+                        a_qty = a_base * (1 + abs(wave_imbalance) * 2.5)
+                        
+                    bid_qtys.append(max(50, int(b_qty)))
+                    ask_qtys.append(max(50, int(a_qty)))
+                    
+                total_bid_qty = sum(bid_qtys)
+                total_ask_qty = sum(ask_qtys)
+                imbalance = (total_bid_qty - total_ask_qty) / (total_bid_qty + total_ask_qty)
+                
+                bid_depth = {"price": bid_px, "qty": bid_qtys}
+                ask_depth = {"price": ask_px, "qty": ask_qtys}
+                
             trend_bullish = True
             if len(tick_history) >= 20:
                 sma20_tick = np.mean(tick_history[-20:])
                 trend_bullish = price > sma20_tick
-                
-            spread = 0.05
-            bid_px = [round(price - spread - i * 0.05, 2) for i in range(5)]
-            ask_px = [round(price + spread + i * 0.05, 2) for i in range(5)]
-            
-            bid_qtys = []
-            ask_qtys = []
-            for i in range(5):
-                decay = 0.85 ** i
-                b_base = np.random.randint(800, 2500) * decay
-                a_base = np.random.randint(800, 2500) * decay
-                
-                if wave_imbalance > 0:
-                    b_qty = b_base * (1 + wave_imbalance * 2.5)
-                    a_qty = a_base * (1 / (1 + wave_imbalance * 1.5))
-                else:
-                    b_qty = b_base * (1 / (1 + abs(wave_imbalance) * 1.5))
-                    a_qty = a_base * (1 + abs(wave_imbalance) * 2.5)
-                    
-                bid_qtys.append(max(50, int(b_qty)))
-                ask_qtys.append(max(50, int(a_qty)))
-                
-            total_bid_qty = sum(bid_qtys)
-            total_ask_qty = sum(ask_qtys)
-            imbalance = (total_bid_qty - total_ask_qty) / (total_bid_qty + total_ask_qty)
-            
-            bid_depth = {"price": bid_px, "qty": bid_qtys}
-            ask_depth = {"price": ask_px, "qty": ask_qtys}
             
             current_ask = ask_depth["price"][0]
             current_bid = bid_depth["price"][0]
@@ -810,7 +1038,6 @@ def run_live_obi_scalping(symbol="SBIN", polling_interval=5.0, imbalance_thresho
             )
             
             overall_idx += 1
-            time.sleep(polling_interval)
             
         except KeyboardInterrupt:
             print("\nExiting live OBI scalper loop cleanly on user request.", flush=True)
@@ -847,7 +1074,7 @@ if __name__ == "__main__":
     parser.add_argument("--use-ai", action=argparse.BooleanOptionalAction, default=True, help="Toggle AI entry filter (default: True)")
     parser.add_argument("--live", action="store_true", help="Run in live market polling mode")
     parser.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds for live mode (default: 5.0)")
-    parser.add_argument("--threshold", type=float, default=0.75, help="Imbalance entry threshold between 0 and 1 (default: 0.75)")
+    parser.add_argument("--threshold", type=float, default=0.40, help="Imbalance entry threshold between 0 and 1 (default: 0.40)")
     args = parser.parse_args()
     
     if args.live:

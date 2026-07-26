@@ -27,18 +27,45 @@ BACKEND_URL = "http://localhost:4000"
 BYPASS_HEADERS = {"x-bypass-auth": "true", "Content-Type": "application/json"}
 
 # Simulation Settings
-SYMBOL = "EMUDHRA"
-TICKER = f"{SYMBOL}.NS"
+TRACKED_SYMBOLS = ["EMUDHRA"]
 SIMULATION_INTERVAL_SEC = 0.5 # Each bar lasts 5 seconds in real time
 SUPERVISOR_INTERVAL_BARS = 10  # LLM runs every 10 bars (~50 seconds)
 MAX_BARS = 25  # Run simulation for 25 bars then exit cleanly
 ALLOCATION_PCT = 1.0  # Default allocation: 100%
 SENSITIVITY_PROFILE_NAME = "moderate"  # Default sensitivity profile
 
+from dataclasses import dataclass, field
+from typing import List, Optional
+import pandas as pd
+
+@dataclass
+class SymbolState:
+    symbol: str
+    ticker: str
+    df: pd.DataFrame = field(default_factory=lambda: pd.DataFrame(columns=["Close", "Volume"]))
+    price_history: List[float] = field(default_factory=list)
+    volume_history: List[float] = field(default_factory=list)
+    tick_count: int = 0
+    current_minute: str = ""
+    last_trade_time: float = 0.0
+    last_buy_time: float = 0.0
+    last_sell_time: float = 0.0
+    prev_macd_hist: float = 0.0
+    local_held_qty: Optional[int] = None
+    local_avg_buy_price: float = 0.0
+    peak_price: float = 0.0
+    last_portfolio_fetch_time: float = 0.0
+
+
 # Local Portfolio State (used as fallback when backend is offline)
 backend_online = True
 simulated_cash = 100000.0
 simulated_holdings = []
+
+# Portfolio background sync state
+_portfolio_lock = threading.Lock()
+_portfolio_fail_count = 0          # consecutive failures before going offline
+_PORTFOLIO_FAIL_THRESHOLD = 3      # tolerate up to 3 timeouts before disabling
 
 # Initial local strategy parameters
 strategy_config = {
@@ -103,6 +130,7 @@ def get_rolling_rsi_percentiles(price_history, period=14, window=None):
 def save_config_if_changed():
     global strategy_config, last_config_mtime
     config_file = "config.json"
+    strategy_config["symbols"] = TRACKED_SYMBOLS
     try:
         if os.path.exists(config_file):
             with open(config_file, "r") as f:
@@ -110,6 +138,9 @@ def save_config_if_changed():
             changed = False
             for k, v in strategy_config.items():
                 if disk_config.get(k) != v:
+                    # Ignore minor float rounding differences if needed, but for symbols list it should match exactly
+                    if k == "symbols" and set(disk_config.get(k, [])) == set(v):
+                        continue
                     changed = True
                     break
             if changed:
@@ -125,48 +156,67 @@ def save_config_if_changed():
 
 
 def fetch_portfolio():
-    """Fetches the user's available cash and current holdings from the backend. Falls back to simulated state if offline."""
-    global backend_online, simulated_cash, simulated_holdings
-    
+    """Fetches cash and holdings from backend (3s timeout). Falls back to local state."""
+    global backend_online, simulated_cash, simulated_holdings, _portfolio_fail_count
+
     if not backend_online:
         return simulated_cash, simulated_holdings
-        
-    cash = simulated_cash
-    holdings = simulated_holdings
-    
+
     try:
-        # Check cash balance
-        res = requests.get(f"{BACKEND_URL}/api/getBalance/getBalance", headers=BYPASS_HEADERS, timeout=10)
+        res = requests.get(
+            f"{BACKEND_URL}/api/getBalance/getBalance",
+            headers=BYPASS_HEADERS,
+            timeout=10
+        )
         if res.status_code == 200:
             cash = float(res.json().get("cash", 0.0))
             backend_online = True
-            simulated_cash = cash
-            
-            # Fetch holdings
-            res_h = requests.get(f"{BACKEND_URL}/api/portfolio/summary?fresh=1", headers=BYPASS_HEADERS, timeout=10)
+            _portfolio_fail_count = 0
+            with _portfolio_lock:
+                simulated_cash = cash
+
+            res_h = requests.get(
+                f"{BACKEND_URL}/api/portfolio/summary",
+                headers=BYPASS_HEADERS,
+                timeout=10
+            )
             if res_h.status_code == 200:
-                holdings = res_h.json().get("holdings", [])
-                
-                # Seed the local simulated holdings list
-                simulated_holdings = []
-                for h in holdings:
+                raw_holdings = res_h.json().get("holdings", [])
+                parsed = []
+                for h in raw_holdings:
                     h_sym = h.get("symbol", "").replace(".NS", "").replace(".BO", "").strip().upper()
                     qty = int(h.get("quantity", 0))
                     invested = float(h.get("invested", 0.0))
                     avg_price = float(h.get("avgPrice") or (invested / qty if qty > 0 else 0.0))
-                    simulated_holdings.append({
+                    parsed.append({
                         "symbol": h_sym,
                         "quantity": qty,
                         "avgPrice": avg_price,
                         "currentPrice": float(h.get("currentPrice", 0.0))
                     })
+                with _portfolio_lock:
+                    simulated_holdings = parsed
         else:
-            backend_online = False
+            _portfolio_fail_count += 1
+            if _portfolio_fail_count >= _PORTFOLIO_FAIL_THRESHOLD:
+                backend_online = False
+                logger.warning(f"[Portfolio] Backend returned {res.status_code}. Switching to local simulation.")
+
     except Exception as e:
-        logger.warning(f"[Portfolio] Backend API is unreachable or returned error: {str(e)}. Switching to simulated local portfolio tracker.")
-        backend_online = False
-            
-    return cash, holdings
+        _portfolio_fail_count += 1
+        if _portfolio_fail_count >= _PORTFOLIO_FAIL_THRESHOLD:
+            backend_online = False
+            logger.warning(f"[Portfolio] Unreachable: {str(e)}. Switching to local simulation.")
+        else:
+            logger.debug(f"[Portfolio] Transient error: {str(e)}")
+
+    with _portfolio_lock:
+        return simulated_cash, simulated_holdings
+
+
+def fetch_portfolio_background():
+    t = threading.Thread(target=fetch_portfolio, daemon=True)
+    t.start()
 
 def execute_buy(symbol: str, quantity: int, current_price: float):
     """Executes a buy order on the backend. Simulates local transaction if offline."""
@@ -175,19 +225,21 @@ def execute_buy(symbol: str, quantity: int, current_price: float):
     if backend_online:
         url = f"{BACKEND_URL}/api/orderExecution/buy"
         body = {
-            "symbol": symbol,
+            "symbol": f"{symbol}.NS",
             "quantity": quantity,
             "product_type": "Delivery",
             "category": "Streaming Algo"
         }
         try:
-            res = requests.post(url, json=body, headers=BYPASS_HEADERS, timeout=10)
+            res = requests.post(url, json=body, headers=BYPASS_HEADERS, timeout=4)
             if res.status_code == 200:
                 res_data = res.json()
-                logger.info(f"[EXECUTION] BUY SUCCESS: {quantity} shares of {symbol} at Rs. {res_data.get('buyPricePerShare')}")
+                logger.info(f"[EXECUTION] ✅ LIVE BUY SUCCESS: {quantity} shares of {symbol} at Rs. {res_data.get('buyPricePerShare')} (Order ID: {res_data.get('orderId', 'N/A')})")
+                global _portfolio_fail_count
+                _portfolio_fail_count = 0
                 return True, res_data
             else:
-                logger.error(f"[EXECUTION] BUY FAILED (API Status {res.status_code}): {res.text}")
+                logger.error(f"[EXECUTION] BUY FAILED (API {res.status_code}): {res.text}")
                 return False, res.text
         except Exception as e:
             logger.error(f"[EXECUTION] BUY EXCEPTION: {str(e)}")
@@ -199,7 +251,7 @@ def execute_buy(symbol: str, quantity: int, current_price: float):
         # Check if already held in simulated list
         found = False
         for h in simulated_holdings:
-            if h["symbol"] == SYMBOL:
+            if h["symbol"] == symbol:
                 old_qty = h["quantity"]
                 old_avg = h["avgPrice"]
                 new_qty = old_qty + quantity
@@ -211,7 +263,7 @@ def execute_buy(symbol: str, quantity: int, current_price: float):
                 break
         if not found:
             simulated_holdings.append({
-                "symbol": SYMBOL,
+                "symbol": symbol,
                 "quantity": quantity,
                 "avgPrice": round(current_price, 2),
                 "currentPrice": current_price
@@ -229,20 +281,20 @@ def execute_sell(symbol: str, quantity: int, current_price: float):
     if backend_online:
         url = f"{BACKEND_URL}/api/sellStock/sell"
         body = {
-            "symbol": symbol,
+            "symbol": f"{symbol}.NS",
             "quantity": quantity,
             "sl_enabled": False,
             "product_type": "Delivery",
             "category": "Streaming Algo"
         }
         try:
-            res = requests.post(url, json=body, headers=BYPASS_HEADERS, timeout=10)
+            res = requests.post(url, json=body, headers=BYPASS_HEADERS, timeout=4)
             if res.status_code == 200:
                 res_data = res.json()
-                logger.info(f"[EXECUTION] SELL SUCCESS: {quantity} shares of {symbol} at Rs. {res_data.get('sellPricePerShare')}")
+                logger.info(f"[EXECUTION] ✅ LIVE SELL SUCCESS: {quantity} shares of {symbol} at Rs. {res_data.get('sellPricePerShare')} (Order ID: {res_data.get('orderId', 'N/A')})")
                 return True, res_data
             else:
-                logger.error(f"[EXECUTION] SELL FAILED (API Status {res.status_code}): {res.text}")
+                logger.error(f"[EXECUTION] SELL FAILED (API {res.status_code}): {res.text}")
                 return False, res.text
         except Exception as e:
             logger.error(f"[EXECUTION] SELL EXCEPTION: {str(e)}")
@@ -250,7 +302,7 @@ def execute_sell(symbol: str, quantity: int, current_price: float):
     # Local Simulation Fallback
     revenue = quantity * current_price
     for i, h in enumerate(simulated_holdings):
-        if h["symbol"] == SYMBOL:
+        if h["symbol"] == symbol:
             old_qty = h["quantity"]
             if old_qty >= quantity:
                 new_qty = old_qty - quantity
@@ -469,6 +521,37 @@ def auto_generate_config(symbol: str, ticker: str) -> dict:
     except Exception as e:
         logger.error(f"[AUTO-CONFIG] Failed to analyze {symbol}: {str(e)}. Using defaults.")
         return {}
+
+
+def _ema(arr, period):
+    """Exponential Moving Average."""
+    arr = np.array(arr, dtype=float)
+    if len(arr) == 0: return 0.0
+    alpha = 2.0 / (period + 1.0)
+    ema = arr[0]
+    for price in arr[1:]:
+        ema = (price - ema) * alpha + ema
+    return float(ema)
+
+def calculate_vwap(price_history, volume_history):
+    """Volume Weighted Average Price."""
+    if not price_history or not volume_history or len(price_history) != len(volume_history):
+        return price_history[-1] if price_history else 0.0
+    prices = np.array(price_history, dtype=float)
+    vols = np.array(volume_history, dtype=float)
+    cum_vol = np.sum(vols)
+    if cum_vol == 0:
+        return prices[-1]
+    return float(np.sum(prices * vols) / cum_vol)
+
+def calculate_atr(price_history, period=14):
+    """Average True Range (simplified as simple volatility for ticks)."""
+    if len(price_history) < 2: return 0.0
+    prices = np.array(price_history, dtype=float)
+    tr = np.abs(np.diff(prices))
+    if len(tr) < period:
+        return float(np.mean(tr))
+    return float(np.mean(tr[-period:]))
 
 
 def calculate_rolling_indicators(price_history, volume_history=None):
@@ -1108,9 +1191,8 @@ def save_live_transaction(tx_item):
 def run_live_trading(interval_sec: float = 10.0, no_supervisor: bool = False):
     global strategy_config, supervisor_running
     
-    logger.info("Starting live market trading mode...")
+    logger.info("Starting live market trading mode for multiple symbols...")
     
-    # 1. Fetch initial portfolio state to ensure connectivity
     cash, holdings = fetch_portfolio()
     logger.info(f"Portfolio State: Cash = Rs. {cash:.2f}, Holdings count = {len(holdings)}")
     
@@ -1119,144 +1201,85 @@ def run_live_trading(interval_sec: float = 10.0, no_supervisor: bool = False):
     for h in holdings:
         initial_holdings_value += float(h.get("quantity", 0)) * float(h.get("currentPrice", 0.0))
     initial_total_value = initial_cash + initial_holdings_value
+
+    print(f"\n{'='*60}", flush=True)
+    print("--- LIVE REAL-TIME TRADING STREAM RUNNING ---", flush=True)
+    print(f"Tracking: {', '.join(TRACKED_SYMBOLS)} | Polling Interval: {interval_sec}s | Bar size: 1 min", flush=True)
+    print('='*60 + "\n", flush=True)
+    
+    # Initialize state for each tracked symbol
+    states = {}
+    for sym in TRACKED_SYMBOLS:
+        ticker = sym if (sym.endswith('.NS') or sym.endswith('.BO')) else f"{sym}.NS"
+        states[sym] = SymbolState(symbol=sym, ticker=ticker)
     
     trade_log = []
     executed_transactions = []
     
     print("\n" + "="*60, flush=True)
-    print("--- LIVE REAL-TIME TRADING STREAM RUNNING ---", flush=True)
-    print(f"Tracking: {TICKER} | Polling Interval: {interval_sec}s | Bar size: 1 min", flush=True)
-    print("="*60 + "\n", flush=True)
-    
-    # Local portfolio state to avoid double-buys/sells during transition periods
-    local_held_qty = None
-    local_avg_buy_price = 0.0
-    last_trade_time = 0.0
-    last_buy_time = 0.0
-    last_sell_time = 0.0
-    
-    # 2. Warm-up Phase: Process today's completed historical bars
-    print("\n" + "="*60, flush=True)
     print("--- WARM-UP: PROCESSING TODAY'S HISTORICAL BARS ---", flush=True)
     print("="*60 + "\n", flush=True)
     
-    # Download today's data (and yesterday's to seed indicators)
-    df_warm = yf.download(TICKER, period="2d", interval="1m", progress=False)
-    if not df_warm.empty:
-        # Clean MultiIndex columns
-        if isinstance(df_warm.columns, pd.MultiIndex):
-            df_warm.columns = df_warm.columns.get_level_values(0)
-            
-        df_warm = df_warm.sort_index().dropna(subset=["Close", "Volume"])
-        
-        # Filter today's bars
-        import datetime
-        now_ist_warm = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=5, minutes=30)))
-        last_date = df_warm.index.date[-1]
-        df_today = df_warm[df_warm.index.date == last_date]
-        
-        # We process all bars of today except the very last one (which is the active/incomplete tick)
-        completed_bars_count = len(df_today) - 1
-        if completed_bars_count > 0:
-            logger.info(f"Backfilling {completed_bars_count} completed bars of today...")
-            
-            warm_held_qty = 0
-            warm_avg_buy_price = 0.0
-            
-            buy_thresh = strategy_config["rsi_buy_threshold"]
-            sell_thresh = strategy_config["rsi_sell_threshold"]
-            stop_loss_pct = strategy_config["stop_loss_pct"]
-            
-            for idx in range(completed_bars_count):
-                bar_timestamp = df_today.index[idx]
-                bar = df_today.iloc[idx]
-                bar_price = float(bar["Close"])
-                
-                # Fetch price history up to this bar's timestamp
-                bar_loc = df_warm.index.get_loc(bar_timestamp)
-                price_history = df_warm["Close"].iloc[:bar_loc + 1].tolist()
-                
-                # Calculate indicators
-                sma20, sma50, rsi = calculate_rolling_indicators(price_history)[:3]
-                trend = "UPTREND" if bar_price > sma50 else "DOWNTREND"
-                
-                # Check signals
-                timestamp_str = bar_timestamp.tz_convert("Asia/Kolkata").strftime('%H:%M:%S') if bar_timestamp.tz is not None else bar_timestamp.strftime('%H:%M:%S')
-                
-                # Evaluate Sell
-                if warm_held_qty > 0:
-                    unrealized_pnl_pct = (bar_price - warm_avg_buy_price) / warm_avg_buy_price if warm_avg_buy_price > 0 else 0.0
-                    
-                    if unrealized_pnl_pct <= -stop_loss_pct:
-                        print(f"[{timestamp_str}] [WARM-UP] SELL SIGNAL (Stop Loss) | Price: Rs. {bar_price:.2f} | PnL: {unrealized_pnl_pct*100:.2f}%", flush=True)
-                        warm_held_qty = 0
-                        warm_avg_buy_price = 0.0
-                    elif rsi >= sell_thresh:
-                        print(f"[{timestamp_str}] [WARM-UP] SELL SIGNAL (RSI Overbought) | Price: Rs. {bar_price:.2f} | RSI: {rsi}", flush=True)
-                        warm_held_qty = 0
-                        warm_avg_buy_price = 0.0
-                # Evaluate Buy
+    import datetime
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=5, minutes=30)))
+    start_time = now.replace(hour=9, minute=15, second=0, microsecond=0)
+    
+    for sym, state in states.items():
+        try:
+            hist_df = get_intraday_data(state.ticker)
+            if not hist_df.empty:
+                today_df = hist_df[hist_df.index >= start_time]
+                if not today_df.empty:
+                    logger.info(f"[{sym}] Backfilling {len(today_df)} completed bars of today...")
+                    for ts, bar in today_df.iterrows():
+                        state.price_history.append(float(bar['Close']))
+                        state.volume_history.append(int(bar['Volume']))
+                    state.df = today_df.copy()
+                    state.current_minute = state.df.index[-1].strftime('%Y-%m-%d %H:%M')
+                    if len(state.price_history) > 200:
+                        state.price_history = state.price_history[-200:]
+                    if len(state.volume_history) > 200:
+                        state.volume_history = state.volume_history[-200:]
                 else:
-                    if rsi <= buy_thresh:
-                        print(f"[{timestamp_str}] [WARM-UP] BUY SIGNAL (RSI Oversold) | Price: Rs. {bar_price:.2f} | RSI: {rsi}", flush=True)
-                        warm_held_qty = 100 
-                        warm_avg_buy_price = bar_price
-            
-            logger.info("Warm-up backfill completed.")
-        else:
-            logger.info("No completed bars for today yet. Skipping warm-up backfill.")
-    else:
-        logger.warning("Could not download history for warm-up.")
-        
+                    logger.warning(f"[{sym}] No historical bars for today during warm-up.")
+        except Exception as e:
+            logger.error(f"[{sym}] Warm-up failed: {e}")
+
+    logger.info("Warm-up backfill completed.")
     print("\n" + "="*60, flush=True)
     print("--- WARM-UP COMPLETED: STARTING LIVE TICK POLING ---", flush=True)
     print("="*60 + "\n", flush=True)
-    
-    # Track supervisor runs (every 10 minutes)
-    last_supervisor_time = time.time()
-    SUPERVISOR_INTERVAL_SEC = 600.0  # 10 minutes
-    
-    tick_count = 0
-    
-    # Pre-fetch history to maintain 1m bars
-    df = yf.download(TICKER, period="2d", interval="1m", progress=False)
-    if not df.empty and isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    if not df.empty:
-        df = df.sort_index().dropna(subset=["Close", "Volume"])
-    
-    current_minute = None
-    if not df.empty:
-        current_minute = df.index[-1].strftime("%Y-%m-%d %H:%M")
 
-    # Connect to websocket
     try:
         ws = websocket.create_connection("ws://localhost:4141")
-        ws.send(json.dumps({"action": "subscribe", "symbols": [SYMBOL]}))
-        logger.info(f"Connected to WS 4141 for {SYMBOL} (yf ticker: {TICKER})")
+        ws.send(json.dumps({"action": "subscribe", "symbols": TRACKED_SYMBOLS}))
+        logger.info(f"Connected to WS 4141 for {', '.join(TRACKED_SYMBOLS)}")
     except Exception as e:
         logger.error(f"Websocket connection failed: {e}")
         return
     
-    # Start polling loop
     last_eval_time = 0.0
     while True:
         try:
             reload_config_if_changed()
-            # Check market hours (NSE/BSE open Monday to Friday, 9:15 AM to 3:30 PM IST)
-            import datetime
             now_ist = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=5, minutes=30)))
             is_weekend = now_ist.weekday() >= 5
             is_out_of_hours = now_ist.time() < datetime.time(9, 15) or now_ist.time() > datetime.time(15, 30)
             
-            # Receive live tick via websocket
             msg = ws.recv()
             data = json.loads(msg)
             if data.get("type") != "LIVE_TICK":
                 continue
                 
+            tick_sym = data.get("symbol", "").replace(".NS", "").replace(".BO", "").upper()
+            if tick_sym not in states:
+                continue
+                
+            state = states[tick_sym]
+            current_config = strategy_config.copy()
+            current_config.update(strategy_config.get("stock_configs", {}).get(tick_sym, {}))
             curr_price = float(data["ltp"])
-            curr_volume = 0  # WebSocket might not give tick volume, fallback to 0
+            curr_volume = 0
             
             try:
                 tick_time = pd.to_datetime(data["timestamp"])
@@ -1268,144 +1291,158 @@ def run_live_trading(interval_sec: float = 10.0, no_supervisor: bool = False):
                 
             minute_str = tick_time.strftime("%Y-%m-%d %H:%M")
             
-            if current_minute == minute_str and not df.empty:
-                # Update current minute's close price
-                df.iloc[-1, df.columns.get_loc("Close")] = curr_price
+            if state.current_minute == minute_str and not state.df.empty:
+                state.df.iloc[-1, state.df.columns.get_loc("Close")] = curr_price
             else:
-                current_minute = minute_str
-                # Create a new bar
+                state.current_minute = minute_str
                 new_row = pd.DataFrame({"Close": [curr_price], "Volume": [0]}, index=[tick_time])
-                df = pd.concat([df, new_row])
+                state.df = pd.concat([state.df, new_row])
                 
-            current_bar = df.iloc[-1]
-            curr_volume = int(current_bar.get("Volume", 0))
-            
-            tick_count += 1
+            state.tick_count += 1
             timestamp_str = now_ist.strftime('%H:%M:%S')
-            
-            # Fetch price history to calculate indicators
-            price_history = df["Close"].tolist()
-            sma20, sma50, rsi = calculate_rolling_indicators(price_history)[:3]
-            trend = "UPTREND" if curr_price > sma50 else "DOWNTREND"
-            
-            # Dynamic Bias Assignment
-            bias_setting = strategy_config.get("bias", "dynamic").lower()
-            if bias_setting == "dynamic" or strategy_config.get("dynamic_bias", False):
-                sma_trend_bullish = sma20 > sma50
-                if sma_trend_bullish and curr_price > sma20:
-                    strategy_config["bias"] = "bullish"
-                elif not sma_trend_bullish and curr_price < sma20:
-                    strategy_config["bias"] = "bearish"
-                else:
-                    strategy_config["bias"] = "neutral"
-            
-            # Dynamic RSI Update
-            if strategy_config.get("dynamic_rsi", True):
-                dyn_buy, dyn_sell = get_rolling_rsi_percentiles(price_history)
-                offset = int(strategy_config.get("rsi_sell_offset", 4))
+
+            if is_out_of_hours or is_weekend:
+                continue
+                
+            live_time = now_ist.time()
+            if live_time < datetime.time(9, 20) or live_time >= datetime.time(15, 15):
+                continue
+
+            state.price_history = state.df["Close"].tolist()[-200:]
+            sma20, sma50, rsi = calculate_rolling_indicators(state.price_history)[:3]
+
+            closes_arr_quick = np.array(state.price_history, dtype=float)
+            ema9_quick  = _ema(closes_arr_quick, 9)  if len(closes_arr_quick) >= 9  else float(closes_arr_quick[-1])
+            ema21_quick = _ema(closes_arr_quick, 21) if len(closes_arr_quick) >= 21 else float(closes_arr_quick[-1])
+            trend = "UPTREND" if ema9_quick > ema21_quick else "DOWNTREND"
+
+            bias_setting = current_config.get("bias", "dynamic").lower()
+            if bias_setting not in ("always_buy",) and (bias_setting == "dynamic" or current_config.get("dynamic_bias", False)):
+                new_bias = "neutral"
+                if ema9_quick > ema21_quick and curr_price > ema9_quick:
+                    new_bias = "bullish"
+                elif ema9_quick < ema21_quick and curr_price < ema9_quick:
+                    new_bias = "bearish"
+                
+                if "stock_configs" not in strategy_config:
+                    strategy_config["stock_configs"] = {}
+                if tick_sym not in strategy_config["stock_configs"]:
+                    strategy_config["stock_configs"][tick_sym] = {}
+                strategy_config["stock_configs"][tick_sym]["bias"] = new_bias
+                current_config["bias"] = new_bias
+
+            if current_config.get("dynamic_rsi", True):
+                dyn_buy, dyn_sell = get_rolling_rsi_percentiles(state.price_history)
+                offset = int(current_config.get("rsi_sell_offset", 4))
                 dyn_sell = dyn_buy + offset
-                strategy_config["rsi_buy_threshold"] = dyn_buy
-                strategy_config["rsi_sell_threshold"] = dyn_sell
+                
+                if "stock_configs" not in strategy_config:
+                    strategy_config["stock_configs"] = {}
+                if tick_sym not in strategy_config["stock_configs"]:
+                    strategy_config["stock_configs"][tick_sym] = {}
+                    
+                strategy_config["stock_configs"][tick_sym]["rsi_buy_threshold"] = dyn_buy
+                strategy_config["stock_configs"][tick_sym]["rsi_sell_threshold"] = dyn_sell
+                current_config["rsi_buy_threshold"] = dyn_buy
+                current_config["rsi_sell_threshold"] = dyn_sell
                 save_config_if_changed()
-            
-            # Log state
-            market_hours_status = "CLOSED/WEEKEND" if (is_weekend or is_out_of_hours) else "OPEN"
-            print(f"[{timestamp_str}] Live Tick {tick_count} (Market: {market_hours_status}) | Price: Rs. {curr_price:.2f} | RSI: {rsi} | Trend: {trend} | Bias: {strategy_config['bias'].upper()}", flush=True)
-            
-            # Retrieve threshold config
-            buy_thresh = strategy_config["rsi_buy_threshold"]
-            sell_thresh = strategy_config["rsi_sell_threshold"]
-            stop_loss_pct = strategy_config["stop_loss_pct"]
-            cooldown_sec = float(strategy_config.get("cooldown_sec", 60.0))
+
+            print(f"[{timestamp_str}] [{tick_sym}] Live Tick {state.tick_count} | Price: Rs. {curr_price:.2f} | RSI: {rsi:.2f} | Trend: {trend}", flush=True)
+
+            buy_thresh = current_config["rsi_buy_threshold"]
+            sell_thresh = current_config["rsi_sell_threshold"]
+            stop_loss_pct = current_config["stop_loss_pct"]
+            cooldown_sec = max(30.0, float(current_config.get("cooldown_sec", 30.0)))
             current_time = time.time()
             
-            # Sync logic with cooldown of 15 seconds to allow backend DB transactions to settle
-            if local_held_qty is None or (current_time - last_trade_time > 15.0):
-                # Fetch fresh portfolio from backend to perform accurate sync
+            if state.local_held_qty is None:
                 cash, holdings = fetch_portfolio()
-                
                 fetched_held_qty = 0
                 fetched_avg_buy_price = 0.0
                 for h in holdings:
                     h_sym = h.get("symbol", "").replace(".NS", "").replace(".BO", "").strip().upper()
-                    if h_sym == SYMBOL:
+                    if h_sym == tick_sym:
                         fetched_held_qty = int(h.get("quantity", 0))
                         fetched_avg_buy_price = float(h.get("avgPrice", 0.0))
                         break
-                local_held_qty = fetched_held_qty
-                local_avg_buy_price = fetched_avg_buy_price
+                state.local_held_qty = fetched_held_qty
+                state.local_avg_buy_price = fetched_avg_buy_price
+                logger.info(f"[PORTFOLIO] Initial sync for {tick_sym}: Cash=Rs.{cash:.2f}, qty={state.local_held_qty}, avg=Rs.{state.local_avg_buy_price:.2f}")
+            elif current_time - state.last_portfolio_fetch_time > 15.0 or state.tick_count % 30 == 0:
+                state.last_portfolio_fetch_time = current_time
+                fetch_portfolio_background()
+                with _portfolio_lock:
+                    cash = simulated_cash
+                    holdings = simulated_holdings
+                fetched_held_qty = 0
+                fetched_avg_buy_price = 0.0
+                for h in holdings:
+                    h_sym = h.get("symbol", "").replace(".NS", "").replace(".BO", "").strip().upper()
+                    if h_sym == tick_sym:
+                        fetched_held_qty = int(h.get("quantity", 0))
+                        fetched_avg_buy_price = float(h.get("avgPrice", 0.0))
+                        break
+                state.local_held_qty = fetched_held_qty
+                state.local_avg_buy_price = fetched_avg_buy_price
             else:
-                # Periodic updates / immediate post-trade updates
-                if tick_count % 15 == 0 or (current_time - last_trade_time < 5.0):
-                    cash, holdings = fetch_portfolio()
+                with _portfolio_lock:
+                    cash = simulated_cash
                 
-            held_qty = local_held_qty
-            avg_buy_price = local_avg_buy_price
+            held_qty = state.local_held_qty
+            avg_buy_price = state.local_avg_buy_price
             
-            # Resolve per-tick config values
-            take_profit_pct   = float(strategy_config.get("take_profit_pct",  0.008))
-            trailing_stop_pct = float(strategy_config.get("trailing_stop_pct", 0.003))
-            current_bias      = strategy_config.get("bias", "neutral").lower()
+            take_profit_pct   = float(current_config.get("take_profit_pct",  0.012))
+            trailing_stop_pct = float(current_config.get("trailing_stop_pct", 0.004))
+            current_bias      = current_config.get("bias", "neutral").lower()
             is_aggressive_live = (current_bias == "always_buy")
 
-            # Compute momentum score for aggressive entries
-            volume_history_live = df["Volume"].tolist()
-            _, _ , _, indicators_full = calculate_rolling_indicators(price_history, volume_history_live), None, None, None
-            full_inds = calculate_rolling_indicators(price_history, volume_history_live)
+            volume_history_live = state.df["Volume"].tolist()[-200:]
+            price_history_capped = state.price_history[-200:]
+            full_inds = calculate_rolling_indicators(price_history_capped, volume_history_live)
             sma20_l, sma50_l, rsi_l, macd_l, sig_l, macd_hist_l, bb_up_l, bb_dn_l, vr_l = full_inds
+
+            closes_arr_l = np.array(price_history_capped, dtype=float)
+            ema9_l  = _ema(closes_arr_l, 9)  if len(closes_arr_l) >= 9  else float(closes_arr_l[-1])
+            ema21_l = _ema(closes_arr_l, 21) if len(closes_arr_l) >= 21 else float(closes_arr_l[-1])
+            vwap_l  = calculate_vwap(price_history_capped, volume_history_live)
+            atr_l   = calculate_atr(price_history_capped, period=14)
+            atr_pct_l = (atr_l / curr_price) if curr_price > 0 else 0.0
+            is_choppy_regime_l = atr_pct_l < 0.0003
+
             mom_buy_score, mom_sell_score, mom_buy_sigs, mom_sell_sigs = calculate_momentum_score(
-                price_history, rsi_l, macd_hist_l, bb_up_l, bb_dn_l,
+                price_history_capped, rsi_l, macd_hist_l, bb_up_l, bb_dn_l,
                 curr_price, vr_l, buy_thresh, sell_thresh
             )
 
-            # Track peak for trailing stop
-            if held_qty > 0:
-                if not hasattr(run_live_trading, '_peak_price') or local_avg_buy_price != getattr(run_live_trading, '_last_avg', -1):
-                    run_live_trading._peak_price = curr_price
-                    run_live_trading._last_avg = local_avg_buy_price
-                if curr_price > run_live_trading._peak_price:
-                    run_live_trading._peak_price = curr_price
-                live_peak = run_live_trading._peak_price
-            else:
-                run_live_trading._peak_price = 0.0
-                run_live_trading._last_avg = 0.0
-                live_peak = 0.0
-
-            # 1. Evaluate Stop-Loss / Take-Profit / Trailing-Stop
-            unrealized_pnl_pct = 0.0
-            if held_qty > 0:
-                unrealized_pnl_pct = (curr_price - avg_buy_price) / avg_buy_price if avg_buy_price > 0 else 0.0
-            trailing_drawdown_live = (live_peak - curr_price) / live_peak if live_peak > 0 else 0.0
+            if held_qty > 0 and curr_price > state.peak_price:
+                state.peak_price = curr_price
 
             def _do_live_sell(qty, sell_type, pnl_pct=None):
-                """Helper: execute sell, log transaction, update local state."""
-                success, details = execute_sell(TICKER, qty, curr_price)
-                if success:
-                    last_trade_time_val = current_time
-                    pnl_str = f" ({pnl_pct*100:+.2f}%)" if pnl_pct is not None else ""
-                    trade_log.append(f"SELL ({sell_type}{pnl_str}) {qty} shares @ {curr_price:.2f}")
+                ok, res_det = execute_sell(tick_sym, qty, curr_price)
+                if ok:
                     tx = {
                         "timestamp": timestamp_str,
-                        "symbol": SYMBOL,
+                        "symbol": tick_sym,
                         "action": "SELL",
                         "quantity": qty,
                         "price": curr_price,
                         "total_value": qty * curr_price,
-                        "type": f"{sell_type}{pnl_str}",
+                        "type": sell_type,
                         "datetime_real": time.strftime("%Y-%m-%d %H:%M:%S")
                     }
+                    if pnl_pct is not None:
+                        tx["pnl_pct"] = pnl_pct
                     executed_transactions.append(tx)
                     save_live_transaction(tx)
-                return success
+                    return True
+                return False
 
             def _do_live_buy(qty, buy_type):
-                """Helper: execute buy, log transaction, update local state."""
-                success, details = execute_buy(TICKER, qty, curr_price)
-                if success:
-                    trade_log.append(f"BUY ({buy_type}) {qty} shares @ {curr_price:.2f}")
+                ok, res_det = execute_buy(tick_sym, qty, curr_price)
+                if ok:
                     tx = {
                         "timestamp": timestamp_str,
-                        "symbol": SYMBOL,
+                        "symbol": tick_sym,
                         "action": "BUY",
                         "quantity": qty,
                         "price": curr_price,
@@ -1415,181 +1452,142 @@ def run_live_trading(interval_sec: float = 10.0, no_supervisor: bool = False):
                     }
                     executed_transactions.append(tx)
                     save_live_transaction(tx)
-                return success
+                    return True
+                return False
 
-            if held_qty > 0 and unrealized_pnl_pct >= take_profit_pct:
-                # --- Take-Profit ---
-                logger.info(f"[STRATEGY] LIVE TAKE-PROFIT at {unrealized_pnl_pct*100:.2f}% — Selling {held_qty} shares @ Rs. {curr_price:.2f}")
-                if _do_live_sell(held_qty, "Take-Profit", unrealized_pnl_pct):
-                    last_trade_time = current_time; last_sell_time = current_time
-                    local_held_qty = 0; local_avg_buy_price = 0.0
-                    run_live_trading._peak_price = 0.0
-                    # Immediate re-entry in aggressive mode
-                    if is_aggressive_live and mom_buy_score >= 1:
-                        cash, _ = fetch_portfolio()
-                        re_qty = int(cash * ALLOCATION_PCT * strategy_config.get("buy_fraction", 1.0) // curr_price)
-                        if re_qty > 0:
-                            logger.info(f"[STRATEGY] LIVE RE-ENTRY after TP: Buying {re_qty} shares @ Rs. {curr_price:.2f}")
-                            if _do_live_buy(re_qty, "Re-entry Post-TP"):
-                                last_buy_time = current_time; last_trade_time = current_time
-                                local_held_qty = re_qty; local_avg_buy_price = curr_price
-                                run_live_trading._peak_price = curr_price
+            if held_qty > 0 and avg_buy_price > 0:
+                unrealized_pnl_pct = (curr_price - avg_buy_price) / avg_buy_price
+                trailing_stop_price = state.peak_price * (1.0 - trailing_stop_pct)
+                
+                sell_signals = []
+                if rsi_l >= sell_thresh:
+                    sell_signals.append(f"RSI:{rsi_l:.1f}")
+                if macd_hist_l < 0:
+                    sell_signals.append("MACD-")
+                    
+                should_sell = False
+                sell_reason = ""
+                
+                if unrealized_pnl_pct <= -stop_loss_pct:
+                    should_sell = True
+                    sell_reason = f"Stop-Loss (-{stop_loss_pct*100:.2f}%)"
+                elif curr_price < trailing_stop_price and state.peak_price > avg_buy_price * 1.002:
+                    should_sell = True
+                    sell_reason = f"Trailing Stop (-{trailing_stop_pct*100:.2f}% from peak)"
+                elif unrealized_pnl_pct >= take_profit_pct:
+                    should_sell = True
+                    sell_reason = f"Take-Profit (+{take_profit_pct*100:.2f}%)"
+                elif not is_aggressive_live and len(sell_signals) >= 2:
+                    should_sell = True
+                    sell_reason = f"Signal-SELL ({', '.join(sell_signals)})"
 
-            elif held_qty > 0 and unrealized_pnl_pct > 0 and trailing_drawdown_live >= trailing_stop_pct:
-                # --- Trailing Stop ---
-                logger.warning(f"[STRATEGY] LIVE TRAILING-STOP hit (drew down {trailing_drawdown_live*100:.2f}% from peak Rs. {live_peak:.2f})")
-                if _do_live_sell(held_qty, "Trailing-Stop", unrealized_pnl_pct):
-                    last_trade_time = current_time; last_sell_time = current_time
-                    local_held_qty = 0; local_avg_buy_price = 0.0
-                    run_live_trading._peak_price = 0.0
-
-            elif held_qty > 0 and unrealized_pnl_pct <= -stop_loss_pct:
-                # --- Hard Stop-Loss ---
-                logger.warning(f"[STRATEGY] [WARNING] LIVE STOP-LOSS for {SYMBOL}! PnL: {unrealized_pnl_pct*100:.2f}%")
-                if _do_live_sell(held_qty, "Stop Loss", unrealized_pnl_pct):
-                    last_trade_time = current_time; last_sell_time = current_time
-                    local_held_qty = 0; local_avg_buy_price = 0.0
-                    run_live_trading._peak_price = 0.0
-                    # Immediate re-entry in aggressive mode
-                    if is_aggressive_live and mom_buy_score >= 1:
-                        cash, _ = fetch_portfolio()
-                        re_qty = int(cash * ALLOCATION_PCT * strategy_config.get("buy_fraction", 1.0) // curr_price)
-                        if re_qty > 0:
-                            logger.info(f"[STRATEGY] LIVE RE-ENTRY after SL: Buying {re_qty} shares @ Rs. {curr_price:.2f}")
-                            if _do_live_buy(re_qty, "Re-entry Post-SL"):
-                                last_buy_time = current_time; last_trade_time = current_time
-                                local_held_qty = re_qty; local_avg_buy_price = curr_price
-                                run_live_trading._peak_price = curr_price
-
-            elif held_qty > 0:
-                # --- Multi-signal / momentum SELL (no hard exit triggered) ---
-                if current_time - last_sell_time > cooldown_sec:
-                    if is_aggressive_live:
-                        sell_signals = list(mom_sell_sigs)
-                        sell_threshold = 1
-                    else:
-                        sell_signals = [f"RSI:{rsi}" if rsi >= sell_thresh else None]
-                        sell_signals = [s for s in sell_signals if s]
-                        sell_threshold = 1
-
-                    # Only sell on signals if we are in profit (> 0.1%) to avoid 0-profit HFT churn
-                    if len(sell_signals) >= sell_threshold and unrealized_pnl_pct > 0.001:
-                        sell_fraction = strategy_config.get("sell_fraction", 1.0)
-                        sell_qty = int(held_qty * sell_fraction)
-                        if sell_qty > 0:
-                            reasons = ", ".join(sell_signals)
-                            logger.info(f"[STRATEGY] LIVE SELL ({reasons}) — PnL: {unrealized_pnl_pct*100:+.2f}% — Selling {sell_qty} shares @ Rs. {curr_price:.2f}")
-                            if _do_live_sell(sell_qty, f"Signal-SELL ({reasons})", unrealized_pnl_pct):
-                                last_trade_time = current_time; last_sell_time = current_time
-                                local_held_qty = max(0, held_qty - sell_qty)
-                                local_avg_buy_price = avg_buy_price if local_held_qty > 0 else 0.0
-
-            # 2. Evaluate BUY
-            #    - Standard: blocked when bearish
-            #    - Aggressive (always_buy): trades in ANY market condition
+                if should_sell and current_time - state.last_sell_time > 10.0:
+                    if _do_live_sell(held_qty, sell_reason, unrealized_pnl_pct):
+                        state.last_trade_time = current_time; state.last_sell_time = current_time
+                        state.local_held_qty = 0; state.local_avg_buy_price = 0.0
+                        state.peak_price = 0.0
+                        
+                        if "Take-Profit" in sell_reason and is_aggressive_live and mom_buy_score >= 3 and curr_price < vwap_l:
+                            with _portfolio_lock:
+                                re_cash = simulated_cash
+                            capital_alloc = re_cash / len(TRACKED_SYMBOLS)
+                            re_qty = int(capital_alloc * ALLOCATION_PCT * current_config.get("buy_fraction", 1.0) // curr_price)
+                            if re_qty > 0:
+                                if _do_live_buy(re_qty, "Re-entry Post-TP"):
+                                    state.last_buy_time = current_time; state.last_trade_time = current_time
+                                    state.local_held_qty = re_qty; state.local_avg_buy_price = curr_price
+                                    state.peak_price = curr_price
+                        
+                        elif "Stop-Loss" in sell_reason and is_aggressive_live and mom_buy_score >= 3 and curr_price < vwap_l * 0.999:
+                            with _portfolio_lock:
+                                re_cash = simulated_cash
+                            capital_alloc = re_cash / len(TRACKED_SYMBOLS)
+                            re_qty = int(capital_alloc * ALLOCATION_PCT * current_config.get("buy_fraction", 1.0) // curr_price)
+                            if re_qty > 0:
+                                if _do_live_buy(re_qty, "Re-entry Post-SL"):
+                                    state.last_buy_time = current_time; state.last_trade_time = current_time
+                                    state.local_held_qty = re_qty; state.local_avg_buy_price = curr_price
+                                    state.peak_price = curr_price
+            
             elif held_qty == 0:
                 buy_allowed = (is_aggressive_live) or (current_bias != "bearish")
-                if buy_allowed and current_time - last_buy_time > cooldown_sec:
+                live_min_score = 1 if is_aggressive_live else 2
+                if is_choppy_regime_l:
+                    live_min_score += 2
+
+                if buy_allowed and current_time - state.last_buy_time > cooldown_sec:
                     if is_aggressive_live:
                         buy_signals = list(mom_buy_sigs)
-                        buy_threshold = 1
                         if macd_hist_l > 0:
                             buy_signals.append("MACD+")
                         if rsi_l <= buy_thresh:
                             buy_signals.append(f"RSI:{rsi_l:.1f}")
+                        if ema9_l > ema21_l:
+                            buy_signals.append("EMA-Bullish")
+                        if curr_price > vwap_l * 1.001:
+                            buy_signals = []
+                        buy_threshold = live_min_score
                     else:
-                        buy_signals = [f"RSI:{rsi}" if rsi <= buy_thresh else None]
+                        buy_signals = [f"RSI:{rsi_l}" if rsi_l <= buy_thresh else None]
                         buy_signals = [s for s in buy_signals if s]
-                        buy_threshold = 1
+                        if ema9_l > ema21_l:
+                            buy_signals.append("EMA-Bullish")
+                        if curr_price > vwap_l * 1.002:
+                            buy_signals = [s for s in buy_signals if "RSI" not in s]
+                        buy_threshold = live_min_score
 
                     if len(buy_signals) >= buy_threshold:
-                        buy_fraction = strategy_config.get("buy_fraction", 1.0)
-                        max_alloc = cash * ALLOCATION_PCT * buy_fraction
+                        buy_fraction = current_config.get("buy_fraction", 1.0)
+                        capital_alloc = cash / len(TRACKED_SYMBOLS)
+                        max_alloc = capital_alloc * ALLOCATION_PCT * buy_fraction
                         buy_qty = int(max_alloc // curr_price)
                         if buy_qty > 0:
                             reasons = ", ".join(buy_signals)
-                            logger.info(f"[STRATEGY] LIVE BUY ({reasons}) — Buying {buy_qty} shares @ Rs. {curr_price:.2f}")
+                            logger.info(f"[STRATEGY] [{tick_sym}] LIVE BUY ({reasons}, VWAP={vwap_l:.2f}) — Buying {buy_qty} shares @ Rs. {curr_price:.2f}")
                             if _do_live_buy(buy_qty, f"Signal-BUY ({reasons})"):
-                                last_trade_time = current_time; last_buy_time = current_time
-                                local_held_qty = buy_qty; local_avg_buy_price = curr_price
-                                run_live_trading._peak_price = curr_price
+                                state.last_trade_time = current_time; state.last_buy_time = current_time
+                                state.local_held_qty = buy_qty; state.local_avg_buy_price = curr_price
+                                state.peak_price = curr_price
                         else:
-                            logger.warning(f"[STRATEGY] [WARNING] BUY signal but cash (Rs. {max_alloc:.2f}) too low (Price: Rs. {curr_price:.2f})")
-                        
-            # 3. Periodically run the CrewAI Strategy Supervisor asynchronously in the background (every 10 mins)
-            skip_supervisor = no_supervisor or strategy_config.get("pause_ai", False) or strategy_config.get("disable_ai", False)
-            if not skip_supervisor and (current_time - last_supervisor_time >= SUPERVISOR_INTERVAL_SEC):
-                if not supervisor_running:
-                    supervisor_running = True
-                    last_supervisor_time = current_time
-                    print("\n" + "-"*50, flush=True)
-                    print("--- LAUNCHING CREWAI STRATEGY SUPERVISOR IN BACKGROUND ---", flush=True)
-                    print("-"*50, flush=True)
+                            pass
+                            
+            if not no_supervisor and not supervisor_running:
+                if current_time - last_eval_time > 300.0:
+                    last_eval_time = current_time
+                    logger.info("[SUPERVISOR] Running live strategy optimization background task...")
                     
-                    # Collect last 10 minutes of bars for supervisor context
-                    recent_bars = df.iloc[-10:]
-                    market_context_list = []
-                    for t, r in recent_bars.iterrows():
-                        t_ist = t.tz_convert("Asia/Kolkata") if t.tz is not None else t
-                        market_context_list.append(f"  - {t_ist.strftime('%H:%M:%S')}: Price {r['Close']:.2f}, Volume {int(r['Volume'])}")
-                    market_context_str = "\n".join(market_context_list)
+                    market_context_str = f"Live tick count: {state.tick_count}. Symbol: {tick_sym}. Current Price: Rs. {curr_price:.2f}. Trend: {trend}. RSI: {rsi_l}."
                     
-                    cash, holdings = fetch_portfolio()
-                    performance_context_str = f"Available Cash: Rs. {cash:.2f}\n"
-                    performance_context_str += f"Current Holdings count: {len(holdings)}\n"
-                    performance_context_str += "Recent Live Trades Log:\n"
-                    if trade_log:
-                        for log_item in trade_log[-5:]:
-                            performance_context_str += f"  - {log_item}\n"
-                    else:
-                        performance_context_str += "  - No trades executed in this run yet.\n"
+                    cash_latest, holdings_latest = fetch_portfolio()
+                    total_latest = cash_latest
+                    for h in holdings_latest:
+                        total_latest += float(h.get("quantity", 0)) * float(h.get("currentPrice", 0.0))
                     
-                    # Spawn background thread
+                    roi_pct = ((total_latest - initial_total_value) / initial_total_value * 100) if initial_total_value > 0 else 0.0
+                    
+                    performance_context_str = f"Initial Capital: Rs. {initial_total_value:.2f}. Current Capital: Rs. {total_latest:.2f}. Live ROI: {roi_pct:.2f}%. Executed trades: {len(executed_transactions)}."
+                    
                     t = threading.Thread(
                         target=run_supervisor_async,
                         args=(market_context_str, performance_context_str),
                         daemon=True
                     )
                     t.start()
-                else:
-                    logger.info("[SUPERVISOR] Previous optimization task is still running in background, skipping trigger.")
-
                 
         except KeyboardInterrupt:
             print("\nExiting live trading loop cleanly on user request.", flush=True)
             break
         except Exception as e:
-            logger.error(f"Error in live trading loop: {str(e)}")
-            
-        time.sleep(interval_sec)
+            logger.error(f"Error in live trading loop: {str(e)}. Retrying on next tick...")
         
     print("\n" + "="*60, flush=True)
     print("=== LIVE TRADING STOPPED ===", flush=True)
-    cash, holdings = fetch_portfolio()
-    final_holdings_value = 0.0
-    for h in holdings:
-        h_qty = float(h.get("quantity", 0))
-        h_sym = h.get("symbol", "").replace(".NS", "").replace(".BO", "").strip().upper()
-        if h_sym == SYMBOL:
-            price = curr_price if 'curr_price' in locals() else float(h.get("currentPrice", 0.0))
-        else:
-            price = float(h.get("currentPrice", 0.0))
-        final_holdings_value += h_qty * price
-        
-    final_total_value = cash + final_holdings_value
-    total_pnl = final_total_value - initial_total_value
-    pnl_pct = (total_pnl / initial_total_value) * 100 if initial_total_value > 0 else 0.0
-    
-    print(f"Initial Portfolio Value: Rs. {initial_total_value:.2f} (Cash: Rs. {initial_cash:.2f}, Holdings: Rs. {initial_holdings_value:.2f})", flush=True)
-    print(f"Final Portfolio Value:   Rs. {final_total_value:.2f} (Cash: Rs. {cash:.2f}, Holdings: Rs. {final_holdings_value:.2f})", flush=True)
-    print(f"Total PnL:               Rs. {total_pnl:+.2f} ({pnl_pct:+.3f}%)", flush=True)
-    print(f"Trades executed in this run: {len(trade_log)}", flush=True)
-    print("="*60 + "\n", flush=True)
+
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Simulated/Live Intraday Streaming Trader")
-    parser.add_argument("--symbol", type=str, default="EMUDHRA", help="Stock symbol or ticker (e.g. EMUDHRA or EMUDHRA.NS) (default: EMUDHRA)")
+    parser.add_argument("--symbols", type=str, default="EMUDHRA", help="Comma-separated stock symbols (e.g. INFY,TCS) (default: EMUDHRA)")
     parser.add_argument("--bars", type=int, default=375, help="Maximum number of bars to simulate (default: 375)")
     parser.add_argument("--interval", type=float, default=None, help="Delay between bars/polling interval in seconds (default: 5.0 for live, 0.01 for simulation)")
     parser.add_argument("--live", action="store_true", help="Run in live market mode instead of simulation")
@@ -1598,10 +1596,9 @@ if __name__ == "__main__":
                         help="Trading sensitivity profile: conservative, moderate, or aggressive (default: moderate)")
     args = parser.parse_args()
     
-    # Dynamically update the global symbol and ticker based on the CLI argument
-    raw_symbol = args.symbol.upper()
-    TICKER = raw_symbol if (raw_symbol.endswith(".NS") or raw_symbol.endswith(".BO")) else f"{raw_symbol}.NS"
-    SYMBOL = TICKER.replace(".NS", "").replace(".BO", "")
+    # Dynamically update the global symbols based on the CLI argument
+    raw_symbols = [s.strip().upper() for s in args.symbols.split(",")]
+    TRACKED_SYMBOLS = [s.replace(".NS", "").replace(".BO", "") for s in raw_symbols]
     
     # Configure trading sensitivity profile settings
     SENSITIVITY_PROFILES = {
@@ -1649,13 +1646,21 @@ if __name__ == "__main__":
             logger.warning(f"Could not read {config_file}: {str(e)}")
 
     if not auto_config_skipped:
-        # Run historical analysis to auto-generate optimal config, which writes to config.json
-        generated = auto_generate_config(SYMBOL, TICKER)
-        if generated:
-            strategy_config.update(generated)
+        # Run historical analysis for all tracked symbols
+        stock_configs = strategy_config.get("stock_configs", {})
+        any_generated = False
+        for sym in TRACKED_SYMBOLS:
+            ticker = sym if (sym.endswith('.NS') or sym.endswith('.BO')) else f"{sym}.NS"
+            generated = auto_generate_config(sym, ticker)
+            if generated:
+                stock_configs[sym] = generated
+                any_generated = True
+                
+        if any_generated:
+            strategy_config["stock_configs"] = stock_configs
+            save_config_if_changed()
             loaded_config_file = config_file
         else:
-            # Fallback to load existing config.json
             if os.path.exists(config_file):
                 try:
                     with open(config_file, "r") as f:
