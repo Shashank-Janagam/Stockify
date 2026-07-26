@@ -16,6 +16,7 @@ type AlgoConfig = {
   dynamic_rsi?: boolean;
   rsi_window?: number;
   rsi_sell_offset?: number;
+  symbols?: string[];
 };
 
 type AlgoSummary = {
@@ -108,7 +109,7 @@ export default function AlgoDashboard() {
             {summary?.mode || "LIVE"} ALGO TRADER ACTIVE
           </div>
           <div className="algo-ticker-title">
-            Tracking Ticker: <span className="algo-ticker-name">{activeSymbol}</span>
+            Tracking Ticker: <span className="algo-ticker-name">{config?.symbols?.length ? config.symbols.join(", ") : activeSymbol}</span>
           </div>
         </div>
 

@@ -1,4 +1,7 @@
 import { WebSocket } from "ws";
+import YahooFinance from 'yahoo-finance2';
+
+const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 class UpstoxFeedService {
   constructor(feedUrl = process.env.UPSTOX_WS_URL || "ws://localhost:4141") {
@@ -10,6 +13,94 @@ class UpstoxFeedService {
     // Ref-counted: symbol → number of active subscribers
     this.symbolRefCounts = new Map();
     this.reconnectTimer = null;
+    this.offlinePricesFetched = new Set();
+    this.pollInterval = setInterval(() => this.fallbackPolling(), 5000);
+  }
+
+  isMarketLive() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + (3600000 * 5.5));
+    const day = ist.getDay(); 
+    if (day === 0 || day === 6) return false;
+    
+    const timeInMinutes = ist.getHours() * 60 + ist.getMinutes();
+    const startMinutes = 9 * 60 + 15; 
+    const endMinutes = 15 * 60 + 30; 
+    
+    return timeInMinutes >= startMinutes && timeInMinutes <= endMinutes;
+  }
+
+  async fallbackPolling() {
+    if (this.isPolling) return;
+    this.isPolling = true;
+
+    try {
+      const activeSymbols = [...this.symbolRefCounts.keys()].filter(s => this.symbolRefCounts.get(s) > 0);
+      if (activeSymbols.length === 0) return;
+
+      const marketLive = this.isMarketLive();
+
+      if (!marketLive) {
+        const symbolsToFetch = activeSymbols.filter(s => !this.offlinePricesFetched.has(s));
+        if (symbolsToFetch.length > 0) {
+          // Add them first to prevent overlapping fetches in the next interval
+          symbolsToFetch.forEach(s => this.offlinePricesFetched.add(s));
+          console.log(`🌙 [UpstoxFeedService] Market offline. Fetching Yahoo closing prices for: ${symbolsToFetch.join(', ')}`);
+          await this.fetchYahooPrices(symbolsToFetch);
+        }
+      } else {
+        // Market is live
+        this.offlinePricesFetched.clear();
+        if (!this.isConnected) {
+          await this.fetchYahooPrices(activeSymbols);
+        }
+      }
+    } finally {
+      this.isPolling = false;
+    }
+  }
+
+  async fetchYahooPrices(symbols) {
+    try {
+      const queries = symbols.map(s => {
+        if (s.startsWith('^')) return s;
+        return s.endsWith('.NS') || s.endsWith('.BO') ? s : `${s}.NS`;
+      });
+      const quotes = await yahooFinance.quote(queries);
+      const results = Array.isArray(quotes) ? quotes : [quotes];
+
+      results.forEach(quote => {
+        if (!quote || !quote.symbol) return;
+        const cleanSymbol = quote.symbol.replace(/\.NS$/, "").toUpperCase();
+        
+        const tickData = {
+          symbol: cleanSymbol,
+          symbolNS: `${cleanSymbol}.NS`,
+          name: quote.shortName || cleanSymbol,
+          instrument_key: "",
+          price: quote.regularMarketPrice ?? null,
+          ltp: quote.regularMarketPrice ?? null,
+          prev_close: quote.regularMarketPreviousClose ?? null,
+          open: quote.regularMarketOpen ?? null,
+          high: quote.regularMarketDayHigh ?? null,
+          low: quote.regularMarketDayLow ?? null,
+          close: quote.regularMarketPrice ?? null,
+          change: quote.regularMarketChange ?? 0,
+          percent: quote.regularMarketChangePercent ?? 0,
+          timestamp: new Date().toISOString()
+        };
+
+        this.latestTicks.set(cleanSymbol, tickData);
+        this.latestTicks.set(`${cleanSymbol}.NS`, tickData);
+
+        this.listeners.forEach((callback) => {
+          try { callback(tickData); } catch (e) {}
+        });
+      });
+    } catch (err) {
+      console.error("❌ [YahooPolling] Error fetching prices:", err.message);
+    }
   }
 
   connect() {
@@ -78,12 +169,17 @@ class UpstoxFeedService {
       });
 
       this.ws.on("error", (err) => {
-        console.error("❌ [UpstoxFeedService] WS Error:", err.message);
+        if (this.lastLoggedError !== err.message) {
+          console.error("❌ [UpstoxFeedService] WS Error:", err.message);
+          this.lastLoggedError = err.message;
+        }
       });
 
       this.ws.on("close", () => {
         this.isConnected = false;
-        console.log("🔌 [UpstoxFeedService] WS Disconnected. Retrying in 3s...");
+        if (!this.reconnectTimer) {
+          console.log("🔌 [UpstoxFeedService] WS Disconnected. Retrying in 10s...");
+        }
         this._scheduleReconnect();
       });
     } catch (err) {
@@ -97,7 +193,7 @@ class UpstoxFeedService {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
-    }, 3000);
+    }, 10000); // 10 seconds to reduce spam
   }
 
   /**

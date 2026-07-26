@@ -180,7 +180,7 @@ wss.on("connection", (ws, req) => {
             upstoxWs.send(Buffer.from(JSON.stringify({
               guid: `dyn_sub_${Date.now()}`,
               method: "sub",
-              data: { mode: "ltpc", instrumentKeys: newKeys }
+              data: { mode: "full", instrumentKeys: newKeys }
             })));
           }
 
@@ -261,7 +261,7 @@ wss.on("connection", (ws, req) => {
 
 // Load Protobuf Schema
 async function initProtobuf() {
-  const root = await protobuf.load("MarketDataFeed.proto");
+  const root = await protobuf.load("sudo.proto");
   FeedResponseProto = root.lookupType("com.upstox.marketdatafeeder.rpc.proto.FeedResponse");
 }
 
@@ -310,7 +310,7 @@ async function startUpstoxFeed() {
           guid: `req_sub_${Math.floor(i / CHUNK_SIZE) + 1}`,
           method: "sub",
           data: {
-            mode: "ltpc",
+            mode: "full",
             instrumentKeys: batchKeys
           }
         };
@@ -333,14 +333,65 @@ async function startUpstoxFeed() {
           for (const [instrumentKey, feedData] of Object.entries(parsedData.feeds)) {
             const stockInfo = stockMap.get(instrumentKey) || { symbol: instrumentKey, name: instrumentKey };
 
-            const marketFF = feedData.fullFeed?.marketFF || feedData.fullFeed?.marketFF2;
+            const marketFF = feedData.ff?.marketFF || feedData.fullFeed?.marketFF || feedData.marketFF;
             const ltpData = marketFF?.ltpc || feedData.ltpc;
-            const ohlc = marketFF?.marketOHLC;
+            const ohlc = marketFF?.marketOHLC?.ohlc?.find(o => o.interval === "1d");
+            const eFeed = marketFF?.eFeedDetails;
+
+            if (!global._eFeedLogged && eFeed) {
+              console.log("\n=== eFeedDetails ===", JSON.stringify(eFeed));
+              global._eFeedLogged = true;
+            }
+            if (!global._eFeedMissingLogged && !eFeed) {
+              console.log("\n⚠️ eFeedDetails is MISSING from this tick");
+              global._eFeedMissingLogged = true;
+            }
 
             const ltp = ltpData?.ltp;
             const cp = ltpData?.cp;
 
             if (ltp) {
+              // Parse bid levels from bidAskQuote
+              const bidAskQuote = marketFF?.marketLevel?.bidAskQuote || [];
+              const bids = [];
+              const asks = [];
+
+              if (Array.isArray(bidAskQuote)) {
+                bidAskQuote.forEach(quote => {
+                  if (quote.bq !== undefined && quote.bp !== undefined && quote.bp > 0) {
+                    bids.push({
+                      price: parseFloat(quote.bp),
+                      qty: parseInt(quote.bq, 10),
+                      orders: parseInt(quote.bno || 0, 10)
+                    });
+                  }
+                  if (quote.aq !== undefined && quote.ap !== undefined && quote.ap > 0) {
+                    asks.push({
+                      price: parseFloat(quote.ap),
+                      qty: parseInt(quote.aq, 10),
+                      orders: parseInt(quote.ano || 0, 10)
+                    });
+                  }
+                });
+              }
+
+              // If Upstox doesn't send ask levels, derive best ask from:
+              // 1. eFeedDetails.tsq (total sell quantity) for OBI
+              // 2. Spread: bestAsk = bestBid + 0.05 (NSE tick for large caps)
+              const totalBidQty = eFeed?.tbq || bids.reduce((s, b) => s + b.qty, 0);
+              const totalAskQty = eFeed?.tsq || asks.reduce((s, a) => s + a.qty, 0);
+
+              if (asks.length === 0 && bids.length > 0) {
+                // Synthesize best ask from best bid + 1 tick (₹0.05 for >₹100 stocks)
+                const tick = ltp >= 100 ? 0.05 : 0.01;
+                const askQtyEstimate = totalAskQty > 0 ? Math.round(totalAskQty / 5) : bids[0].qty;
+                asks.push({
+                  price: parseFloat((bids[0].price + tick).toFixed(2)),
+                  qty: askQtyEstimate,
+                  orders: 1
+                });
+              }
+
               const tickPayload = {
                 type: "LIVE_TICK",
                 symbol: stockInfo.symbol,
@@ -352,16 +403,22 @@ async function startUpstoxFeed() {
                 high: ohlc?.high || null,
                 low: ohlc?.low || null,
                 close: ohlc?.close || null,
-                timestamp: new Date().toISOString(),
-                raw_feed: feedData
+                bids: bids,
+                asks: asks,
+                total_bid_qty: totalBidQty,   // from eFeedDetails.tbq — accurate for OBI
+                total_ask_qty: totalAskQty,   // from eFeedDetails.tsq — accurate for OBI
+                atp: eFeed?.atp || null,       // avg trade price
+                volume: eFeed?.vtt || null,    // volume traded today
+                timestamp: new Date().toISOString()
               };
 
               latestTicks.set(instrumentKey, tickPayload);
 
-              // Console Log
-              console.log(`🟢 ${stockInfo.symbol}: ₹${ltp} | Prev Close: ₹${cp || "N/A"} | Time: ${new Date().toLocaleTimeString()}`);
+              const topBid = bids.length > 0 ? `${bids[0].qty}@₹${bids[0].price}` : 'N/A';
+              const topAsk = asks.length > 0 ? `${asks[0].qty}@₹${asks[0].price}` : 'N/A';
+              console.log(`🟢 ${stockInfo.symbol}: ₹${ltp} | Bid: ${topBid} | Ask: ${topAsk} | Time: ${new Date().toLocaleTimeString()}`);
 
-              // Broadcast live tick to connected WebSocket clients subscribed to this stock
+              // Broadcast to connected clients subscribed to this stock
               wss.clients.forEach((client) => {
                 if (client.readyState === WebSocket.OPEN) {
                   if (client.subscribedKeys && client.subscribedKeys.has(instrumentKey)) {
@@ -373,7 +430,7 @@ async function startUpstoxFeed() {
           }
         }
       } catch (err) {
-        // Ignore non-proto frames
+        // Ignore non-proto frames (e.g. handshake/control messages)
       }
     });
 

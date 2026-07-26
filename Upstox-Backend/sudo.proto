@@ -10,6 +10,10 @@ message LTPC {
 
 message MarketLevel {
   repeated Quote bidAskQuote = 1;
+  repeated Quote askQuote = 2;
+  repeated Quote bids = 3;
+  repeated Quote asks = 4;
+  repeated Quote bidQuote = 5;
 }
 
 message MarketOHLC {

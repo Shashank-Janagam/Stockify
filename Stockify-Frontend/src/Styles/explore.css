@@ -165,6 +165,16 @@ body {
   flex-shrink: 0;
 }
 
+.welcome-sub .offline-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9ca3af;
+  box-shadow: 0 0 0 3px rgba(156,163,175,0.3);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
 @keyframes livePulse {
   0%,100% { box-shadow: 0 0 0 3px rgba(52,211,153,0.3); }
   50%     { box-shadow: 0 0 0 7px rgba(52,211,153,0.08); }
