@@ -81,6 +81,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
   const [timeframe, setTimeframe] = useState("1D");
   const [chartType, setChartType] = useState<"line" | "candle">("line");
+  const [candleInterval, setCandleInterval] = useState<"1m" | "5m">("1m");
   const [loading, setLoading] = useState(true);
 
   const [lineData, setLineData] = useState<
@@ -98,10 +99,8 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   const [change, setChange] = useState<number>(0);
   const [percent, setPercent] = useState<number>(0);
   const [companyName, setCompanyName] = useState("");
-  const [exchangeName, setExchangeName] = useState<"NSE" | "BSE">()
   const [quote, setQuote] = useState<YahooQuote | null>(null);
-
-
+  const [profile, setProfile] = useState<{ sector?: string; industry?: string } | null>(null);
   if (!symbol) {
     return null; // or <Navigate /> or fallback UI
   }
@@ -218,13 +217,20 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
         setBaseline(q.regularMarketPreviousClose);
         setChange(q.regularMarketChange);
         setPercent(q.regularMarketChangePercent);
-        const exchange =
-          q.fullExchangeName === "NSE" || q.fullExchangeName === "BSE"
-            ? q.fullExchangeName
-            : "NSE";
-
-        setExchangeName(exchange);
       });
+
+    // Also fetch profile for Sector/Industry
+    fetch(`${HOST}/api/stocks/${encodeURIComponent(symbol)}/profile`)
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch profile");
+        return res.json();
+      })
+      .then(data => {
+        if (data && !data.error) {
+          setProfile(data);
+        }
+      })
+      .catch(err => console.error("Error fetching profile for header:", err));
   }, [symbol, timeframe, marketState]); // Added marketState to dependency for safer checks
 
   /* =========================
@@ -249,11 +255,11 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
     // 🟢 MARKET OPEN / REPLAY → WS
     if (marketState === "REGULAR") {
-      subscribe("STOCK_LIVE", { symbol });
+      subscribe("STOCK_LIVE", { symbol, interval: candleInterval });
     }
     // 🔴 MARKET CLOSED → STATIC
     else {
-      fetch(`${HOST}/api/stocks/${symbol}/history?days=1`)
+      fetch(`${HOST}/api/stocks/${symbol}/history?days=1&interval=${candleInterval}`)
         .then(res => res.json())
         .then((candles: Candle2[]) => {
           const shifted = candles.map(d => ({
@@ -273,10 +279,10 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
     return () => {
       if (marketState === "REGULAR") {
-        unsubscribe("STOCK_LIVE", { symbol });
+        unsubscribe("STOCK_LIVE", { symbol, interval: candleInterval });
       }
     };
-  }, [symbol, timeframe, marketState]);
+  }, [symbol, timeframe, marketState, candleInterval]);
 
   useEffect(() => {
     if (lastMessage?.type === "STOCK_UPDATE" && lastMessage.symbol === symbol) {
@@ -366,75 +372,51 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
           change={change}
           percent={percent}
           timeframe={timeframe}
+          marketState={marketState}
+          quote={quote}
+          profile={profile}
         />
-        <div className="chart-controls" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <div className="chart-controls">
           <TimeframeBar
             active={timeframe}
             onChange={setTimeframe}
           />
 
-          <div className="chart-type-toggle" style={{ display: "flex", gap: "8px", background: "#f3f4f6", padding: "4px", borderRadius: "8px" }}>
+          <div className="chart-type-toggle">
             <button
+              className={chartType === "line" ? "active" : ""}
               onClick={() => setChartType("line")}
-              style={{
-                padding: "6px 12px",
-                borderRadius: "6px",
-                border: "none",
-                cursor: "pointer",
-                fontSize: "13px",
-                fontWeight: "500",
-                backgroundColor: chartType === "line" ? "#ffffff" : "transparent",
-                boxShadow: chartType === "line" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                color: chartType === "line" ? "#00b386" : "#6b7280",
-                transition: "all 0.2s"
-              }}
             >
               Line
             </button>
             <button
+              className={chartType === "candle" ? "active" : ""}
               onClick={() => setChartType("candle")}
-              style={{
-                padding: "6px 12px",
-                borderRadius: "6px",
-                border: "none",
-                cursor: "pointer",
-                fontSize: "13px",
-                fontWeight: "500",
-                backgroundColor: chartType === "candle" ? "#ffffff" : "transparent",
-                boxShadow: chartType === "candle" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                color: chartType === "candle" ? "#00b386" : "#6b7280",
-                transition: "all 0.2s"
-              }}
             >
               Candles
             </button>
+            {chartType === "candle" && timeframe === "1D" && (
+              <>
+                <div style={{width: 1, backgroundColor: '#e2e8f0', margin: '0 4px', height: '16px'}}></div>
+                <button
+                  className={candleInterval === "1m" ? "active" : ""}
+                  onClick={() => setCandleInterval("1m")}
+                >
+                  1m
+                </button>
+                <button
+                  className={candleInterval === "5m" ? "active" : ""}
+                  onClick={() => setCandleInterval("5m")}
+                >
+                  5m
+                </button>
+              </>
+            )}
           </div>
 
           <button
-            onClick={() => window.open(`https://www.tradingview.com/chart/?symbol=${exchangeName ?? "NSE"}:${symbol.replace(".NS", "")}`, "_blank")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "8px 16px",
-              borderRadius: "8px",
-              border: "1px solid #e5e7eb",
-              backgroundColor: "#ffffff",
-              color: "#374151",
-              fontSize: "13px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "all 0.2s",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = "#f9fafb";
-              e.currentTarget.style.borderColor = "#d1d5db";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = "#ffffff";
-              e.currentTarget.style.borderColor = "#e5e7eb";
-            }}
+            className="terminal-btn"
+            onClick={() => window.open(`https://www.tradingview.com/chart/?symbol=NSE:${(symbol || "").replace(".NS", "")}`, "_blank")}
           >
             <span>Terminal</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -459,10 +441,17 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
                 percent={percent.toString()}
                 pendingSL={pendingSL}
               />
-            ) : (
-              <StockChart data={formattedData} />
-            )
-            }
+            ) : (() => {
+              let fixedRange = undefined;
+              if (timeframe === "1D") {
+                const anchorTs = data.length > 0 ? data[data.length - 1].x : Date.now();
+                const d = new Date(anchorTs);
+                const marketOpen = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 9, 15, 0);
+                const marketClose = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 15, 30, 0);
+                fixedRange = { min: marketOpen / 1000, max: Math.max(marketClose, anchorTs) / 1000 };
+              }
+              return <StockChart data={formattedData} fixedXRange={fixedRange} />;
+            })()}
           </div>
         )}
 
@@ -478,7 +467,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
             symbol={symbol}
             price={price ?? 0}
             changePercent={percent}
-            fullExchangeName={exchangeName ?? "NSE"}
+            fullExchangeName={quote?.fullExchangeName === "BSE" ? "BSE" : "NSE"}
             onLoginClick={onLoginClick}
             trades={trades}
             availableQty={availableQty}

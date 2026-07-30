@@ -308,18 +308,13 @@ const growwPlugin = {
       const point = chart.data.datasets[0].data[hoverIndex] as any;
       if (!p || !point) return;
 
-      /* --- PREMIUM VERTICAL CURSOR --- */
-      const gradient = ctx.createLinearGradient(0, top, 0, bottom);
-      gradient.addColorStop(0, "rgba(0, 179, 134, 0)");
-      gradient.addColorStop(0.5, "rgba(0, 179, 134, 0.4)");
-      gradient.addColorStop(1, "rgba(0, 179, 134, 0)");
-
+      /* --- THIN BLACK VERTICAL CURSOR --- */
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(p.x, top);
       ctx.lineTo(p.x, bottom);
-      ctx.strokeStyle = gradient;
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.3)";
+      ctx.lineWidth = 1;
       ctx.stroke();
       ctx.restore();
 
@@ -436,70 +431,101 @@ if (!Array.isArray(dataPoints) || !dataPoints.length) return;
 
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
 
+    // Determine marker type and colors
     const isBuy = trade.side === "BUY";
-    const color = isBuy ? "#10b981" : "#ef4444";
+    const isPartial = trade.side === "PARTIAL"; 
+    let color = isBuy ? "#10b981" : "#ef4444";
+    let text = isBuy ? "B" : "S";
+    if (isPartial) { color = "#f59e0b"; text = "P"; }
+
+    // Box Dimensions
+    const boxWidth = 80;
+    const boxHeight = 44;
+    const yOffset = isBuy ? 20 : -64; // Buy below point, Sell/Partial above point
     
-    // Detection: Is mouse near this marker?
-    const isHovered = mx != null && my != null && Math.sqrt((mx - x)**2 + (my - y)**2) < 15;
+    const boxX = x - boxWidth / 2;
+    const boxY = y + yOffset;
 
-    /* ── VERTICAL FADE LINE ── */
+    // Stem (connecting line)
     ctx.save();
-    const gradient = ctx.createLinearGradient(0, top, 0, bottom);
-    gradient.addColorStop(0, `${color}00`);
-    gradient.addColorStop(0.5, isHovered ? `${color}66` : `${color}22`);
-    gradient.addColorStop(1, `${color}00`);
-
     ctx.beginPath();
-    ctx.moveTo(x, top);
-    ctx.lineTo(x, bottom);
-    ctx.strokeStyle = gradient;
-    ctx.lineWidth = isHovered ? 2 : 1;
+    ctx.setLineDash([2, 3]);
+    ctx.strokeStyle = color;
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, isBuy ? boxY : boxY + boxHeight);
     ctx.stroke();
     ctx.restore();
 
-    /* ── PRICE-LEVEL MARKER ── */
+    // Dot on the chart line
     ctx.save();
-    if (isHovered) {
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = color;
-    }
     ctx.beginPath();
-    ctx.arc(x, y, isHovered ? 8 : 6, 0, Math.PI * 2);
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-
-    const markerText = isBuy ? "B" : "S";
-    ctx.font = `700 ${isHovered ? 10 : 8}px Inter, system-ui`;
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(markerText, x, y + 0.5);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
     ctx.restore();
 
-    /* ── INFO PILL ON HOVER ── */
-    if (isHovered) {
-      const infoText = `${trade.quantity} Qty @ ₹${tradePrice.toFixed(2)}`;
-      ctx.save();
-      ctx.font = "600 10px Inter, sans-serif";
-      const tw = ctx.measureText(infoText).width;
-      const ph = 18;
-      const pw = tw + 14;
-      const px = x - pw / 2;
-      const py = y - ph - 10;
+    // Box Shadow and Background
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.08)";
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 6);
+    else ctx.rect(boxX, boxY, boxWidth, boxHeight);
+    ctx.fill();
+    ctx.restore();
 
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(px, py, pw, ph, 4);
-      else ctx.rect(px, py, pw, ph);
-      
-      ctx.fillStyle = "#1e293b";
-      ctx.fill();
+    // Box Border
+    ctx.save();
+    ctx.strokeStyle = "#e5e7eb";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 6);
+    else ctx.rect(boxX, boxY, boxWidth, boxHeight);
+    ctx.stroke();
+    ctx.restore();
 
-      ctx.fillStyle = "#ffffff";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(infoText, x, py + ph / 2);
-      ctx.restore();
-    }
+    // Icon square inside box
+    const iconSize = 16;
+    const padding = 8;
+    const iconX = boxX + padding;
+    const iconY = boxY + padding;
+    
+    ctx.save();
+    ctx.fillStyle = color + "1a"; // 10% opacity background
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(iconX, iconY, iconSize, iconSize, 4);
+    else ctx.rect(iconX, iconY, iconSize, iconSize);
+    ctx.fill();
+    ctx.stroke();
+    
+    // Icon Text (B / S / P)
+    ctx.fillStyle = color;
+    ctx.font = "bold 10px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, iconX + iconSize / 2, iconY + iconSize / 2 + 1);
+
+    // Price Text
+    ctx.fillStyle = "#111827";
+    ctx.font = "bold 12px Inter, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(`₹${tradePrice.toFixed(2)}`, iconX + iconSize + 6, iconY + iconSize / 2 + 1);
+
+    // Time Text
+    const timeStr = new Date(tradeTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+    ctx.fillStyle = "#6b7280";
+    ctx.font = "500 10px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(timeStr, boxX + boxWidth / 2, iconY + iconSize + 12);
+    
+    ctx.restore();
   });
 
 
