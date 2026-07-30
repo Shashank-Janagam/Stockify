@@ -61,3 +61,18 @@ services:
     restart: unless-stopped
     env_file:
       - ./Upstox-Backend/.env
+
+  notification-worker:
+    build:
+      context: ./Notification_Service
+      dockerfile: Dockerfile
+    container_name: paperbull-notification-worker
+    restart: unless-stopped
+    env_file:
+      - ./Notification_Service/.env
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    stop_grace_period: 30s
