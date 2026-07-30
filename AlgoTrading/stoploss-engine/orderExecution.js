@@ -3,11 +3,16 @@ import redis from "../cache/redisClient.js";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import path from "path";
+import { Queue } from "bullmq";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const { default: db } = await import("../db/sql.js");
+
+const notificationQueue = new Queue("notifications", {
+  connection: { url: process.env.REDIS_URL }
+});
 
 const yahoo = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
@@ -147,13 +152,11 @@ export async function executeSell({ orderId, userId, stockId, symbol, quantity, 
     };
 
     try {
-      console.log(`[SL Engine] Sending notification to n8n`);
-      fetch("http://localhost:3001/api/notify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(webhookData)
-      }).catch(err => console.error("[SL Engine] Webhook error:", err.message));
-    } catch (err) {}
+      console.log(`[SL Engine] Enqueueing notification...`);
+      await notificationQueue.add("trade", webhookData);
+    } catch (err) {
+      console.error("[SL Engine] Webhook error:", err.message);
+    }
 
     try {
       await redis.publish("ORDER_EXECUTED", JSON.stringify({ userId, symbol }));
@@ -292,13 +295,11 @@ export async function executeBuy({ orderId, userId, stockId, symbol, quantity, p
     };
 
     try {
-      console.log(`[SL Engine] Sending notification to n8n`);
-      fetch("http://localhost:3001/api/notify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(webhookData)
-      }).catch(err => console.error("[SL Engine] Webhook error:", err.message));
-    } catch (err) {}
+      console.log(`[SL Engine] Enqueueing notification...`);
+      await notificationQueue.add("trade", webhookData);
+    } catch (err) {
+      console.error("[SL Engine] Webhook error:", err.message);
+    }
 
     try {
       await redis.publish("ORDER_EXECUTED", JSON.stringify({ userId, symbol }));
