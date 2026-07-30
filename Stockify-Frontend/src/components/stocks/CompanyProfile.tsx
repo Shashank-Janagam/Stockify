@@ -96,10 +96,10 @@ export default function CompanyProfile({ symbol, companyName }: CompanyProfilePr
     return (
       <div className="company-profile-section skeleton">
         <h3 className="section-title">About Company</h3>
-        <div style={{ height: "16px", backgroundColor: "#f3f4f6", borderRadius: "4px", width: "60%", marginBottom: "12px" }}></div>
-        <div style={{ height: "12px", backgroundColor: "#f3f4f6", borderRadius: "4px", width: "100%", marginBottom: "8px" }}></div>
-        <div style={{ height: "12px", backgroundColor: "#f3f4f6", borderRadius: "4px", width: "95%", marginBottom: "8px" }}></div>
-        <div style={{ height: "12px", backgroundColor: "#f3f4f6", borderRadius: "4px", width: "80%" }}></div>
+        <div style={{ height: "16px", backgroundColor: "#f3f4f6", borderRadius: "6px", width: "60%", marginBottom: "12px" }}></div>
+        <div style={{ height: "12px", backgroundColor: "#f3f4f6", borderRadius: "6px", width: "100%", marginBottom: "8px" }}></div>
+        <div style={{ height: "12px", backgroundColor: "#f3f4f6", borderRadius: "6px", width: "95%", marginBottom: "8px" }}></div>
+        <div style={{ height: "12px", backgroundColor: "#f3f4f6", borderRadius: "6px", width: "80%" }}></div>
       </div>
     );
   }

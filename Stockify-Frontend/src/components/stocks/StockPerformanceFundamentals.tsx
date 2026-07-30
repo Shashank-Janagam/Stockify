@@ -20,9 +20,9 @@ export default function StockPerformanceFundamentals({ quote }: Props) {
 
       {/* TODAY RANGE */}
       <RangeBar
-        leftLabel="Today’s Low"
+        leftLabel="Today's Low"
         leftValue={quote.regularMarketDayLow}
-        rightLabel="Today’s High"
+        rightLabel="Today's High"
         rightValue={quote.regularMarketDayHigh}
         marker={getPosition(
           currentPrice,
@@ -53,7 +53,7 @@ export default function StockPerformanceFundamentals({ quote }: Props) {
       </div>
 
       {/* ================= FUNDAMENTALS ================= */}
-      <h3 className="section-title">Fundamentals</h3>
+      <h3 className="section-title" style={{ marginTop: '24px' }}>Fundamentals</h3>
 
       <div className="fundamentals-grid">
         <KV label="Market Cap" value={`₹${(quote.marketCap / 1e7).toFixed(0)} Cr`} />
@@ -83,7 +83,7 @@ function RangeBar({
     <div className="range-block">
       <div className="range-labels">
         <span>{leftLabel}<br /><b>₹{leftValue}</b></span>
-        <span>{rightLabel}<br /><b>₹{rightValue}</b></span>
+        <span style={{ textAlign: 'right' }}>{rightLabel}<br /><b>₹{rightValue}</b></span>
       </div>
       <div className="range-bar">
         <span className="marker" style={{ left: marker }} />

@@ -49,76 +49,52 @@ export default function StockSectorAlerts({ symbol }: StockSectorAlertsProps) {
   if (loading || alerts.length === 0) return null;
 
   return (
-    <div className="stock-sector-alerts-container" style={{ margin: "24px 0" }}>
-      <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#1f2937", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+    <div className="stock-sector-alerts-container">
+      <h3 className="sector-alerts-title">
         <span>⚠️</span> Sector Impact Insights
       </h3>
       
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {alerts.map((alert) => {
+        {alerts.map((alert, index) => {
           const isPositive = alert.affected_sector?.impact === "Positive";
-          const borderClr = isPositive ? "#10b981" : "#ef4444";
-          const bgClr = isPositive ? "#ecfdf5" : "#fef2f2";
+          const impactClass = isPositive ? "positive" : "negative";
           
           return (
             <div
               key={alert.release_id}
-              style={{
-                borderLeft: `4px solid ${borderClr}`,
-                backgroundColor: bgClr,
-                padding: "16px",
-                borderRadius: "8px",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
-              }}
+              className={`sector-alert-card ${impactClass}`}
+              style={{ animationDelay: `${index * 0.1}s` }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+              <div className="sector-alert-header">
                 <div>
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      color: isPositive ? "#047857" : "#b91c1c",
-                      backgroundColor: isPositive ? "#d1fae5" : "#fee2e2",
-                      padding: "2px 8px",
-                      borderRadius: "4px"
-                    }}
-                  >
+                  <span className={`sector-badge ${impactClass}`}>
                     {alert.affected_sector?.sector} • {alert.affected_sector?.impact}
                   </span>
-                  <span style={{ fontSize: "11px", color: "#6b7280", marginLeft: "12px" }}>
+                  <span className="sector-importance">
                     {alert.importance} Importance
                   </span>
                 </div>
-                <span style={{ fontSize: "11px", color: "#6b7280" }}>
+                <span className="sector-date">
                   {new Date(alert.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                 </span>
               </div>
 
-              <h4 style={{ fontSize: "14px", fontWeight: 600, color: "#1f2937", margin: "4px 0 8px 0" }}>
+              <h4 className="sector-alert-title">
                 {alert.title}
               </h4>
               
-              <div style={{ fontSize: "13px", color: "#374151", lineHeight: "1.5" }}>
+              <div className="sector-alert-detail">
                 <strong>Impact Detail:</strong> {alert.affected_sector?.one_liner}
               </div>
 
-              <div style={{ fontSize: "12px", color: "#4b5563", marginTop: "10px", paddingTop: "10px", borderTop: "1px solid rgba(0,0,0,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="sector-alert-footer">
                 <span><strong>Release Summary:</strong> {alert.one_liner}</span>
                 {alert.source_url && (
                   <a
                     href={alert.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      color: isPositive ? "#047857" : "#b91c1c",
-                      textDecoration: "none",
-                      fontWeight: 600,
-                      flexShrink: 0,
-                      marginLeft: "16px"
-                    }}
+                    className={`sector-source-link ${impactClass}`}
                   >
                     Source PDF
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "12px", height: "12px", marginLeft: "4px" }}>

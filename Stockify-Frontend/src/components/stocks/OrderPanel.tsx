@@ -96,7 +96,6 @@ export default function OrderPanel({
       const val = Number(slValue) || 0;
       let finalSlPrice = 0;
       if (slEnabled && val > 0) {
-        // BUY SL: trigger is ABOVE current price (buy if price rises to X)
         finalSlPrice = slType === "PRICE" ? val : price * (1 + val / 100);
       }
 
@@ -109,7 +108,7 @@ export default function OrderPanel({
           quantity: finalQty,
           sl_enabled: slEnabled,
           sl_price: Number(finalSlPrice.toFixed(2)),
-          product_type: mode,   // "Delivery" | "Intraday"
+          product_type: mode,
         }),
       });
 
@@ -138,7 +137,6 @@ export default function OrderPanel({
       const val = Number(slValue) || 0;
       let finalSlPrice = 0;
       if (slEnabled && val > 0) {
-        // SELL SL: trigger is BELOW current price (sell if price drops to X)
         finalSlPrice = slType === "PRICE" ? val : price * (1 - val / 100);
       }
 
@@ -151,7 +149,7 @@ export default function OrderPanel({
           quantity: finalQty,
           sl_enabled: slEnabled,
           sl_price: Number(finalSlPrice.toFixed(2)),
-          product_type: mode,   // "Delivery" | "Intraday"
+          product_type: mode,
         }),
       });
 
@@ -259,7 +257,6 @@ export default function OrderPanel({
           setWarning("Market order might be subject to price fluctuation");
         }
       } else if (tab === "SELL") {
-        // SELL SL trigger must be LOWER than current price (sell if drops to X)
         if (val >= price) {
           setWarning("Stoploss trigger must be lower than current price");
         } else if (warning.startsWith("Stoploss")) {
@@ -289,7 +286,7 @@ export default function OrderPanel({
         <p className="cta-subtitle">
           Open a free Demat account in minutes to start investing in stocks.
         </p>
-        <button className="cta-button" onClick={onLoginClick}>
+        <button className="cta-button buy-mode" onClick={onLoginClick}>
           Buy now
         </button>
       </div>
@@ -418,7 +415,7 @@ export default function OrderPanel({
               className={orderType === t ? "selected" : ""}
               onClick={() => t !== "Limit" && setOrderType(t)}
               disabled={t === "Limit"}
-              style={t === "Limit" ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+              style={t === "Limit" ? { opacity: 0.4, cursor: "not-allowed" } : {}}
             >
               {t}
             </button>
@@ -441,11 +438,7 @@ export default function OrderPanel({
         </div>
         <div className="input-wrapper" style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <button
-            style={{
-              width: 32, height: 36, border: "1px solid #d1d5db",
-              borderRadius: "8px 0 0 8px", background: "#f3f4f6",
-              fontSize: 18, cursor: "pointer", flexShrink: 0,
-            }}
+            className="stepper-btn left"
             onClick={() => {
               const n = Math.max(0, qtyNum - 1);
               setQty(n > 0 ? String(n) : "");
@@ -468,11 +461,7 @@ export default function OrderPanel({
             }}
           />
           <button
-            style={{
-              width: 32, height: 36, border: "1px solid #d1d5db",
-              borderRadius: "0 8px 8px 0", background: "#f3f4f6",
-              fontSize: 18, cursor: "pointer", flexShrink: 0,
-            }}
+            className="stepper-btn right"
             onClick={() => {
               const n = qtyNum + 1;
               setQty(String(n));
@@ -496,11 +485,7 @@ export default function OrderPanel({
           ) : (
             <>
               <button
-                style={{
-                  width: 32, height: 36, border: "1px solid #d1d5db",
-                  borderRadius: "8px 0 0 8px", background: "#f3f4f6",
-                  fontSize: 18, cursor: "pointer", flexShrink: 0,
-                }}
+                className="stepper-btn left"
                 onClick={() => {
                   const n = Math.max(0, Number(limitPrice || price) - 0.05);
                   setLimitPrice(n.toFixed(2));
@@ -518,11 +503,7 @@ export default function OrderPanel({
                 }}
               />
               <button
-                style={{
-                  width: 32, height: 36, border: "1px solid #d1d5db",
-                  borderRadius: "0 8px 8px 0", background: "#f3f4f6",
-                  fontSize: 18, cursor: "pointer", flexShrink: 0,
-                }}
+                className="stepper-btn right"
                 onClick={() => {
                   const n = Number(limitPrice || price) + 0.05;
                   setLimitPrice(n.toFixed(2));
@@ -563,7 +544,7 @@ export default function OrderPanel({
                   const tPrice =
                     slType === "PRICE"
                       ? val
-                      : price * (1 - val / 100);  // both BUY & SELL SL: trigger below current
+                      : price * (1 - val / 100);
                   return isBuy
                     ? `Pending BUY triggers when price reaches ₹${tPrice.toFixed(2)}`
                     : `Executes SELL if price drops to ₹${tPrice.toFixed(2)}`;
@@ -608,8 +589,7 @@ export default function OrderPanel({
           </div>
 
           <button
-            className="cta-button"
-            style={{ marginTop: 10, background: isBuy ? "#04ad83" : "#dc2626" }}
+            className={`cta-button ${isBuy ? 'buy-mode' : 'sell-mode'}`}
             disabled={
               loading ||
               Number(qty) <= 0 ||

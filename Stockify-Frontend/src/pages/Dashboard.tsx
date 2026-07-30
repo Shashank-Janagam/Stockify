@@ -31,11 +31,11 @@ export default function Dashboard() {
   return (
     <div className="app">
       <header className="top-nav">
-        <div className="tabbs">
+        <div className="dashboard-tabs-container">
           {["Explore", "Holdings", "Positions", "Orders", "Streaming Algo"].map(t => (
             <span
               key={t}
-              className={tab === t ? "tabbs active" : "tabbs"}
+              className={tab === t ? "dashboard-tab active" : "dashboard-tab"}
               onClick={() => setTab(t)}
             >
               {t === "Streaming Algo" ? "⚡ Streaming Algo" : t}
