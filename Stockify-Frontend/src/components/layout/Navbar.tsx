@@ -19,11 +19,6 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
 
   const [openSearch, setOpenSearch] = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
-  const [photoLoaded, setPhotoLoaded] = useState(false);
-
-  const [mobile, setMobile] = useState<string | null>(null);
-  const [tempMobile, setTempMobile] = useState("");
-  const [isEditingMobile, setIsEditingMobile] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
@@ -34,7 +29,6 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
   const googleProvider = user.providerData.find(
     (p) => p.providerId === "google.com"
   );
-  setPhotoLoaded(true);
   
   return googleProvider?.photoURL ?? null;
 };
@@ -58,55 +52,7 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
       document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  /* ---------- FETCH PROFILE MOBILE ---------- */
-  useEffect(() => {
-    if (user && openProfile) {
-      const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
-      fetch(`${HOST}/api/user/profile`, {
-        credentials: "include"
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch profile");
-          return res.json();
-        })
-        .then((data) => {
-          setMobile(data.mobile);
-          setTempMobile(data.mobile || "");
-        })
-        .catch((err) => console.error("Error fetching profile mobile:", err));
-    }
-  }, [user, openProfile]);
-
-  const handleSaveMobile = async () => {
-    const trimmed = tempMobile.trim();
-    if (trimmed && !/^\+?[0-9]{10,15}$/.test(trimmed)) {
-      alert("Please enter a valid mobile number (e.g. +919876543210 or 9876543210)");
-      return;
-    }
-
-    try {
-      const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
-      const response = await fetch(`${HOST}/api/user/mobile`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ mobile: trimmed || null }),
-        credentials: "include"
-      });
-      if (!response.ok) {
-        throw new Error("Failed to save mobile number");
-      }
-      const data = await response.json();
-      setMobile(data.mobile);
-      setIsEditingMobile(false);
-    } catch (err) {
-      console.error("Error saving mobile:", err);
-      alert("Failed to save mobile number. Please try again.");
-    }
-  };
-
-  /* ---------- CTRL + K SEARCH ---------- */
+  /* ---------- RENDER ---------- */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
@@ -199,24 +145,17 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
                   className="profile-btn"
                   onClick={() => setOpenProfile((p) => !p)}
                 >
-                  {/* fallback always visible first */}
-                  <div
-                    className="profile-fallback"
-                    style={{ display: photoLoaded ? "none" : "flex" }}
-                  >
-                    {(user.displayName?.[0] ?? "U").toUpperCase()}
-                  </div>
-
-                  {profilePhoto && (
+                  {profilePhoto ? (
                     <img
                       src={profilePhoto}
                       alt="profile"
                       className="profile-img"
                       referrerPolicy="no-referrer"
-                      loading="lazy"
-                      onLoad={() => setPhotoLoaded(true)}
-                      style={{ display: photoLoaded ? "block" : "none" }}
                     />
+                  ) : (
+                    <div className="profile-fallback">
+                      {(user.displayName?.[0] ?? "U").toUpperCase()}
+                    </div>
                   )}
                 </button>
 
@@ -233,52 +172,8 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
 
                     <div className="profile-dropdown-divider" />
 
-                    {/* MOBILE SETTING SECTION */}
-                    <div className="profile-mobile-section">
-                      <div className="profile-mobile-label">Mobile Number</div>
-                      {isEditingMobile ? (
-                        <div className="profile-mobile-input-container">
-                          <input
-                            type="tel"
-                            value={tempMobile}
-                            onChange={(e) => setTempMobile(e.target.value)}
-                            placeholder="Enter Mobile Number"
-                            className="profile-mobile-input"
-                            autoFocus
-                          />
-                          <button onClick={handleSaveMobile} className="profile-mobile-save-btn">
-                            Save
-                          </button>
-                          <button
-                            onClick={() => {
-                              setIsEditingMobile(false);
-                              setTempMobile(mobile || "");
-                            }}
-                            className="profile-mobile-cancel-btn"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="profile-mobile-display">
-                          <span className="profile-mobile-value">
-                            {mobile ? mobile : <span className="profile-mobile-placeholder">Not Added</span>}
-                          </span>
-                          <button onClick={() => setIsEditingMobile(true)} className="profile-mobile-btn">
-                            {mobile ? "Change" : "Add"}
-                          </button>
-                        </div>
-                      )}
-                      <div className="profile-mobile-hint">
-                        <span className="dot">●</span> WhatsApp notifications will be sent
-                      </div>
-                    </div>
-
-                    <div className="profile-dropdown-divider" />
-
                     <div className="profile-dropdown-menu">
                       
-
                       <button
                         className="profile-item"
                         onClick={() => {
@@ -287,6 +182,17 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
                         }}
                       >
                         <span>All Orders</span>
+                        <span className="arrow">›</span>
+                      </button>
+
+                      <button
+                        className="profile-item"
+                        onClick={() => {
+                          navigate("/settings");
+                          setOpenProfile(false);
+                        }}
+                      >
+                        <span>⚙️ Settings</span>
                         <span className="arrow">›</span>
                       </button>
 
@@ -331,8 +237,8 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
                     <div className="profile-dropdown-divider" />
 
                     <div className="profile-dropdown-footer">
-                      <button className="logout-btn" onClick={handleLogout}>
-                        Log out
+                      <button className="profile-dropdown-logout" onClick={handleLogout}>
+                        Logout
                       </button>
                     </div>
                   </div>

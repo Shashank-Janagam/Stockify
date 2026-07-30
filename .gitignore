@@ -49,3 +49,7 @@ Thumbs.db
 # yarn.lock
 
 # pnpm-lock.yaml
+
+# Sensitive/internal files — do NOT commit
+n8n.json
+**/n8n.json

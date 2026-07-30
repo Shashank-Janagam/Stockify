@@ -1,4 +1,5 @@
-import { BookmarkIcon, PlusIcon } from "lucide-react";
+import { BookmarkIcon, Star } from "lucide-react";
+import { useState, useEffect } from "react";
 
 type StockHeaderProps = {
   companyName?: string;
@@ -22,6 +23,32 @@ export default function StockHeader({
   quote,
   profile
 }: StockHeaderProps) {
+  const [isFollowed, setIsFollowed] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
+
+  useEffect(() => {
+    fetch(`${HOST}/api/user/follow/check?symbol=${encodeURIComponent(symbol)}`, { credentials: "include" })
+      .then(res => res.json())
+      .then(data => setIsFollowed(!!data.isFollowed))
+      .catch(console.error);
+  }, [symbol, HOST]);
+
+  const handleFollowToggle = async () => {
+    try {
+      const res = await fetch(`${HOST}/api/user/follow`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol, name: companyName })
+      });
+      const data = await res.json();
+      setIsFollowed(!!data.isFollowed);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const isNegative = change < 0;
   const images = import.meta.glob(
     "../../assets/*.{png,jpg,jpeg,svg,webp}",
@@ -78,8 +105,35 @@ export default function StockHeader({
             </div>
           </div>
         </div>
-        <button className="follow-btn">
-          <PlusIcon size={16} /> Follow
+        <button 
+          className="follow-btn" 
+          onClick={handleFollowToggle}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          style={{ 
+            backgroundColor: isFollowed ? 'rgba(251, 191, 36, 0.1)' : 'transparent', 
+            color: isFollowed ? '#fbbf24' : '#9ca3af',
+            borderColor: isFollowed ? 'rgba(251, 191, 36, 0.3)' : '#374151',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 14px',
+            justifyContent: 'center',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            overflow: 'hidden'
+          }}
+        >
+          <Star 
+            size={18} 
+            fill={isFollowed ? '#fbbf24' : 'none'} 
+            stroke={isFollowed ? '#fbbf24' : 'currentColor'}
+            style={{ minWidth: '18px' }}
+          />
+          {isHovered && (
+            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'black', whiteSpace: 'nowrap' }}>
+              {isFollowed ? 'Unfollow' : 'Follow'}
+            </span>
+          )}
         </button>
       </div>
 

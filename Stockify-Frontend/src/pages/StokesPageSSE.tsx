@@ -9,7 +9,6 @@ import OrderPanel from "../components/stocks/OrderPanel";
 import { useWebSocket } from "../context/WebSocketContext";
 import "../Styles/stock.css";
 import StockPerformance from "../components/stocks/StockPerformanceFundamentals"
-import AIStockReport from "../components/stocks/AIStockReport";
 import CompanyNewsPanel from "../components/stocks/CompanyNewsPanel";
 import CompanyProfile from "../components/stocks/CompanyProfile";
 import StockSectorAlerts from "../components/stocks/StockSectorAlerts";
@@ -61,9 +60,37 @@ const timeframeToDays: Record<string, number | "ALL"> = {
 };
 
 /* =========================
-   MARKET HOURS
+   SOUND EFFECTS
 ========================= */
-
+const playAlertSound = () => {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    
+    const playTone = (freq: number, type: OscillatorType, startTime: number, duration: number, vol: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
+      
+      gain.gain.setValueAtTime(vol, ctx.currentTime + startTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + startTime + duration);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + startTime);
+      osc.stop(ctx.currentTime + startTime + duration);
+    };
+    
+    // Aggressive synth alert
+    playTone(800, 'square', 0.0, 0.2, 0.1);
+    playTone(600, 'square', 0.15, 0.2, 0.1);
+    playTone(400, 'sawtooth', 0.3, 0.4, 0.15);
+  } catch(e) {
+    console.error("Audio play failed:", e);
+  }
+};
 
 /* =========================
    PAGE
@@ -238,6 +265,24 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   ========================= */
   const { subscribe, unsubscribe, lastMessage, pauseBackgroundFeeds, resumeBackgroundFeeds } = useWebSocket();
 
+  const [stoplossAlert, setStoplossAlert] = useState<{ show: boolean; symbol: string } | null>(null);
+
+  useEffect(() => {
+    // Force authentication on this WS connection so backend knows our userId for direct messages
+    subscribe("USER_EVENTS");
+    return () => unsubscribe("USER_EVENTS");
+  }, []);
+
+  // Listen for background Stoploss execution events
+  useEffect(() => {
+    if (lastMessage?.type === "ORDER_EXECUTED") {
+      rerefresh();
+      playAlertSound();
+      setStoplossAlert({ show: true, symbol: lastMessage.symbol });
+      setTimeout(() => setStoplossAlert(null), 8000);
+    }
+  }, [lastMessage]);
+
   // ⏸️ Pause all background feeds while this stock page is active for faster updates
   useEffect(() => {
     pauseBackgroundFeeds();
@@ -363,7 +408,128 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
   console.log("quote:", quote)
   return (
-    <div className={`stock-page ${isIndex ? 'stock-page--index' : ''}`}>
+    <>
+      {stoplossAlert?.show && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 999999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(15px)',
+            animation: 'fadeIn 0.3s ease-out'
+          }}
+        >
+          <style>{`
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes popIn3D { 
+              0% { opacity: 0; transform: perspective(1000px) scale(0.8) rotateX(20deg) translateY(40px); } 
+              100% { opacity: 1; transform: perspective(1000px) scale(1) rotateX(0deg) translateY(0); } 
+            }
+            @keyframes spinBorder {
+              100% { transform: rotate(360deg); }
+            }
+            @keyframes pulseAlert {
+              0%, 100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 15px rgba(239,68,68,0.8)); }
+              50% { opacity: 0.7; transform: scale(0.95); filter: drop-shadow(0 0 5px rgba(239,68,68,0.4)); }
+            }
+          `}</style>
+          
+          <div style={{ position: 'relative', padding: '4px', borderRadius: '32px', overflow: 'hidden', animation: 'popIn3D 0.6s cubic-bezier(0.2, 1.2, 0.3, 1)' }}>
+            {/* Rotating gradient border */}
+            <div style={{
+              position: 'absolute',
+              top: '-50%', left: '-50%', width: '200%', height: '200%',
+              background: 'conic-gradient(from 0deg, transparent 0%, transparent 35%, #ff0000 50%, transparent 65%, transparent 100%)',
+              animation: 'spinBorder 2.5s linear infinite',
+              zIndex: 0
+            }}></div>
+
+            <div 
+              style={{
+                background: 'linear-gradient(145deg, #111827, #030712)',
+                borderRadius: '28px',
+                padding: '3.5rem',
+                maxWidth: '550px',
+                width: '90vw',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center',
+                position: 'relative',
+                zIndex: 1,
+                boxShadow: 'inset 0 0 40px rgba(0,0,0,0.8)'
+              }}
+            >
+              {/* Background ambient glow */}
+              <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '300px', height: '300px', background: 'radial-gradient(circle, rgba(239,68,68,0.15) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }}></div>
+
+              <div style={{
+                width: '120px',
+                height: '120px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '2rem',
+                border: '2px solid rgba(239, 68, 68, 0.6)',
+                zIndex: 1,
+                animation: 'pulseAlert 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+              }}>
+                <svg style={{ width: '60px', height: '60px', color: '#ff2222' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+
+              <h2 style={{ fontSize: '3rem', fontWeight: 900, color: '#ffffff', marginBottom: '1.25rem', letterSpacing: '0.08em', zIndex: 1, textShadow: '0 0 25px rgba(239,68,68,0.7)', textTransform: 'uppercase' }}>
+                STOPLOSS HIT
+              </h2>
+              
+              <p style={{ fontSize: '1.35rem', color: '#e5e7eb', lineHeight: 1.7, zIndex: 1 }}>
+                Protective trigger for <span style={{ color: '#ff4444', fontWeight: 900, fontSize: '1.6rem', padding: '0 6px', textShadow: '0 0 15px rgba(239,68,68,0.4)' }}>{stoplossAlert.symbol}</span> executed successfully.
+              </p>
+
+              <button 
+                onClick={() => setStoplossAlert(null)}
+                style={{
+                  marginTop: '3rem',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.5)',
+                  color: '#ff6666',
+                  padding: '1rem 4rem',
+                  borderRadius: '9999px',
+                  fontWeight: 800,
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                  zIndex: 1,
+                  boxShadow: '0 0 20px rgba(239,68,68,0.15)'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.3)';
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                  e.currentTarget.style.boxShadow = '0 0 35px rgba(239,68,68,0.4)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.boxShadow = '0 0 20px rgba(239,68,68,0.15)';
+                }}
+              >
+                DISMISS
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className={`stock-page ${isIndex ? 'stock-page--index' : ''}`}>
       <div className="stock-left">
         <StockHeader
           companyName={companyName}
@@ -479,7 +645,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
           <CompanyNewsPanel symbol={symbol} />
         </div>
       )}
-      <AIStockReport symbol={symbol} />
     </div>
+    </>
   );
 }

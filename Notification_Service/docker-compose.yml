@@ -1,0 +1,42 @@
+services:
+  notification-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: paperbull-notification-worker
+    restart: unless-stopped
+
+    environment:
+      # ── Redis (shared with Stockify-Backend) ─────────────
+      REDIS_URL: ${REDIS_URL}
+
+      # ── Groq AI ──────────────────────────────────────────
+      GROQ_API_KEY: ${GROQ_API_KEY}
+
+      # ── Twilio (WhatsApp) ─────────────────────────────────
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_WHATSAPP_FROM: ${TWILIO_WHATSAPP_FROM}
+
+      # ── EmailJS ───────────────────────────────────────────
+      EMAILJS_SERVICE_ID: ${EMAILJS_SERVICE_ID}
+      EMAILJS_TEMPLATE_ID: ${EMAILJS_TEMPLATE_ID}
+      EMAILJS_PUBLIC_KEY: ${EMAILJS_PUBLIC_KEY}
+      EMAILJS_PRIVATE_KEY: ${EMAILJS_PRIVATE_KEY}
+
+      # ── Telegram ──────────────────────────────────────────
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}   # optional default
+
+    # No ports — this is a worker, not an HTTP service
+    # ports: []
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Graceful shutdown: give the worker 30s to finish processing
+    # the current job before SIGKILL
+    stop_grace_period: 30s

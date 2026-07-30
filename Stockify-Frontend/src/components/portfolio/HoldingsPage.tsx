@@ -5,8 +5,15 @@ import { useNavigate } from "react-router-dom";
 import { useAIAnalysis } from "../../hooks/useAIAnalysis";
 import AIInsightCard from "./AIInsightCard";
 import { useWebSocket } from "../../context/WebSocketContext";
+import paperbulllogo from "../../assets/imageinv.png";
 
 const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
+const images = import.meta.glob("../../assets/*.{png,jpg,jpeg,svg,webp}", { eager: true });
+function getLogoSrc(symbol: string): string {
+  const name = symbol.replace(".NS", "").replace(".BO", "");
+  const match = Object.keys(images).find(p => p.includes(`/${name}.`));
+  return match ? (images[match] as any).default : paperbulllogo;
+}
 
 /* ─── Helpers ─── */
 function slugify(n: string) {
@@ -246,10 +253,16 @@ const HoldingsPage: React.FC = () => {
                       >
                         <td>
                           <div className="hp-company">
-                            <span className="hp-company-name">{h.name || h.symbol}</span>
-                            <span className="hp-company-sym">
-                              {pureSymbol}
-                            </span>
+                            <img
+                              src={getLogoSrc(h.symbol)}
+                              alt={h.name}
+                              className="hp-company-logo"
+                              onError={(e) => (e.currentTarget.src = paperbulllogo)}
+                            />
+                            <div className="hp-company-text">
+                              <span className="hp-company-name">{h.name || h.symbol}</span>
+                              <span className="hp-company-sym">{pureSymbol}</span>
+                            </div>
                           </div>
                         </td>
                         <td>
