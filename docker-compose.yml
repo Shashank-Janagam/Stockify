@@ -43,6 +43,8 @@ services:
     restart: unless-stopped
     env_file:
       - ./AlgoTrading/.env
+    environment:
+      - UPSTOX_WS_URL=ws://upstox-backend:4141
 
   pressrelease-cron:
     build:
