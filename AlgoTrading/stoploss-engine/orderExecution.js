@@ -113,10 +113,52 @@ export async function executeSell({ orderId, userId, stockId, symbol, quantity, 
     await client.query("COMMIT");
 
     // Invalidate wallet cache
-    const uidRes = await db.query(`SELECT uid FROM users WHERE id=$1`, [userId]);
-    if (uidRes.rows[0]) {
-      await redis.del(`wallet:balance:${uidRes.rows[0].uid}`);
+    const userRes = await db.query(`SELECT * FROM users WHERE id=$1`, [userId]);
+    const userRow = userRes.rows[0] || {};
+    if (userRow.uid) {
+      await redis.del(`wallet:balance:${userRow.uid}`);
       await redis.del(`ai_portfolio_v3_${userId}`);
+    }
+
+    const webhookData = {
+      status: "EXECUTED",
+      side: "SELL",
+      order_type: "STOPLOSS",
+      product_type,
+      sl_pending: false,
+      symbol,
+      stockName: symbol,
+      quantity,
+      PricePerShare: executionPrice,
+      totalValue: sellValue,
+      walletBalance: newBalance,
+      userId,
+      orderId,
+      tradeId,
+      uid: userRow.uid,
+      email: userRow.Email || userRow.email,
+      name: userRow.Name || userRow.name || null,
+      mobile: userRow.Mobile || userRow.mobile || null,
+      telegram_chat_id: userRow.telegram_chat_id || null,
+      notify_email: userRow.notify_email,
+      notify_whatsapp: userRow.notify_whatsapp,
+      notify_telegram: userRow.notify_telegram,
+      subject: "PaperBull Order Execution",
+    };
+
+    try {
+      console.log(`[SL Engine] Sending notification to n8n`);
+      fetch("http://localhost:3001/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(webhookData)
+      }).catch(err => console.error("[SL Engine] Webhook error:", err.message));
+    } catch (err) {}
+
+    try {
+      await redis.publish("ORDER_EXECUTED", JSON.stringify({ userId, symbol }));
+    } catch (err) {
+      console.error("[SL Engine] Redis publish error:", err.message);
     }
 
     console.log(`[SL Engine] ✅ SELL #${orderId} EXECUTED | ${symbol} | qty ${quantity} @ ₹${executionPrice} | PnL ₹${totalRealizedPnL.toFixed(2)}`);
@@ -216,10 +258,52 @@ export async function executeBuy({ orderId, userId, stockId, symbol, quantity, p
     await client.query("COMMIT");
 
     // Invalidate wallet cache
-    const uidRes = await db.query(`SELECT uid FROM users WHERE id=$1`, [userId]);
-    if (uidRes.rows[0]) {
-      await redis.del(`wallet:balance:${uidRes.rows[0].uid}`);
+    const userRes = await db.query(`SELECT * FROM users WHERE id=$1`, [userId]);
+    const userRow = userRes.rows[0] || {};
+    if (userRow.uid) {
+      await redis.del(`wallet:balance:${userRow.uid}`);
       await redis.del(`ai_portfolio_v3_${userId}`);
+    }
+
+    const webhookData = {
+      status: "EXECUTED",
+      side: "BUY",
+      order_type: "STOPLOSS",
+      product_type,
+      sl_pending: false,
+      symbol,
+      stockName: symbol,
+      quantity,
+      PricePerShare: executionPrice,
+      totalValue: totalPrice,
+      walletBalance: newBalance,
+      userId,
+      orderId,
+      tradeId: null,
+      uid: userRow.uid,
+      email: userRow.Email || userRow.email,
+      name: userRow.Name || userRow.name || null,
+      mobile: userRow.Mobile || userRow.mobile || null,
+      telegram_chat_id: userRow.telegram_chat_id || null,
+      notify_email: userRow.notify_email,
+      notify_whatsapp: userRow.notify_whatsapp,
+      notify_telegram: userRow.notify_telegram,
+      subject: "PaperBull Order Execution",
+    };
+
+    try {
+      console.log(`[SL Engine] Sending notification to n8n`);
+      fetch("http://localhost:3001/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(webhookData)
+      }).catch(err => console.error("[SL Engine] Webhook error:", err.message));
+    } catch (err) {}
+
+    try {
+      await redis.publish("ORDER_EXECUTED", JSON.stringify({ userId, symbol }));
+    } catch (err) {
+      console.error("[SL Engine] Redis publish error:", err.message);
     }
 
     console.log(`[SL Engine] ✅ BUY #${orderId} EXECUTED | ${symbol} | qty ${quantity} @ ₹${executionPrice}`);

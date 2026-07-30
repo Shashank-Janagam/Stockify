@@ -1,0 +1,13 @@
+ *PaperBull - Trade {{STATUS}}* 
+Hello {{NAME}} 👋
+
+*Trade Details:*
+Stock: {{STOCK_NAME}} ({{SIDE}})
+Execution Type: {{ORDER_TYPE}}
+Quantity: {{QUANTITY}}
+Execution Price: ₹{{PRICE}}
+Total Investment: ₹{{INVESTMENT}}
+Wallet Balance: ₹{{WALLET}}
+
+
+{{AI_MESSAGE}}

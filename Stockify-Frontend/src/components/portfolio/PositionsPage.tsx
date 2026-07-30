@@ -5,8 +5,15 @@ import { useNavigate } from "react-router-dom";
 import { useAIAnalysis } from "../../hooks/useAIAnalysis";
 import AIInsightCard from "./AIInsightCard";
 import { useWebSocket } from "../../context/WebSocketContext";
+import paperbulllogo from "../../assets/imageinv.png";
 
 const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
+const images = import.meta.glob("../../assets/*.{png,jpg,jpeg,svg,webp}", { eager: true });
+function getLogoSrc(symbol: string): string {
+  const name = symbol.replace(".NS", "").replace(".BO", "");
+  const match = Object.keys(images).find(p => p.includes(`/${name}.`));
+  return match ? (images[match] as any).default : paperbulllogo;
+}
 
 /* ─── Helpers ─── */
 function slugify(n: string) {
@@ -255,14 +262,22 @@ const PositionsPage: React.FC = () => {
                     {/* 1. Company */}
                     <td>
                         <div className="hp-company" style={{ paddingLeft: '4px' }}>
-                            <span className="hp-company-name">{p.name || p.symbol}</span>
-                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginTop: '2px' }}>
-                                <span className="hp-company-sym">{p.symbol.replace(".NS", "").replace(".BO", "")}</span>
-                                <span className={`hp-product-badge ${p.productType === "Intraday" ? "hp-intra" : "hp-delivery"}`}>{p.productType}</span>
-                                <span className={`hp-type-badge ${p.positionType === "LONG" ? "hp-long" : "hp-short"}`}>{p.positionType}</span>
-                                {p.stoplossEnabled && p.stopLoss && (
-                                    <span style={{ backgroundColor: '#fef2f2', color: '#ef4444', padding: '1px 6px', borderRadius: '4px', border: '1px solid #fecaca', fontSize: '10px', fontWeight: 600 }}>SL: {p.stopLossQty} @ {fmt(p.stopLoss)}</span>
-                                )}
+                            <img
+                              src={getLogoSrc(p.symbol)}
+                              alt={p.name}
+                              className="hp-company-logo"
+                              onError={(e) => (e.currentTarget.src = paperbulllogo)}
+                            />
+                            <div className="hp-company-text">
+                              <span className="hp-company-name">{p.name || p.symbol}</span>
+                              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', flexWrap: 'wrap', marginTop: '3px' }}>
+                                  <span className="hp-company-sym">{p.symbol.replace(".NS", "").replace(".BO", "")}</span>
+                                  <span className={`hp-product-badge ${p.productType === "Intraday" ? "hp-intra" : "hp-delivery"}`}>{p.productType}</span>
+                                  <span className={`hp-type-badge ${p.positionType === "LONG" ? "hp-long" : "hp-short"}`}>{p.positionType}</span>
+                                  {p.stoplossEnabled && p.stopLoss && (
+                                      <span style={{ backgroundColor: '#fef2f2', color: '#ef4444', padding: '1px 6px', borderRadius: '4px', border: '1px solid #fecaca', fontSize: '10px', fontWeight: 700 }}>SL: {p.stopLossQty} @ {fmt(p.stopLoss)}</span>
+                                  )}
+                              </div>
                             </div>
                         </div>
                     </td>

@@ -27,9 +27,13 @@ import newsRoutes from "./modules/news/news.routes.js";
 import userRoutes from "./modules/user/user.routes.js";
 import sectorAlertsRoutes from "./modules/sectorAlerts/sectorAlerts.routes.js";
 import algoRoutes from "./modules/algo/algo.routes.js";
+import { initTelegramBot } from "./modules/telegram/bot.js";
 
 import login from "./Middleware/login.js"
 import rateLimit from "express-rate-limit";
+
+// Initialize Telegram Bot
+initTelegramBot();
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
@@ -42,7 +46,7 @@ app.use("/api/webhooks/razorpay", express.raw({ type: "application/json" })
 );
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174", "https://wardless-postmyxedematous-jeneva.ngrok-free.dev",
+    origin: ["http://localhost:5173","http://10.65.168:5173", "http://localhost:5174", "https://wardless-postmyxedematous-jeneva.ngrok-free.dev",
       "https://www.stockifyindia.app","https://stockify-india.vercel.app","https://stockifyindia.app"],
     // ✅ exact origin
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],

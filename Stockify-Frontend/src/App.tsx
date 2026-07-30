@@ -8,6 +8,7 @@ import HomePage from "./pages/HomePage.tsx";
 import "./App.css";
 import ProtectedRoute from "./auth/ProtectedRoute.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
+import Settings from "./pages/Settings.tsx";
 import StockPageSSE from "./pages/StokesPageSSE.tsx";
 import FundsPage from "./pages/FundsPage.tsx";
 import { ExploreSSEProvider } from "./context/ExploreSSEContext";
@@ -125,6 +126,14 @@ const App = () => {
                   element={
                     <ProtectedRoute>
                       <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <Settings />
                     </ProtectedRoute>
                   }
                 />

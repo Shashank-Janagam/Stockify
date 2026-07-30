@@ -4,7 +4,7 @@ import { useWebSocket } from "./WebSocketContext";
 
 type ExploreContextType = {
   data: any;
-  recentData: any[];
+  followedData: any[];
   invested: any[];
   holdingsSummary: any | null;
   ready: boolean;
@@ -16,7 +16,7 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
   const { user } = useContext(AuthContext);
 
   const [data, setData] = useState<any>(null);
-  const [recentData, setRecentData] = useState<any[]>([]);
+  const [followedData, setFollowedData] = useState<any[]>([]);
   const [invested, setInvested] = useState<any[]>([]);
   const [holdingsSummary, setHoldingsSummary] = useState<any | null>(null);
   const [ready, setReady] = useState(false);
@@ -29,19 +29,19 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
     if (!user) {
       setReady(false);
       setData(null);
-      setRecentData([]);
+      setFollowedData([]);
       setInvested([]);
       setHoldingsSummary(null);
       return;
     }
 
     subscribe("EXPLORE_LIVE");
-    subscribe("RECENT_LIVE");
+    subscribe("FOLLOWED_LIVE");
     subscribe("HOLDINGS_LIVE");
 
     return () => {
       unsubscribe("EXPLORE_LIVE");
-      unsubscribe("RECENT_LIVE");
+      unsubscribe("FOLLOWED_LIVE");
       unsubscribe("HOLDINGS_LIVE");
     };
   }, [user]);
@@ -59,8 +59,8 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
       }
     }
 
-    if (lastMessage.type === "RECENT_UPDATE") {
-      setRecentData(lastMessage.data.recentlyViewed ?? []);
+    if (lastMessage.type === "FOLLOWED_UPDATE") {
+      setFollowedData(lastMessage.data.followedData ?? []);
       setInvested(lastMessage.data.invested ?? []);
     }
 
@@ -72,7 +72,7 @@ export function ExploreSSEProvider({ children }: { children: React.ReactNode }) 
 
   return (
     <ExploreSSEContext.Provider
-      value={{ data, recentData, invested, holdingsSummary, ready }}
+      value={{ data, followedData, invested, holdingsSummary, ready }}
     >
       {children}
     </ExploreSSEContext.Provider>

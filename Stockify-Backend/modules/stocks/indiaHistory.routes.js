@@ -6,7 +6,7 @@ const router = express.Router();
 router.get("/:symbol/history", async (req, res) => {
 console.log("calling history route")
   const { symbol } = req.params;
-  let { days } = req.query;
+  let { days, interval } = req.query;
 
   // ✅ normalize
   if (days !== "ALL") {
@@ -14,7 +14,7 @@ console.log("calling history route")
   }
 
   try {
-    const data = await getYahooIndiaHistory(symbol, days);
+    const data = await getYahooIndiaHistory(symbol, days, interval);
     res.json(data); 
   } catch (err) {
     console.log("Market closed------------------")

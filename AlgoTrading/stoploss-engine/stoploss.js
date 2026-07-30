@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import path from "path";
 import { createClient } from "redis";
-import { monitorPrice } from "./priceMonitor.js";
+import { setTickListener, updateTrackedSymbols } from "./priceMonitor.js";
 import { executeSell, executeBuy } from "./orderExecution.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -50,6 +50,8 @@ function registerOrder(descriptor) {
     `[SL Engine] 📋 Registered ${descriptor.side} #${targetId}` +
     ` | ${sym} | trigger ₹${descriptor.stopLoss} | qty ${descriptor.quantity}`
   );
+  
+  updateTrackedSymbols([...activeOrders.keys()]);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -122,31 +124,30 @@ async function executeTrigger(descriptor, currentPrice) {
 }
 
 // ─────────────────────────────────────────────────────────
-//  Price polling loop
+//  Live Tick Handler
 // ─────────────────────────────────────────────────────────
-async function checkPrices() {
-  if (activeOrders.size === 0) return;
-  const symbols = [...activeOrders.keys()];
-  const prices  = await monitorPrice(symbols);
+setTickListener((symbol, currentPrice) => {
+  const symNS = symbol.endsWith(".NS") ? symbol : `${symbol}.NS`;
+  
+  // Check both symbol variants
+  let orderMap = activeOrders.get(symNS) || activeOrders.get(symbol);
+  if (!orderMap) return;
 
-  for (const sym of symbols) {
-    const currentPrice = prices[sym];
-    if (!currentPrice) continue;
-    const orderMap = activeOrders.get(sym);
-    if (!orderMap) continue;
+  for (const [orderId, descriptor] of orderMap) {
+    const { stopLoss, side } = descriptor;
+    const triggered = side === "SELL" ? currentPrice <= stopLoss : currentPrice >= stopLoss;
 
-    for (const [orderId, descriptor] of orderMap) {
-      const { stopLoss, side } = descriptor;
-      const triggered = side === "SELL" ? currentPrice <= stopLoss : currentPrice >= stopLoss;
-
-      if (triggered) {
-        orderMap.delete(orderId);
-        if (orderMap.size === 0) activeOrders.delete(sym);
-        executeTrigger(descriptor, currentPrice).catch(err => console.error(err));
+    if (triggered) {
+      orderMap.delete(orderId);
+      if (orderMap.size === 0) {
+        activeOrders.delete(symNS);
+        activeOrders.delete(symbol);
+        updateTrackedSymbols([...activeOrders.keys()]);
       }
+      executeTrigger(descriptor, currentPrice).catch(err => console.error(err));
     }
   }
-}
+});
 
 // ─────────────────────────────────────────────────────────
 //  Subscriptions
@@ -206,7 +207,10 @@ await subscriber.subscribe("CANCEL_STOPLOSS", (message) => {
     for (const [sym, orderMap] of activeOrders) {
       if (orderMap.has(targetId)) {
         orderMap.delete(targetId);
-        if (orderMap.size === 0) activeOrders.delete(sym);
+        if (orderMap.size === 0) {
+          activeOrders.delete(sym);
+          updateTrackedSymbols([...activeOrders.keys()]);
+        }
         console.log(`[SL Engine] 🗑  Removed order #${targetId} from watch map`);
         found = true;
         break;
@@ -219,8 +223,5 @@ await subscriber.subscribe("CANCEL_STOPLOSS", (message) => {
 });
 
 await loadPendingOrders();
-setInterval(async () => {
-  try { await checkPrices(); } catch (err) {}
-}, 5000);
 
-console.log("[SL Engine] 🚀 Running — polling every 5s");
+console.log("[SL Engine] 🚀 Running — Listening for real-time WebSocket ticks...");

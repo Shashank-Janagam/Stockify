@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useContext, useState, useMemo, useEffect, useCallback } from "react";
+import { useContext, useState, useMemo, useEffect, useCallback, useRef } from "react";
 import paperbulllogo from "../../assets/imageinv.png";
 import { useExploreSSE } from "../../context/ExploreSSEContext";
 import { AuthContext } from "../../auth/AuthProvider";
@@ -44,7 +44,7 @@ function MarketChart({ symbol }: { symbol: string }) {
   useEffect(() => {
     if (chartData.length === 0) setLoading(true);
     // /api/stocks/:symbol/history?days=1 → Array<{x:timestamp_ms, o, h, l, c}>
-    fetch(`${HOST}/api/stocks/${encodeURIComponent(symbol)}/history?days=1`)
+    fetch(`${HOST}/api/stocks/${encodeURIComponent(symbol)}/history?days=1&interval=1m`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -111,11 +111,11 @@ function MarketChart({ symbol }: { symbol: string }) {
             <line key={frac} x1="0" y1={(H * frac).toFixed(0)} x2={W} y2={(H * frac).toFixed(0)}
               stroke="#e2e8f0" strokeWidth="0.5" strokeDasharray="4 4" />
           ))}
-          <path d={areaStr} fill={`url(#ag-${symbol.replace(/[^a-z]/gi, "")})`} />
-          <path d={pathStr} fill="none" stroke={lc} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={areaStr} fill={`url(#ag-${symbol.replace(/[^a-z]/gi, "")})`} style={{ transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }} />
+          <path d={pathStr} fill="none" stroke={lc} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }} />
           {/* Last point dot */}
           <circle cx={px(vals.length - 1).toFixed(1)} cy={py(vals[vals.length - 1]).toFixed(1)}
-            r="4" fill={lc} />
+            r="4" fill={lc} style={{ transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }} />
         </svg>
         <div className="mkt-chart-xlabels">
           {xLabels.map((l, i) => <span key={i}>{l}</span>)}
@@ -162,13 +162,15 @@ function DonutChart({ holdings, totalValue }: { holdings: any[]; totalValue: num
 
   return (
     <div className="donut-wrap">
-      <svg width="136" height="136" viewBox="0 0 136 136">
-        {slices.filter(s => s.angle > 0.5).map((s, i) => (
-          <path key={i}
-            d={`M ${s.cx} ${s.cy} L ${s.x1.toFixed(2)} ${s.y1.toFixed(2)} A ${s.r} ${s.r} 0 ${s.lg} 1 ${s.x2.toFixed(2)} ${s.y2.toFixed(2)} Z`}
-            fill={s.color} stroke="#fff" strokeWidth="2.5" />
-        ))}
-        <circle cx="68" cy="68" r="34" fill="#fff" />
+      <svg width="136" height="136" viewBox="-5 -5 146 146" style={{ overflow: 'visible' }}>
+        <g style={{ filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.15))' }}>
+          {slices.filter(s => s.angle > 0.5).map((s, i) => (
+            <path key={i}
+              d={`M ${s.cx} ${s.cy} L ${s.x1.toFixed(2)} ${s.y1.toFixed(2)} A ${s.r} ${s.r} 0 ${s.lg} 1 ${s.x2.toFixed(2)} ${s.y2.toFixed(2)} Z`}
+              fill={s.color} stroke="#fff" strokeWidth="2" />
+          ))}
+          <circle cx="68" cy="68" r="34" fill="#fff" />
+        </g>
         <text x="68" y="63" textAnchor="middle" fontSize="8" fill="#6b7280" fontWeight="600">Total Value</text>
         <text x="68" y="76" textAnchor="middle" fontSize="9" fill="#0f172a" fontWeight="800">
           ₹{(totalValue / 1000).toFixed(1)}K
@@ -283,6 +285,7 @@ const INDEX_CONFIGS = [
   { key: "SENSEX", symbol: "^BSESN", label: "SENSEX" },
   { key: "BANKNIFTY", symbol: "^NSEBANK", label: "BANKNIFTY" },
   { key: "FINNIFTY", symbol: "NIFTY_FIN_SERVICE.NS", label: "FINNIFTY" },
+  {key: "MIDCPNIFTY", symbol: "NIFTY_MIDCAP_100.NS", label: "MIDCPNIFTY"}
 ];
 
 const UPCOMING_EVENTS = [
@@ -296,9 +299,12 @@ const UPCOMING_EVENTS = [
    MAIN DASHBOARD  (Explore replaces old view)
 ═══════════════════════════════════════════════════════════════ */
 export default function Explore() {
-  const { data, recentData, invested, holdingsSummary, ready } = useExploreSSE();
+  const { data, followedData, invested, holdingsSummary, ready } = useExploreSSE();
   const [moverTab, setMoverTab] = useState<"gainers" | "losers">("gainers");
   const [activeIdx, setActiveIdx] = useState(0);
+  const [activeFollowIdx, setActiveFollowIdx] = useState(0);
+  const safeFollowIdx = (followedData && followedData.length > 0) ? activeFollowIdx % followedData.length : 0;
+  const followedTabsRef = useRef<HTMLDivElement>(null);
   const [indicesMap, setIndicesMap] = useState<Record<string, { price: number; change: number; percent: number }>>({});
   const { user } = useContext(AuthContext);
   const { lastMessage } = useWebSocket();
@@ -319,6 +325,24 @@ export default function Explore() {
     }, 5000);
     return () => clearTimeout(timer);
   }, [activeIdx]);
+
+  // Auto-rotate followed stocks every 5 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setActiveFollowIdx((prev) => prev + 1);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [activeFollowIdx]);
+
+  // Scroll active followed tab into view
+  useEffect(() => {
+    if (followedTabsRef.current) {
+      const activeTab = followedTabsRef.current.querySelector('.mkt-tab.active');
+      if (activeTab) {
+        activeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+  }, [safeFollowIdx]);
 
   // Live index data from WebSocket
   useEffect(() => {
@@ -386,6 +410,12 @@ export default function Explore() {
 
   return (
     <div className="db2-page">
+      <style>{`
+        @keyframes slideFadeRight {
+          0% { opacity: 0; transform: translateX(-15px); }
+          100% { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
 
       {/* ════ HERO STRIP ════ */}
       <div className="db2-hero">
@@ -427,11 +457,11 @@ export default function Explore() {
           </div>
           <div className="db2-stat-card">
             <span className="db2-stat-label">Watchlist</span>
-            <span className="db2-stat-val">{recentData?.length || 0}</span>
+            <span className="db2-stat-val">{followedData?.length || 0}</span>
           </div>
         </div>
 
-        <button className="db2-add-funds-btn" onClick={() => navigate("/funds")}>
+        <button className="db2-add-funds-btn" onClick={() => navigate("/user/balance")}>
           + Add Funds
         </button>
       </div>
@@ -459,20 +489,27 @@ export default function Explore() {
               ))}
             </div>
 
-            <div className="mkt-price-row">
-              <span className="mkt-price-val">
-                {activePriceData?.price != null
-                  ? activePriceData.price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                  : "—"}
-              </span>
-              {activePriceData && (
-                <span className={`mkt-price-chg ${activePriceData.percent >= 0 ? "pos" : "neg"}`}>
-                  &nbsp;
-                  {activePriceData.percent >= 0 ? "+" : ""}
-                  {activePriceData.change?.toFixed(2)}&nbsp;
-                  ({activePriceData.percent >= 0 ? "+" : ""}{activePriceData.percent?.toFixed(2)}%)
+            <div className="mkt-price-row" key={activeCfg.key} style={{ display: 'flex', alignItems: 'center', gap: '14px', animation: 'slideFadeRight 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+              <img 
+                src={new URL(getImageSrc(activeCfg.symbol), import.meta.url).href} 
+                alt={activeCfg.label}
+                style={{ width: '44px', height: '44px', borderRadius: '12px', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}
+              />
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+                <span className="mkt-price-val">
+                  {activePriceData?.price != null
+                    ? activePriceData.price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    : "—"}
                 </span>
-              )}
+                {activePriceData && (
+                  <span className={`mkt-price-chg ${activePriceData.percent >= 0 ? "pos" : "neg"}`}>
+                    &nbsp;
+                    {activePriceData.percent >= 0 ? "+" : ""}
+                    {activePriceData.change?.toFixed(2)}&nbsp;
+                    ({activePriceData.percent >= 0 ? "+" : ""}{activePriceData.percent?.toFixed(2)}%)
+                  </span>
+                )}
+              </div>
             </div>
 
             <MarketChart symbol={activeCfg.symbol} />
@@ -588,36 +625,67 @@ export default function Explore() {
         {/* ─── MIDDLE COLUMN ─── */}
         <div className="db2-col">
 
-          {/* RECENTLY VIEWED */}
+          {/* FOLLOWED STOCKS OVERVIEW */}
           <div className="db2-card">
             <div className="db2-card-header">
-              <span className="db2-card-title">Recently Viewed</span>
-              <span className="db2-link">View all</span>
+              <span className="db2-card-title">Followed Stocks</span>
             </div>
-            {recentData.length === 0 ? (
-              <div className="db2-empty-state"><span>👁️</span><span>No recently viewed stocks</span></div>
+            {(!followedData || followedData.length === 0) ? (
+              <div className="db2-empty-state"><span>⭐</span><span>Follow stocks to see them here</span></div>
             ) : (
-              <div className="db2-recent-list">
-                {recentData.slice(0, 7).map((r: any) => (
-                  <div key={r.symbol} className="db2-recent-item" onClick={() => handleStockClick(r)}>
-                    <div className="db2-recent-logo-wrap">
-                      <img src={new URL(getImageSrc(r.symbol), import.meta.url).href}
-                        alt={r.name} className="db2-recent-img"
-                        onError={(e) => (e.currentTarget.src = paperbulllogo)} />
+              <>
+                <div ref={followedTabsRef} className="mkt-tabs" style={{ display: 'flex', overflowX: 'auto', gap: '8px', marginBottom: '16px', paddingBottom: '8px', flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch' }}>
+                  {followedData.map((stock: any, i: number) => (
+                    <button key={stock.symbol}
+                      style={{ flexShrink: 0 }}
+                      className={`mkt-tab${safeFollowIdx === i ? " active" : ""}`}
+                      onClick={() => setActiveFollowIdx(i)}>
+                      {stock.symbol.replace(".NS", "")}
+                    </button>
+                  ))}
+                </div>
+
+                {followedData[safeFollowIdx] && (
+                  <div
+                    onClick={() => handleStockClick(followedData[safeFollowIdx])}
+                    style={{ cursor: 'pointer' }}
+                    title={`Open ${followedData[safeFollowIdx].symbol.replace('.NS', '')} stock page`}
+                  >
+                    <div className="mkt-price-row" key={followedData[safeFollowIdx].symbol} style={{ display: 'flex', alignItems: 'center', gap: '14px', animation: 'slideFadeRight 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+                      <img 
+                        src={new URL(getImageSrc(followedData[safeFollowIdx].symbol), import.meta.url).href} 
+                        alt={followedData[safeFollowIdx].symbol}
+                        style={{ width: '44px', height: '44px', borderRadius: '12px', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}
+                        onError={(e) => (e.currentTarget.src = paperbulllogo)}
+                      />
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+                        <span className="mkt-price-val">
+                          {followedData[safeFollowIdx].price != null
+                            ? followedData[safeFollowIdx].price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                            : "—"}
+                        </span>
+                        <span className={`mkt-price-chg ${followedData[safeFollowIdx].percent >= 0 ? "pos" : "neg"}`}>
+                          &nbsp;
+                          {followedData[safeFollowIdx].percent >= 0 ? "+" : ""}
+                          {followedData[safeFollowIdx].change?.toFixed(2)}&nbsp;
+                          ({followedData[safeFollowIdx].percent >= 0 ? "+" : ""}{followedData[safeFollowIdx].percent?.toFixed(2)}%)
+                        </span>
+                      </div>
                     </div>
-                    <div className="db2-recent-body">
-                      <span className="db2-recent-sym">{r.symbol.replace(".NS", "")}</span>
-                      <span className="db2-recent-name-sm">{toTitleCase((r.name || "").split(" ").slice(0, 2).join(" "))}</span>
-                    </div>
-                    <div className="db2-recent-vals">
-                      <span className="db2-recent-price">₹{(r.price || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                      <span className={`db2-recent-pct ${r.percent >= 0 ? "pos" : "neg"}`}>
-                        {r.percent >= 0 ? "+" : ""}{(r.percent || 0).toFixed(2)}%
+                    
+                    <MarketChart symbol={followedData[safeFollowIdx].symbol} />
+
+                    <div className="mkt-day-range">
+                      <span>Day's Range</span>
+                      <span>
+                        {followedData[safeFollowIdx]
+                          ? `${(followedData[safeFollowIdx].price * 0.995).toLocaleString("en-IN", { maximumFractionDigits: 2 })} – ${(followedData[safeFollowIdx].price * 1.005).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+                          : "—"}
                       </span>
                     </div>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
 

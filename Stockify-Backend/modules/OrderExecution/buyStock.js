@@ -1,9 +1,9 @@
 import express from "express";
-import axios from "axios";
 import { db } from "../../db/sql.js";
 import requireAuth from "../../Middleware/requireAuth.js";
 import YahooFinance from "yahoo-finance2";
 import redis from "../../cache/redisClient.js";
+import notificationQueue from "../../queue/notificationQueue.js";
 
 const router = express.Router();
 
@@ -64,11 +64,15 @@ router.post("/buy", requireAuth, async (req, res) => {
 
     // ── Resolve / create user ──
     let userRes = await client.query(
-      `SELECT id, "Mobile" FROM users WHERE uid = $1`,
+      `SELECT id, "Mobile", telegram_chat_id, notify_email, notify_whatsapp, notify_telegram FROM users WHERE uid = $1`,
       [uid]
     );
     let userId;
     let userMobile;
+    let telegramChatId;
+    let notifyEmail = true;
+    let notifyWhatsapp = true;
+    let notifyTelegram = true;
     if (userRes.rows.length === 0) {
       await client.query("BEGIN");
       try {
@@ -90,6 +94,10 @@ router.post("/buy", requireAuth, async (req, res) => {
     } else {
       userId = userRes.rows[0].id;
       userMobile = userRes.rows[0].Mobile;
+      telegramChatId = userRes.rows[0].telegram_chat_id;
+      notifyEmail = userRes.rows[0].notify_email;
+      notifyWhatsapp = userRes.rows[0].notify_whatsapp;
+      notifyTelegram = userRes.rows[0].notify_telegram;
     }
 
     // ── Resolve / create stock ──
@@ -233,10 +241,11 @@ router.post("/buy", requireAuth, async (req, res) => {
     const webhookData = {
       status: "EXECUTED",
       side: "BUY",
-      order_type: "MARKET",
+      order_type: category || "REGULAR",
       product_type: finalProductType,
       sl_pending: false,
       symbol: finalSymbol,
+      stockName: name,
       quantity,
       PricePerShare: pricePerShare,
       totalValue: totalPrice,
@@ -248,18 +257,20 @@ router.post("/buy", requireAuth, async (req, res) => {
       email,
       name: userName || null,
       mobile: userMobile || null,
+      telegram_chat_id: telegramChatId || null,
+      notify_email: notifyEmail,
+      notify_whatsapp: notifyWhatsapp,
+      notify_telegram: notifyTelegram,
       subject:"PaperBull Order Execution"
 
     };
 
     try {
-      console.log("Sengin to n8n")
-      await axios.post(
-        "https://shashankjanagam.app.n8n.cloud/webhook/3714732e-5a5e-4934-ae3f-136680443064",
-        webhookData
-      );
-    } catch (webhookErr) {
-      console.error("Webhook notification failed:", webhookErr.message);
+      await notificationQueue.add("trade", webhookData);
+      console.log("✅ Notification job enqueued for", finalSymbol);
+    } catch (queueErr) {
+      // Non-fatal: the trade already executed — just log and continue
+      console.error("❌ Failed to enqueue notification:", queueErr.message);
     }
 
     res.json({

@@ -1,32 +1,32 @@
 import YahooFinance from "yahoo-finance2";
 const yahoo = new YahooFinance();
 
-export async function getYahooIndiaHistory(symbol, days) {
+export async function getYahooIndiaHistory(symbol, days, customInterval = null) {
   const nowSec = Math.floor(Date.now() / 1000);
 
   let interval;
   let period1;
 
   if (days <= 1) {
-    interval = "1m";
-    period1 = nowSec - 60 * 60 * 24 * 5;
+    interval = customInterval || "1m";
+    period1 = nowSec - 60 * 60 * 24 * (customInterval === "5m" ? 7 : 5);
   } else if (days <= 7) {
-    interval = "5m";
+    interval = customInterval || "5m";
     period1 = nowSec - 60 * 60 * 24 * 7;
   } else if (days <= 30) {
-    interval = "15m";
+    interval = customInterval || "15m";
     period1 = nowSec - 60 * 60 * 24 * 30;
   } else if (days <= 90) {
-    interval = "1d";
+    interval = customInterval || "1d";
     period1 = nowSec - 60 * 60 * 24 * 90;
   } else if (days <= 180) {
-    interval = "1d";
+    interval = customInterval || "1d";
     period1 = nowSec - 60 * 60 * 24 * 180;
   } else if (days <= 365) {
-    interval = "1d";
+    interval = customInterval || "1d";
     period1 = nowSec - 60 * 60 * 24 * 365;
   } else {
-    interval = "5d";
+    interval = customInterval || "5d";
     period1 = 0;
   }
 

@@ -8,6 +8,8 @@ import { getDb } from "../../db/mongo.js";
 import { db } from "../../db/sql.js";
 import { getNSETopGainers, getNSETopLosers } from "../stocks/multiCurrentMovers.js";
 import { upstoxFeedService } from "./upstoxFeed.service.js";
+import Redis from "ioredis";
+
 // We'll need these from holdings.js, so we should export them there or duplicate/refactor
 // For speed, let's assume we can refactor holdings.js to export its logic
 
@@ -38,6 +40,27 @@ export  class WebSocketManager {
       { symbol: "NIFTY_MIDCAP_100.NS", label: "MIDCPNIFTY" },
       { symbol: "NIFTY_FIN_SERVICE.NS", label: "FINNIFTY" },
     ];
+
+    try {
+      this.redisSub = new Redis(process.env.REDIS_URL);
+      this.redisSub.subscribe("ORDER_EXECUTED");
+      this.redisSub.on("message", (channel, message) => {
+        if (channel === "ORDER_EXECUTED") {
+          try {
+            const { userId, symbol } = JSON.parse(message);
+            this.clients.forEach((client, ws) => {
+              if (String(client.sqlUserId) === String(userId) || String(client.userId) === String(userId)) {
+                if (ws.readyState === ws.OPEN) {
+                  ws.send(JSON.stringify({ type: "ORDER_EXECUTED", symbol }));
+                }
+              }
+            });
+          } catch (err) {}
+        }
+      });
+    } catch (err) {
+      console.error("WS Redis sub error:", err);
+    }
 
     const heartbeat = setInterval(() => {
       this.wss.clients.forEach((ws) => {
@@ -151,13 +174,13 @@ export  class WebSocketManager {
     let interval;
     switch (topic) {
       case "STOCK_LIVE":
-        interval = this.startStockLive(ws, params.symbol);
+        interval = this.startStockLive(ws, params.symbol, params.interval);
         break;
       case "EXPLORE_LIVE":
         this.startExploreLive(ws);
         break;
-      case "RECENT_LIVE":
-        interval = this.startRecentLive(ws, client);
+      case "FOLLOWED_LIVE":
+        interval = this.startFollowedLive(ws, client);
         break;
       case "HOLDINGS_LIVE":
         interval = this.startHoldingsLive(ws, client);
@@ -246,7 +269,7 @@ export  class WebSocketManager {
 
   // --- Topic Implementations ---
 
-  startStockLive(ws, symbol) {
+  startStockLive(ws, symbol, customInterval = null) {
     upstoxFeedService.subscribe([symbol]);
 
     // Cache the full Yahoo quote (fundamentals) — refresh every 1 minute
@@ -271,10 +294,10 @@ export  class WebSocketManager {
     const sendUpdate = async () => {
       try {
         const [candlesRaw, yahooQuote] = await Promise.all([
-          getYahooIndiaHistory(symbol, 1),
+          getYahooIndiaHistory(symbol, 1, customInterval),
           fetchYahooQuote()
         ]);
-        const candles = candlesRaw.map(d => ({ x: d.x, c: d.c }));
+        const candles = candlesRaw.map(d => ({ x: d.x, o: d.o, h: d.h, l: d.l, c: d.c }));
 
         const upstoxTick = upstoxFeedService.getTick(symbol);
         let quote;
@@ -463,7 +486,7 @@ export  class WebSocketManager {
     sendUpdate();
   }
 
-  startRecentLive(ws, client) {
+  startFollowedLive(ws, client) {
     if (!client.userId) return null;
 
     // Track which symbols this client has subscribed to Upstox
@@ -474,8 +497,8 @@ export  class WebSocketManager {
       try {
         const dbMongo = getDb();
         const users = dbMongo.collection("users");
-        const user = await users.findOne({ _id: client.userId }, { projection: { recentlyViewed: 1 } });
-        const recentlyViewed = user?.recentlyViewed || [];
+        const user = await users.findOne({ _id: client.userId }, { projection: { followedStocks: 1 } });
+        const followedStocks = user?.followedStocks || [];
 
         let investedSymbols = [];
         if (client.sqlUserId) {
@@ -486,12 +509,12 @@ export  class WebSocketManager {
           investedSymbols = investedRows.map(r => r.symbol);
         }
 
-        const recentSymbols = recentlyViewed.map(r => r.symbol);
-        const allSymbols = [...new Set([...recentSymbols, ...investedSymbols])];
+        const followedSymbols = followedStocks.map(r => r.symbol);
+        const allSymbols = [...new Set([...followedSymbols, ...investedSymbols])];
 
         if (allSymbols.length === 0) {
           if (ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify({ type: "RECENT_UPDATE", data: { recentlyViewed: [], invested: [] } }));
+            ws.send(JSON.stringify({ type: "FOLLOWED_UPDATE", data: { followedData: [], invested: [] } }));
           }
           return;
         }
@@ -529,17 +552,17 @@ export  class WebSocketManager {
           return upstoxQuotes;
         })();
 
-        const recentQuotes = quotes.filter(q => recentSymbols.includes(q.symbol));
+        const followedQuotes = quotes.filter(q => followedSymbols.includes(q.symbol));
         const investedQuotes = quotes.filter(q => investedSymbols.includes(q.symbol));
 
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify({
-            type: "RECENT_UPDATE",
-            data: { recentlyViewed: recentQuotes, invested: investedQuotes }
+            type: "FOLLOWED_UPDATE",
+            data: { followedData: followedQuotes, invested: investedQuotes }
           }));
         }
       } catch (err) {
-        console.error("WS Recent Update Error:", err);
+        console.error("WS Followed Update Error:", err);
       }
     };
 

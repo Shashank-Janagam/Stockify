@@ -1,9 +1,9 @@
 import express from "express";
-import axios from "axios";
 import requireAuth from "../../Middleware/requireAuth.js";
 import { db } from "../../db/sql.js";
 import YahooFinance from "yahoo-finance2";
 import redis from "../../cache/redisClient.js";
+import notificationQueue from "../../queue/notificationQueue.js";
 
 const router = express.Router();
 
@@ -96,14 +96,19 @@ router.post("/sell", requireAuth, async (req, res) => {
     if (!quantity || quantity <= 0)
       return res.status(400).json({ error: "Invalid qty" });
 
-    const userRes = await client.query(`SELECT id, "Mobile" FROM users WHERE uid=$1`, [uid]);
+    const userRes = await client.query(`SELECT id, "Mobile", telegram_chat_id, notify_email, notify_whatsapp, notify_telegram FROM users WHERE uid=$1`, [uid]);
     if (userRes.rows.length === 0) return res.status(400).json({ error: "User not found" });
     const userId = userRes.rows[0].id;
     const userMobile = userRes.rows[0].Mobile;
+    const telegramChatId = userRes.rows[0].telegram_chat_id;
+    const notifyEmail = userRes.rows[0].notify_email;
+    const notifyWhatsapp = userRes.rows[0].notify_whatsapp;
+    const notifyTelegram = userRes.rows[0].notify_telegram;
 
-    const stockRes = await client.query(`SELECT id FROM stocks WHERE symbol=$1`, [symbol]);
+    const stockRes = await client.query(`SELECT id, stock_name FROM stocks WHERE symbol=$1`, [symbol]);
     if (stockRes.rows.length === 0) return res.status(400).json({ error: "Stock not found" });
     const stockId = stockRes.rows[0].id;
+    const stockName = stockRes.rows[0].stock_name;
 
     // ══════════════════════════════════════════════════════
     //  PATH A: STOPLOSS SELL
@@ -289,10 +294,11 @@ router.post("/sell", requireAuth, async (req, res) => {
     const webhookData = {
       status: "EXECUTED",
       side: "SELL",
-      order_type: "MARKET",
+      order_type: category || "REGULAR",
       product_type: finalProductType,
       sl_pending: false,
       symbol,
+      stockName,
       quantity,
       PricePerShare: pricePerShare,
       totalValue: sellValue,
@@ -304,17 +310,19 @@ router.post("/sell", requireAuth, async (req, res) => {
       email,
       name: userName || null,
       mobile: userMobile || null,
+      telegram_chat_id: telegramChatId || null,
+      notify_email: notifyEmail,
+      notify_whatsapp: notifyWhatsapp,
+      notify_telegram: notifyTelegram,
       subject:"PaperBull Order Execution",
     };
 
     try {
-      console.log("Sending to n8n");
-      await axios.post(
-        "https://shashankjanagam.app.n8n.cloud/webhook/3714732e-5a5e-4934-ae3f-136680443064",
-        webhookData
-      );
-    } catch (webhookErr) {
-      console.error("Webhook notification failed:", webhookErr.message);
+      await notificationQueue.add("trade", webhookData);
+      console.log("✅ Notification job enqueued for", symbol);
+    } catch (queueErr) {
+      // Non-fatal: the trade already executed — just log and continue
+      console.error("❌ Failed to enqueue notification:", queueErr.message);
     }
 
     res.json({
