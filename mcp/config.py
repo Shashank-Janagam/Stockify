@@ -10,12 +10,15 @@ from dotenv import load_dotenv
 # Load environment variables from local .env file
 load_dotenv()
 
+from mcp.server.fastmcp import FastMCP
+
 try:
-    from mcp.server.fastmcp import FastMCP
     from mcp.server.fastmcp.server import TransportSecuritySettings
-except (ImportError, ModuleNotFoundError):
-    from mcp.server import MCPServer as FastMCP
-    TransportSecuritySettings = None
+except (ImportError, ModuleNotFoundError, AttributeError):
+    try:
+        from mcp.server.fastmcp import TransportSecuritySettings
+    except (ImportError, ModuleNotFoundError, AttributeError):
+        TransportSecuritySettings = None
 
 import firebase_admin
 from firebase_admin import auth as firebase_auth, credentials as firebase_credentials
@@ -60,9 +63,18 @@ ts_settings = (
     else None
 )
 
-mcp = FastMCP(
-    "PaperBull MCP Server",
-    host=MCP_HOST,
-    port=MCP_PORT,
-    transport_security=ts_settings,
-)
+kwargs = {
+    "host": MCP_HOST,
+    "port": MCP_PORT,
+}
+if ts_settings is not None:
+    kwargs["transport_security"] = ts_settings
+
+try:
+    mcp = FastMCP("PaperBull MCP Server", **kwargs)
+except TypeError:
+    try:
+        mcp = FastMCP("PaperBull MCP Server", host=MCP_HOST, port=MCP_PORT)
+    except TypeError:
+        mcp = FastMCP("PaperBull MCP Server")
+
