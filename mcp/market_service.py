@@ -40,6 +40,7 @@ def load_instruments():
                     sym = (item.get("symbol") or "").strip().upper()
                     if not sym:
                         continue
+                    name = (item.get("name") or item.get("company_name") or sym).strip()
                     name_upper = name.upper()
                     if "^" in sym or "NIFTY 50" in name_upper or "SENSEX" in name_upper:
                         cat = "Indices"
