@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import StockLogo from "../common/StockLogo";
 
 interface SimilarStock {
   symbol: string;
@@ -9,23 +10,6 @@ interface SimilarStock {
 function slugify(n: string) {
   return n.toLowerCase().trim().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
-
-const images = import.meta.glob(
-  "../../assets/*.{png,jpg,jpeg,svg,webp}",
-  { eager: true }
-);
-
-const getImageSrc = (symbol: string): string => {
-  const name = symbol.replace(".NS", "").replace(".BO", "");
-
-  const match = Object.keys(images).find(path =>
-    path.includes(`/${name}.`)
-  );
-
-  return match
-    ? (images[match] as any).default
-    : (images["../../assets/imageinv.png"] as any).default;
-};
 
 interface CompanyProfileData {
   symbol: string;
@@ -131,13 +115,11 @@ export default function CompanyProfile({ symbol, companyName }: CompanyProfilePr
                 className="similar-stock-card"
               >
                 <div className="similar-stock-logo-wrapper">
-                  <img
-                    src={new URL(`${getImageSrc(s.symbol)}`, import.meta.url).href}
-                    alt={s.company_name}
+                  <StockLogo
+                    symbol={s.symbol}
+                    name={s.company_name}
                     className="similar-stock-logo"
-                    onError={(e) => {
-                      e.currentTarget.src = "/assets/default-logo.png";
-                    }}
+                    fallbackToAvatar={false}
                   />
                 </div>
                 <div className="similar-stock-info">

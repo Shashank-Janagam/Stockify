@@ -151,15 +151,27 @@ export async function resolveStockProfile(symbol) {
     }
 
     const companyName = yfData?.price?.longName || yfData?.price?.shortName || cached?.company_name || cleanSymbol;
-    let sector = mapYahooSector(yfData?.summaryProfile?.sector) || cached?.sector || "Others";
-    let industry = yfData?.summaryProfile?.industry || cached?.industry || "N/A";
+    const isFund = cleanSymbol.includes("BEES") || cleanSymbol.includes("ETF") || cleanSymbol.includes("FUND") || companyName.toUpperCase().includes("AMC") || companyName.toUpperCase().includes("ETF") || cleanSymbol.startsWith("^");
+
+    let sector = mapYahooSector(yfData?.summaryProfile?.sector) || cached?.sector || (isFund ? (cleanSymbol.startsWith("^") ? "Indices" : "Mutual Funds & ETFs") : "Others");
+    let industry = yfData?.summaryProfile?.industry || cached?.industry || (isFund ? (cleanSymbol.startsWith("^") ? "Market Index" : "Asset Management") : "N/A");
     let website = yfData?.summaryProfile?.website || cached?.website || "N/A";
-    let summaryText = yfData?.summaryProfile?.longBusinessSummary || cached?.summary_text || "No corporate summary available.";
+    let summaryText = yfData?.summaryProfile?.longBusinessSummary || cached?.summary_text || "";
+
+    if (!summaryText && isFund) {
+      if (cleanSymbol.startsWith("^")) {
+        summaryText = `${companyName} is a major benchmark Indian stock market index tracking the top constituent companies by market capitalization and liquidity.`;
+      } else {
+        summaryText = `${companyName} is an exchange-traded index fund and mutual fund scheme listed on Indian markets, tracking benchmark indices and asset baskets with high liquidity and low expense ratios.`;
+      }
+    } else if (!summaryText) {
+      summaryText = "No corporate summary available.";
+    }
 
     let needUpdate = !cached;
 
     // 3. Fallbacks to LLM
-    if (sector === "Others" || sector === "N/A") {
+    if ((sector === "Others" || sector === "N/A") && !isFund) {
       const llmSector = await classifySectorWithLLM(cleanSymbol, companyName);
       if (llmSector && llmSector !== "Others") {
         sector = llmSector;
@@ -167,7 +179,7 @@ export async function resolveStockProfile(symbol) {
       }
     }
 
-    if (summaryText === "No corporate summary available." || summaryText.trim() === "") {
+    if ((summaryText === "No corporate summary available." || summaryText.trim() === "") && !isFund) {
       const llmSummary = await generateSummaryWithLLM(companyName, sector);
       if (llmSummary && llmSummary !== "No corporate summary available.") {
         summaryText = llmSummary;

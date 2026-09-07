@@ -106,8 +106,11 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
                 <NavLink to="/portfolio" className="tab1">
                   Portfolio
                 </NavLink>
-                <NavLink to="/dashboard" state={{ tab: "Streaming Algo" }} className="tab1">
-                  ⚡ Streaming Algo
+                <NavLink to="/algo-backtest/studio" className="tab1">
+                  ⚡ Strategy Studio
+                </NavLink>
+                <NavLink to="/live-trading" className="tab1">
+                  🤖 Live Trading
                 </NavLink>
                 <NavLink to="/user/balance" className="tab1">
                   Funds

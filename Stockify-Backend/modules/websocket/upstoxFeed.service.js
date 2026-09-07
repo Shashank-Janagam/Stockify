@@ -67,8 +67,20 @@ class UpstoxFeedService {
         if (s.startsWith('^')) return s;
         return s.endsWith('.NS') || s.endsWith('.BO') ? s : `${s}.NS`;
       });
-      const quotes = await yahooFinance.quote(queries);
-      const results = Array.isArray(quotes) ? quotes : [quotes];
+
+      let results = [];
+      try {
+        const quotes = await yahooFinance.quote(queries);
+        results = Array.isArray(quotes) ? quotes : (quotes ? [quotes] : []);
+      } catch (batchErr) {
+        // Fallback: If batch fails due to 1 bad symbol, query each symbol with Promise.allSettled
+        const settled = await Promise.allSettled(
+          queries.map(q => yahooFinance.quote(q).catch(() => null))
+        );
+        results = settled
+          .filter(r => r.status === "fulfilled" && r.value)
+          .map(r => r.value);
+      }
 
       results.forEach(quote => {
         if (!quote || !quote.symbol) return;
@@ -99,7 +111,7 @@ class UpstoxFeedService {
         });
       });
     } catch (err) {
-      console.error("❌ [YahooPolling] Error fetching prices:", err.message);
+      console.warn("⚠️ [YahooPolling] Warning fetching prices:", err.message);
     }
   }
 

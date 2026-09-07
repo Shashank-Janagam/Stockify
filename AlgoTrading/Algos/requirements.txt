@@ -1,0 +1,26 @@
+# PaperBull — Multi-Strategy Trading Framework
+# Pure Python standard library only (no numpy/pandas required for core logic)
+# Optional dependencies listed below
+
+# ── Required ──────────────────────────────────────────────────────────────────
+# (None — the framework uses only Python standard library)
+# Python >= 3.10 required (for match/case and newer type hints)
+
+# ── Optional: Data Sources ────────────────────────────────────────────────────
+# For fetching historical OHLCV data to run backtests:
+# yfinance>=0.2.0          # Yahoo Finance
+# pandas>=2.0.0            # DataFrame support
+
+# ── Optional: Performance ─────────────────────────────────────────────────────
+# For faster indicator calculations on large datasets:
+# numpy>=1.24.0            # NumPy vectorized math
+
+# ── Optional: Database ────────────────────────────────────────────────────────
+# For persisting trades to PostgreSQL (ExecutionEngine._db):
+# psycopg2-binary>=2.9.0   # PostgreSQL driver
+# asyncpg>=0.29.0          # Async PostgreSQL driver
+
+# ── Optional: API / Web ───────────────────────────────────────────────────────
+# For serving signals via REST or WebSocket:
+# fastapi>=0.110.0
+# websockets>=12.0

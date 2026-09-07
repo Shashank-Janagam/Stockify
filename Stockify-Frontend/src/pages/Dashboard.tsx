@@ -4,7 +4,6 @@ import "../Styles/dashboard.css";
 import HoldingsPage from "../components/portfolio/HoldingsPage.tsx";
 import PositionsPage from "../components/portfolio/PositionsPage.tsx";
 import HeaderIndices from "../components/layout/HeaderIndices.tsx";
-import AlgoDashboard from "../components/portfolio/AlgoDashboard.tsx";
 import { useLocation } from "react-router-dom";
 
 // Lazy load the OrderHistory component
@@ -32,13 +31,13 @@ export default function Dashboard() {
     <div className="app">
       <header className="top-nav">
         <div className="dashboard-tabs-container">
-          {["Explore", "Holdings", "Positions", "Orders", "Streaming Algo"].map(t => (
+          {["Explore", "Holdings", "Positions", "Orders"].map(t => (
             <span
               key={t}
               className={tab === t ? "dashboard-tab active" : "dashboard-tab"}
               onClick={() => setTab(t)}
             >
-              {t === "Streaming Algo" ? "⚡ Streaming Algo" : t}
+              {t}
             </span>
           ))}
         </div>
@@ -55,7 +54,7 @@ export default function Dashboard() {
           <OrderHistory />
         </Suspense>
       )}
-      {tab === "Streaming Algo" && <AlgoDashboard />}
+
 
     </div>
     </div>

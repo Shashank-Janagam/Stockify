@@ -1,5 +1,6 @@
 import { BookmarkIcon, Star } from "lucide-react";
 import { useState, useEffect } from "react";
+import StockLogo from "../common/StockLogo";
 
 type StockHeaderProps = {
   companyName?: string;
@@ -23,49 +24,55 @@ export default function StockHeader({
   quote,
   profile
 }: StockHeaderProps) {
-  const [isFollowed, setIsFollowed] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [loadingFollow, setLoadingFollow] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
 
   useEffect(() => {
-    fetch(`${HOST}/api/user/follow/check?symbol=${encodeURIComponent(symbol)}`, { credentials: "include" })
-      .then(res => res.json())
-      .then(data => setIsFollowed(!!data.isFollowed))
-      .catch(console.error);
-  }, [symbol, HOST]);
+    if (!symbol) return;
+    const encoded = encodeURIComponent(symbol);
+    fetch(`${HOST}/api/stocks/${encoded}/follow-status`, {
+      credentials: "include",
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.isFollowing === "boolean") {
+          setIsFollowing(data.isFollowing);
+        } else if (data && typeof data.isFollowed === "boolean") {
+          setIsFollowing(data.isFollowed);
+        }
+      })
+      .catch((err) => console.error("Error fetching follow status:", err));
+  }, [symbol]);
 
-  const handleFollowToggle = async () => {
+  const toggleFollow = async () => {
+    if (!symbol) return;
+    setLoadingFollow(true);
     try {
-      const res = await fetch(`${HOST}/api/user/follow`, {
+      const encoded = encodeURIComponent(symbol);
+      const res = await fetch(`${HOST}/api/stocks/${encoded}/follow`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol, name: companyName })
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: companyName || symbol }),
       });
       const data = await res.json();
-      setIsFollowed(!!data.isFollowed);
+      if (data && typeof data.isFollowing === "boolean") {
+        setIsFollowing(data.isFollowing);
+      } else if (data && typeof data.isFollowed === "boolean") {
+        setIsFollowing(data.isFollowed);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Error toggling follow:", err);
+    } finally {
+      setLoadingFollow(false);
     }
   };
 
   const isNegative = change < 0;
-  const images = import.meta.glob(
-    "../../assets/*.{png,jpg,jpeg,svg,webp}",
-    { eager: true }
-  );
-
-  const getImageSrc = (symbol: string): string => {
-    const name = symbol.replace(".NS", "");
-
-    const match = Object.keys(images).find((path) =>
-      path.includes(`/${name}.`)
-    );
-
-    return match
-      ? (images[match] as any).default
-      : (images["../../assets/imageinv.png"] as any).default;
-  };
 
   const formatMarketCap = (mc: number) => {
     if (!mc) return "--";
@@ -80,14 +87,12 @@ export default function StockHeader({
     <div className="stock-header">
       <div className="stock-header-top">
         <div className="stock-header-title-area">
-          <img
-            src={new URL(`${getImageSrc(symbol)}`, import.meta.url).href}
-            alt={companyName}
+          <StockLogo
+            symbol={symbol}
+            name={companyName}
+            domain={profile?.website}
             className="stock-logo"
-            loading="lazy"
-            onError={(e) => {
-              e.currentTarget.src = "/assets/default-logo.png";
-            }}
+            fallbackToAvatar={false}
           />
           <div className="stock-title-info">
             <div className="stock-name-row">
@@ -107,13 +112,14 @@ export default function StockHeader({
         </div>
         <button 
           className="follow-btn" 
-          onClick={handleFollowToggle}
+          onClick={toggleFollow}
+          disabled={loadingFollow}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           style={{ 
-            backgroundColor: isFollowed ? 'rgba(251, 191, 36, 0.1)' : 'transparent', 
-            color: isFollowed ? '#fbbf24' : '#9ca3af',
-            borderColor: isFollowed ? 'rgba(251, 191, 36, 0.3)' : '#374151',
+            backgroundColor: isFollowing ? 'rgba(251, 191, 36, 0.1)' : 'transparent', 
+            color: isFollowing ? '#fbbf24' : '#9ca3af',
+            borderColor: isFollowing ? 'rgba(251, 191, 36, 0.3)' : '#374151',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
@@ -125,13 +131,13 @@ export default function StockHeader({
         >
           <Star 
             size={18} 
-            fill={isFollowed ? '#fbbf24' : 'none'} 
-            stroke={isFollowed ? '#fbbf24' : 'currentColor'}
+            fill={isFollowing ? '#fbbf24' : 'none'} 
+            stroke={isFollowing ? '#fbbf24' : 'currentColor'}
             style={{ minWidth: '18px' }}
           />
           {isHovered && (
             <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'black', whiteSpace: 'nowrap' }}>
-              {isFollowed ? 'Unfollow' : 'Follow'}
+              {isFollowing ? 'Unfollow' : 'Follow'}
             </span>
           )}
         </button>

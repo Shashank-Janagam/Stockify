@@ -138,6 +138,14 @@
   max-width: 1100px;
 }
 
+.stock-page.stock-page--index {
+  max-width: 1400px;
+}
+
+.stock-page.stock-page--index .stock-left {
+  max-width: 100%;
+}
+
 /* =========================
    HEADER
 ========================= */

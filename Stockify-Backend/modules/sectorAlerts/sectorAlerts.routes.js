@@ -71,3 +71,4 @@ router.get("/stock/:symbol", async (req, res) => {
 });
 
 export default router;
+

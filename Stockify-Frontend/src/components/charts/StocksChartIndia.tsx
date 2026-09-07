@@ -438,93 +438,99 @@ if (!Array.isArray(dataPoints) || !dataPoints.length) return;
     let text = isBuy ? "B" : "S";
     if (isPartial) { color = "#f59e0b"; text = "P"; }
 
-    // Box Dimensions
-    const boxWidth = 80;
-    const boxHeight = 44;
-    const yOffset = isBuy ? 20 : -64; // Buy below point, Sell/Partial above point
-    
-    const boxX = x - boxWidth / 2;
-    const boxY = y + yOffset;
+    const mx = chart.options.plugins?.growwPlugin?.mx;
+    const my = chart.options.plugins?.growwPlugin?.my;
+    const isHovered = mx != null && my != null && Math.abs(mx - x) < 20 && Math.abs(my - y) < 20;
 
-    // Stem (connecting line)
+    if (isHovered) {
+      // Box Dimensions
+      const boxWidth = 80;
+      const boxHeight = 44;
+      const yOffset = isBuy ? 20 : -64; // Buy below point, Sell/Partial above point
+      
+      const boxX = x - boxWidth / 2;
+      const boxY = y + yOffset;
+
+      // Stem (connecting line)
+      ctx.save();
+      ctx.beginPath();
+      ctx.setLineDash([2, 3]);
+      ctx.strokeStyle = color;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, isBuy ? boxY : boxY + boxHeight);
+      ctx.stroke();
+      ctx.restore();
+      
+      // Box Shadow and Background
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.08)";
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 2;
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 6);
+      else ctx.rect(boxX, boxY, boxWidth, boxHeight);
+      ctx.fill();
+      ctx.restore();
+
+      // Box Border
+      ctx.save();
+      ctx.strokeStyle = "#e5e7eb";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 6);
+      else ctx.rect(boxX, boxY, boxWidth, boxHeight);
+      ctx.stroke();
+      ctx.restore();
+
+      // Icon square inside box
+      const iconSize = 16;
+      const padding = 8;
+      const iconX = boxX + padding;
+      const iconY = boxY + padding;
+      
+      ctx.save();
+      ctx.fillStyle = color + "1a"; // 10% opacity background
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(iconX, iconY, iconSize, iconSize, 4);
+      else ctx.rect(iconX, iconY, iconSize, iconSize);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Icon Text (B / S / P)
+      ctx.fillStyle = color;
+      ctx.font = "bold 10px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, iconX + iconSize / 2, iconY + iconSize / 2 + 1);
+
+      // Price Text
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 12px Inter, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(`₹${tradePrice.toFixed(2)}`, iconX + iconSize + 6, iconY + iconSize / 2 + 1);
+
+      // Time Text
+      const timeStr = new Date(tradeTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+      ctx.fillStyle = "#6b7280";
+      ctx.font = "500 10px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(timeStr, boxX + boxWidth / 2, iconY + iconSize + 12);
+      
+      ctx.restore();
+    }
+
+    // Dot on the chart line (always visible)
     ctx.save();
     ctx.beginPath();
-    ctx.setLineDash([2, 3]);
-    ctx.strokeStyle = color;
-    ctx.moveTo(x, y);
-    ctx.lineTo(x, isBuy ? boxY : boxY + boxHeight);
-    ctx.stroke();
-    ctx.restore();
-
-    // Dot on the chart line
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.arc(x, y, isHovered ? 6 : 4, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
     ctx.strokeStyle = "#ffffff";
     ctx.stroke();
-    ctx.restore();
-
-    // Box Shadow and Background
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.08)";
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 2;
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 6);
-    else ctx.rect(boxX, boxY, boxWidth, boxHeight);
-    ctx.fill();
-    ctx.restore();
-
-    // Box Border
-    ctx.save();
-    ctx.strokeStyle = "#e5e7eb";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 6);
-    else ctx.rect(boxX, boxY, boxWidth, boxHeight);
-    ctx.stroke();
-    ctx.restore();
-
-    // Icon square inside box
-    const iconSize = 16;
-    const padding = 8;
-    const iconX = boxX + padding;
-    const iconY = boxY + padding;
-    
-    ctx.save();
-    ctx.fillStyle = color + "1a"; // 10% opacity background
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(iconX, iconY, iconSize, iconSize, 4);
-    else ctx.rect(iconX, iconY, iconSize, iconSize);
-    ctx.fill();
-    ctx.stroke();
-    
-    // Icon Text (B / S / P)
-    ctx.fillStyle = color;
-    ctx.font = "bold 10px Inter, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, iconX + iconSize / 2, iconY + iconSize / 2 + 1);
-
-    // Price Text
-    ctx.fillStyle = "#111827";
-    ctx.font = "bold 12px Inter, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(`₹${tradePrice.toFixed(2)}`, iconX + iconSize + 6, iconY + iconSize / 2 + 1);
-
-    // Time Text
-    const timeStr = new Date(tradeTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
-    ctx.fillStyle = "#6b7280";
-    ctx.font = "500 10px Inter, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(timeStr, boxX + boxWidth / 2, iconY + iconSize + 12);
-    
     ctx.restore();
   });
 
@@ -558,14 +564,23 @@ type LinePoint = {
   y: number; // price
 };
 
+type IndicatorSeries = {
+  key: string;
+  label: string;
+  color: string;
+  width?: number;
+  values: { x: string | number; y: number }[];
+};
+
 interface Props {
   lineData: LinePoint[];
   timeframe: string;
   referencePrice?: number | null;
-  marketState:string;
-  percent:string
-  trades:Trade[]
-  pendingSL?: any[]
+  marketState: string;
+  percent: string;
+  trades: Trade[];
+  pendingSL?: any[];
+  indicatorSeries?: IndicatorSeries[];
 }
 
 /* =========================
@@ -644,7 +659,7 @@ export function GraphSkeleton() {
 
 
 
-export  function StockChartIndia({
+export function StockChartIndia({
   lineData,
   timeframe,
   marketState,
@@ -654,161 +669,145 @@ export  function StockChartIndia({
   pendingSL
 }: Props) {
   if (!lineData.length) return null;
-// const today = new Date();
-function getNseMarketWindowIST(anchorTs: number) {
-  const d = new Date(anchorTs);
 
-  // All lineData x-values have already been shifted +5.5h in StokesPageSSE
-  // (e.g. 9:15 IST lives at the UTC timestamp for 9:15 "UTC").
-  // So use the IST clock hours directly here to match that convention.
-  return {
-    marketOpen: Date.UTC(
-      d.getUTCFullYear(),
-      d.getUTCMonth(),
-      d.getUTCDate(),
-      9, 15, 0   // 09:15 IST stored as 09:15 UTC (data is pre-shifted)
-    ),
-    marketClose: Date.UTC(
-      d.getUTCFullYear(),
-      d.getUTCMonth(),
-      d.getUTCDate(),
-      15, 30, 0  // 15:30 IST stored as 15:30 UTC (data is pre-shifted)
-    )
-  };
-}
+  function getNseMarketWindowIST(anchorTs: number) {
+    const d = new Date(anchorTs);
 
-const lastCandleTs = lineData[lineData.length - 1].x;
-const maxTradeTs = trades.length ? Math.max(...trades.map(t => new Date(t.createdAtIST).getTime())) : 0;
-const chartMax = Math.max(lastCandleTs, maxTradeTs);
+    return {
+      marketOpen: Date.UTC(
+        d.getUTCFullYear(),
+        d.getUTCMonth(),
+        d.getUTCDate(),
+        9, 15, 0
+      ),
+      marketClose: Date.UTC(
+        d.getUTCFullYear(),
+        d.getUTCMonth(),
+        d.getUTCDate(),
+        15, 30, 0
+      )
+    };
+  }
 
-const { marketOpen, marketClose } = getNseMarketWindowIST(lastCandleTs);
-const finalMarketClose = Math.max(marketClose, chartMax);
+  const lastCandleTs = lineData.length ? lineData[lineData.length - 1].x : Date.now();
+  const validTradeTimestamps = trades
+    .map(t => typeof t.createdAtIST === 'number' ? t.createdAtIST : new Date(t.createdAtIST).getTime())
+    .filter(t => !isNaN(t));
+  const maxTradeTs = validTradeTimestamps.length ? Math.max(...validTradeTimestamps) : 0;
+  const chartMax = Math.max(lastCandleTs, maxTradeTs);
 
+  const { marketOpen, marketClose } = getNseMarketWindowIST(lastCandleTs);
+  const finalMarketClose = Math.max(marketClose, chartMax);
 
-// positions.created_at is now set with NOW() — pure UTC.
-const tradePoints = trades.map(t => {
-  const ts = t.createdAtIST;
-  return {
-    x: typeof ts === 'number' ? ts : new Date(ts).getTime(),
-    y: t.pricePerShare,
-    side: t.side,
-    quantity: t.quantity
-  };
-});
-
-
-
-
-
+  const tradePoints = trades
+    .map(t => {
+      const ts = typeof t.createdAtIST === 'number' ? t.createdAtIST : new Date(t.createdAtIST).getTime();
+      return {
+        x: isNaN(ts) ? Date.now() : ts,
+        y: Number(t.pricePerShare) || 0,
+        side: t.side,
+        quantity: t.quantity || 1
+      };
+    })
+    .filter(t => !isNaN(t.x) && !isNaN(t.y));
 
   currentIndex = lineData.length - 1;
   const is1D = timeframe === "1D";
 
-// Include trade prices in the scale so markers aren't cut off vertically
-const allVisiblePrices = [...lineData.map(d => d.y)];
-trades.forEach(t => {
-  const ts = typeof t.createdAtIST === 'number' ? t.createdAtIST : new Date(t.createdAtIST).getTime();
-  // Only include trade prices if they are within or near the current time range
-  if (ts >= marketOpen && ts <= finalMarketClose) {
-    allVisiblePrices.push(t.pricePerShare);
-  }
-});
+  // Include trade prices in the scale so markers aren't cut off vertically
+  const allVisiblePrices: number[] = lineData.map(d => d.y).filter(y => y != null && !isNaN(y));
+  trades.forEach(t => {
+    const ts = typeof t.createdAtIST === 'number' ? t.createdAtIST : new Date(t.createdAtIST).getTime();
+    if (!isNaN(ts) && ts >= marketOpen && ts <= finalMarketClose && t.pricePerShare != null && !isNaN(t.pricePerShare)) {
+      allVisiblePrices.push(Number(t.pricePerShare));
+    }
+  });
 
-const minPrice = Math.min(...allVisiblePrices);
-const maxPrice = Math.max(...allVisiblePrices);
-const pad = (maxPrice - minPrice) * 0.12 || minPrice * 0.005;
-  const isMarketOpen=marketState==="REGULAR"
-  const [lineColor,setLineColor]=useState("")
+  if (!allVisiblePrices.length) allVisiblePrices.push(100);
+
+  const minPriceFinal = Math.min(...allVisiblePrices);
+  const maxPriceFinal = Math.max(...allVisiblePrices);
+  const pad = (maxPriceFinal - minPriceFinal) * 0.12 || minPriceFinal * 0.005 || 1;
+  const isMarketOpen = marketState === "REGULAR";
+  const [lineColor, setLineColor] = useState("");
   useEffect(() => {
-  const pct = Number(percent) || 0;
+    const pct = Number(percent) || 0;
 
-  setLineColor(
-    pct > 0 ? "#00b386" :
-    pct < 0 ? "#f76767" :
-    "#9ca3af"
-  );
-}, [timeframe, percent]);
+    setLineColor(
+      pct > 0 ? "#00b386" :
+      pct < 0 ? "#f76767" :
+      "#9ca3af"
+    );
+  }, [timeframe, percent]);
 
+  const chartData = lineData.filter(d => !isNaN(d.x) && !isNaN(d.y));
+  currentIndex = chartData.length - 1;
 
-
-
-const chartData = lineData;
-currentIndex = chartData.length - 1;
-
-  
-
- return (
-  <div className="chart-container">
-    {chartData.length ? (
-      <Chart
-        key={`${timeframe}-${marketState}`}
-
-        type="line"
-        data={{
-    datasets: [
-  {
-    data: chartData,
-    borderColor: lineColor,
-    borderWidth: 3,
-    pointRadius: 0,
-    tension: 0.05,
-    parsing: false
-  }
-]
-
-  }}
-        options={{
-          animation:false,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: { enabled: false },
-            growwPlugin: { 
-              timeframe, 
-              referencePrice: referencePrice??0, 
-              trades: tradePoints,
-              pendingSL: pendingSL || []
-            }
-          } as any,
-          interaction: {
-            intersect: false,
-            mode: "index"
-          },
-          scales: {
-            x: is1D && isMarketOpen ? {
-            type: "linear",
-            display: false,
-            min: marketOpen,
-            max: finalMarketClose,
-            ticks: {
-              stepSize: 60
-            }
-              }:{
-              type: "timeseries",
-              display: false,
-
-              min:  undefined,
-              max:  finalMarketClose > lastCandleTs ? finalMarketClose : undefined,
-
-              time: {
-                unit: is1D ? "minute" : "day",
-                tooltipFormat: is1D ? "HH:mm" : "dd MMM"
+  return (
+    <div className="chart-container" style={{ height: "100%", width: "100%", position: "relative" }}>
+      {chartData.length ? (
+        <Chart
+          key={`${timeframe}-${marketState}`}
+          type="line"
+          data={{
+            datasets: [
+              {
+                data: chartData,
+                borderColor: lineColor,
+                borderWidth: 3,
+                pointRadius: 0,
+                tension: 0.05,
+                parsing: false
               }
+            ]
+          }}
+          options={{
+            animation: false,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { enabled: false },
+              growwPlugin: { 
+                timeframe, 
+                referencePrice: referencePrice ?? 0, 
+                trades: tradePoints,
+                pendingSL: pendingSL || []
+              }
+            } as any,
+            interaction: {
+              intersect: false,
+              mode: "index"
             },
-
-
-            y: {
-              display: false,
-              min: minPrice - pad,
-              max: maxPrice + pad
+            scales: {
+              x: is1D && isMarketOpen ? {
+                type: "linear",
+                display: false,
+                min: marketOpen,
+                max: finalMarketClose,
+                ticks: {
+                  stepSize: 60
+                }
+              } : {
+                type: "timeseries",
+                display: false,
+                min: undefined,
+                max: finalMarketClose > lastCandleTs ? finalMarketClose : undefined,
+                time: {
+                  unit: is1D ? "minute" : "day",
+                  tooltipFormat: is1D ? "HH:mm" : "dd MMM"
+                }
+              },
+              y: {
+                display: false,
+                min: minPriceFinal - pad,
+                max: maxPriceFinal + pad
+              }
             }
-          }
-        }}
-      />
-    ) : (
-      <div className="chart-empty">No data available</div>
-    )}
-  </div>
-);
-
+          }}
+        />
+      ) : (
+        <div className="chart-empty">No data available</div>
+      )}
+    </div>
+  );
 }

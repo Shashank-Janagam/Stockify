@@ -1,24 +1,23 @@
 import express from "express";
 import { getDb } from "../../db/mongo.js";
 import requireAuth from "../../Middleware/requireAuth.js";
+import { incrementStockPopularity } from "./stockSearchEngine.js";
+
 const router = express.Router();
 
-router.post("/hit", requireAuth,async (req, res) => {
-  const { symbol ,name} = req.body;
-  const userId=req.user.uid
-
+router.post("/hit", requireAuth, async (req, res) => {
+  const { symbol, name } = req.body;
+  const userId = req.user.uid;
 
   if (!symbol || !name) return res.sendStatus(400);
 
-
   const db = getDb();
   const stocks = db.collection("stocks");
-  const users=db.collection("users")
+  const users = db.collection("users");
 
-  await stocks.updateOne(
-    { symbol },
-    { $inc: { popularity: 1 } }
-  );
+  // Update in MongoDB and in-memory search engine
+  await incrementStockPopularity(symbol);
+
 console.log("updating users reccent ")
 /* =========================
      2️⃣ REMOVE DUPLICATE (KEY FIX)
