@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import StockHeader from "../components/stocks/StockHeader";
+import ConstituentsContainer from "../components/stocks/ConstituentsContainer";
 import { StockChartIndia, GraphSkeleton } from "../components/charts/StocksChartIndia";
 import TimeframeBar from "../components/charts/TimeframeBar";
 import OrderPanel from "../components/stocks/OrderPanel";
@@ -102,7 +103,36 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
   if (!symbol) return null;
 
-  const isIndex = ["^NSEI", "^BSESN", "^NSEBANK", "^CNXMIDCAP", "NIFTY_FIN_SERVICE.NS"].includes(symbol.toUpperCase());
+  const symUpper = symbol.toUpperCase();
+  const isIndex =
+    ["^NSEI", "^BSESN", "^NSEBANK", "^CNXIT", "^CNXFIN", "^CRSMID", "^CNXMIDCAP", "NIFTY_FIN_SERVICE.NS", "NIFTY_MIDCAP_100.NS"].includes(symUpper) ||
+    symUpper.startsWith("^");
+
+  const isFund =
+    !isIndex &&
+    (symUpper.includes("BEES") ||
+      symUpper.includes("ETF") ||
+      symUpper.includes("FUND") ||
+      symUpper.includes("IETF") ||
+      [
+        "NIFTYBEES",
+        "BANKBEES",
+        "GOLDBEES",
+        "SILVERBEES",
+        "SMALLIETF",
+        "SETFNIF50",
+        "NIFTYAXIS",
+        "GOLDAXIS",
+        "BANKNIFTY1",
+        "MIDCAP",
+        "CPSEETF",
+        "AUTOBEES",
+        "PHARMABEES",
+        "ITBEES",
+        "JUNIORBEES",
+        "MON100",
+        "LIQUIDBEES",
+      ].includes(symUpper.replace(/\.(NS|BO)$/, "")));
 
 
 
@@ -621,8 +651,18 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
           </div>
         )}
 
-        {!isIndex && <StockSectorAlerts symbol={symbol} />}
-        {!isIndex && <StockPerformance quote={quote} />}
+        {/* ── CONSTITUENT STOCKS / HOLDINGS (For Indices & Mutual Funds/ETFs) ── */}
+        {(isIndex || isFund) && (
+          <ConstituentsContainer
+            symbol={symbol}
+            companyName={companyName}
+            isIndex={isIndex}
+            isFund={isFund}
+          />
+        )}
+
+        {!isIndex && !isFund && <StockSectorAlerts symbol={symbol} />}
+        {!isIndex && !isFund && <StockPerformance quote={quote} />}
         {!isIndex && <CompanyProfile symbol={symbol} companyName={companyName} />}
 
       </div>

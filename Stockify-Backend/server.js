@@ -8,6 +8,7 @@ import cookieParser from "cookie-parser";
 import { connectMongo } from "./db/mongo.js";
 import { WebSocketManager } from "./modules/websocket/wsManager.js";
 import { upstoxFeedService } from "./modules/websocket/upstoxFeed.service.js";
+import { initStockSearchEngine } from "./modules/Search/stockSearchEngine.js";
 
 import indiaLiveRoutes from "./modules/stocks/indiaLive.routes.js"
 import searchResults from "./modules/Search/searchResults.js";
@@ -27,6 +28,9 @@ import newsRoutes from "./modules/news/news.routes.js";
 import userRoutes from "./modules/user/user.routes.js";
 import sectorAlertsRoutes from "./modules/sectorAlerts/sectorAlerts.routes.js";
 import algoRoutes from "./modules/algo/algo.routes.js";
+import paperbullRoutes from "./modules/paperbull/paperbull.routes.js";
+import { spawn } from "child_process";
+import path from "path";
 import { initTelegramBot } from "./modules/telegram/bot.js";
 
 import login from "./Middleware/login.js"
@@ -77,6 +81,92 @@ app.use("/api/news", newsRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/sectorAlerts", sectorAlertsRoutes);
 app.use("/api/algo", algoRoutes);
+app.use("/api/paperbull", paperbullRoutes);
+
+// --- ALGO TRADING & BACKTEST APIS ---
+app.get("/api/algo/capabilities", async (req, res) => {
+  try {
+    const pythonApiUrl = process.env.VITE_PYTHON_API_URL || "http://127.0.0.1:5001";
+    const response = await fetch(`${pythonApiUrl}/schema/capabilities`);
+    const data = await response.json();
+    return res.json(data);
+  } catch (err) {
+    console.error("Failed to fetch algo capabilities:", err);
+    return res.status(500).json({ error: "Failed to connect to backtest engine", details: err.message });
+  }
+});
+
+app.post("/api/algo/indicators/preview", async (req, res) => {
+  try {
+    const pythonApiUrl = process.env.VITE_PYTHON_API_URL || "http://127.0.0.1:5001";
+    const response = await fetch(`${pythonApiUrl}/indicators/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    return res.json(data);
+  } catch (err) {
+    console.error("Failed to preview indicator:", err);
+    return res.status(500).json({ error: "Failed to connect to backtest engine", details: err.message });
+  }
+});
+
+app.post("/api/algo/backtest", async (req, res) => {
+  const { symbol, period, strategy, config, strategy_config, start_date, end_date } = req.body;
+  if (!symbol) return res.status(400).json({ error: "Missing symbol" });
+  
+  try {
+    const pythonApiUrl = process.env.VITE_PYTHON_API_URL || "http://127.0.0.1:5001";
+    const response = await fetch(`${pythonApiUrl}/backtest`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ symbol, period, strategy, config, strategy_config, start_date, end_date })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Python backtest API returned status ${response.status}:`, errorText);
+      return res.status(response.status).json({ error: "Backtest API error", details: errorText });
+    }
+
+    const data = await response.json();
+    return res.json(data);
+  } catch (err) {
+    console.error("Failed to call Python backtest API:", err);
+    return res.status(500).json({ error: "Failed to connect to backtest engine", details: err.message });
+  }
+});
+
+app.post("/api/algo/backtest/all", async (req, res) => {
+  const { symbol, period, start_date, end_date } = req.body;
+  if (!symbol) return res.status(400).json({ error: "Missing symbol" });
+  
+  try {
+    const pythonApiUrl = process.env.VITE_PYTHON_API_URL || "http://127.0.0.1:5001";
+    const response = await fetch(`${pythonApiUrl}/backtest/all`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ symbol, period, start_date, end_date })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Python backtest/all API returned status ${response.status}:`, errorText);
+      return res.status(response.status).json({ error: "Backtest API error", details: errorText });
+    }
+
+    const data = await response.json();
+    return res.json(data);
+  } catch (err) {
+    console.error("Failed to call Python backtest/all API:", err);
+    return res.status(500).json({ error: "Failed to connect to backtest engine", details: err.message });
+  }
+});
 
 // app.use("/api/stocks",indiaReplay);
 
@@ -88,6 +178,7 @@ const wsManager = { current: null };
 async function startServer() {
   try {
     await connectMongo();
+    await initStockSearchEngine();
 
     upstoxFeedService.connect();
     const server = http.createServer(app);

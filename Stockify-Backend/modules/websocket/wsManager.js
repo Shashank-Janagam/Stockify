@@ -37,8 +37,8 @@ export  class WebSocketManager {
       { symbol: "^NSEI",             label: "NIFTY 50" },
       { symbol: "^BSESN",            label: "SENSEX" },
       { symbol: "^NSEBANK",          label: "BANKNIFTY" },
-      { symbol: "NIFTY_MIDCAP_100.NS", label: "MIDCPNIFTY" },
-      { symbol: "NIFTY_FIN_SERVICE.NS", label: "FINNIFTY" },
+      { symbol: "^CNXIT",            label: "NIFTY IT" },
+      { symbol: "^CNXFIN",           label: "FINNIFTY" },
     ];
 
     try {

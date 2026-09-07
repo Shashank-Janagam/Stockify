@@ -1,0 +1,47 @@
+{
+  "name": "Kotak_VWAP_RSI",
+  "description": "VWAP Crossover with RSI confirmation tuned for KOTAKBANK",
+  "indicators": [
+    {
+      "name": "VWAP",
+      "key": "vwap",
+      "params": {
+        "reset_daily": true
+      }
+    },
+    {
+      "name": "RSI",
+      "key": "rsi",
+      "params": {
+        "period": 14
+      }
+    }
+  ],
+  "entry": {
+    "type": "AND",
+    "conditions": [
+      {
+        "type": "CrossAbove",
+        "args": ["close", "vwap"]
+      },
+      {
+        "type": "GreaterThan",
+        "args": ["rsi", 45]
+      }
+    ]
+  },
+  "exit": {
+    "type": "OR",
+    "conditions": [
+      {
+        "type": "CrossBelow",
+        "args": ["close", "vwap"]
+      },
+      {
+        "type": "GreaterThan",
+        "args": ["rsi", 75]
+      }
+    ]
+  },
+  "stop_loss_pct": 2.0
+}

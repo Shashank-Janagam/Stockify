@@ -22,7 +22,6 @@ import Layer8_DailyDigest        from "../components/portfolio/Layer8_DailyDiges
 import HoldingsPage  from "../components/portfolio/HoldingsPage";
 import PositionsPage from "../components/portfolio/PositionsPage";
 import OrderHistory  from "../components/portfolio/OrderHistory";
-import AlgoDashboard from "../components/portfolio/AlgoDashboard";
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -64,7 +63,7 @@ type Order = {
   updated_at_ist?: string | null;
 };
 
-type Tab = "overview" | "holdings" | "positions" | "orders" | "algo";
+type Tab = "overview" | "holdings" | "positions" | "orders";
 const TIME_RANGES = ["1W","1M","6M","1Y","ALL"] as const;
 
 const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
@@ -109,7 +108,7 @@ const PortfolioInner = () => {
 
   useEffect(() => {
     const tabParam = searchParams.get("tab") as Tab;
-    if (tabParam && ["overview", "holdings", "positions", "orders", "algo"].includes(tabParam)) {
+    if (tabParam && ["overview", "holdings", "positions", "orders"].includes(tabParam)) {
       setTab(tabParam);
     }
   }, [searchParams]);
@@ -269,7 +268,6 @@ const PortfolioInner = () => {
   const tabCounts: Record<Tab, number | undefined> = {
     overview:  undefined, holdings: holdings.length,
     positions: undefined, orders:   orders.length,
-    algo:      undefined,
   };
 
   /* ── Layer section renderer ── */
@@ -457,11 +455,10 @@ const PortfolioInner = () => {
 
         {/* Tab Nav */}
         <div className="pc-tab-nav">
-          {(["overview","holdings","positions","orders","algo"] as Tab[]).map(t => {
+          {(["overview","holdings","positions","orders"] as Tab[]).map(t => {
             const labels: Record<Tab,string> = {
               overview: "Overview", holdings: "Holdings",
               positions: "Positions", orders: "Orders",
-              algo: "⚡ Streaming Algo",
             };
             return (
               <button key={t}
@@ -484,7 +481,6 @@ const PortfolioInner = () => {
         {tab === "holdings"  && <div className="pc-layer"><div className="pc-layer-body" style={{ padding: 0 }}><HoldingsPage /></div></div>}
         {tab === "positions" && <div className="pc-layer"><div className="pc-layer-body" style={{ padding: 0 }}><PositionsPage /></div></div>}
         {tab === "orders"    && <div className="pc-layer"><div className="pc-layer-body" style={{ padding: 0 }}><OrderHistory /></div></div>}
-        {tab === "algo"      && <div className="pc-layer"><div className="pc-layer-body" style={{ padding: 0 }}><AlgoDashboard /></div></div>}
 
         {tab === "overview" && (
           <>

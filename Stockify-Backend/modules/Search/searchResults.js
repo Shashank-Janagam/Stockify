@@ -1,72 +1,61 @@
 import express from "express";
-import { getDb } from "../../db/mongo.js";
-import { yahooSearch } from "./yahooSearch.js";
+import { searchStocks } from "./stockSearchEngine.js";
 import redis from "../../cache/redisClient.js";
 
 const router = express.Router();
 
 // TTL for search cache (seconds)
-const SEARCH_CACHE_TTL = 60 * 10; // 10 minutes
+const SEARCH_CACHE_TTL = 60 * 5; // 5 minutes
 
 router.get("/search", async (req, res) => {
   try {
-    const q = (req.query.q || "").toLowerCase().trim();
-    if (q.length < 2) return res.json([]);
+    const q = (req.query.q || "").trim();
+    const category = req.query.category || "All";
+    const limit = parseInt(req.query.limit) || 15;
 
-    const redisKey = `search:${q}`;
+    if (q.length < 1) {
+      return res.json({ results: [], didYouMean: null, total: 0, query: q });
+    }
+
+    const redisKey = `search:${category}:${q.toLowerCase()}`;
 
     /* =========================
        1️⃣ REDIS CACHE (FASTEST)
     ========================= */
-    const cached = await redis.get(redisKey);
-    if (cached) {
-      return res.json(JSON.parse(cached));
+    try {
+      const cached = await redis.get(redisKey);
+      if (cached) {
+        return res.json(JSON.parse(cached));
+      }
+    } catch (e) {
+      // Redis error ignore safely
     }
 
+    /* ==============================================
+       2️⃣ HIGH SPEED TYPO-TOLERANT SEARCH ENGINE
+    ============================================== */
+    const searchResponse = searchStocks(q, { category, limit });
+
     /* =========================
-       2️⃣ MONGODB
+       3️⃣ CACHE TO REDIS
     ========================= */
-    const db = getDb();
-    const stocks = db.collection("stocks");
-
-    const mongoResults = await stocks
-      .find({
-        $or: [
-          { symbol: { $regex: `^${q}`, $options: "i" } },
-          { name: { $regex: q, $options: "i" } }
-        ]
-      })
-      .sort({ popularity: -1 })
-      .limit(10)
-      .toArray();
-
-    if (mongoResults.length) {
+    try {
       await redis.set(
         redisKey,
-        JSON.stringify(mongoResults),
+        JSON.stringify(searchResponse),
         "EX",
         SEARCH_CACHE_TTL
       );
-      return res.json(mongoResults);
+    } catch (e) {
+      // Redis error ignore safely
     }
 
-    /* =========================
-       3️⃣ YAHOO FALLBACK
-    ========================= */
-    const yahooResults = await yahooSearch(q);
-
-    await redis.set(
-      redisKey,
-      JSON.stringify(yahooResults),
-      "EX",
-      SEARCH_CACHE_TTL
-    );
-
-    return res.json(yahooResults);
+    return res.json(searchResponse);
   } catch (err) {
     console.error("Search error:", err);
-    res.status(500).json({ message: "Search failed" });
+    res.status(500).json({ message: "Search failed", results: [], didYouMean: null });
   }
 });
 
 export default router;
+

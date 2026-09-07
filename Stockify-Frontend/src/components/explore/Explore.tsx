@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { useContext, useState, useMemo, useEffect, useCallback, useRef } from "react";
-import paperbulllogo from "../../assets/imageinv.png";
+import { useContext, useState, useMemo, useEffect, useRef } from "react";
+import StockLogo from "../common/StockLogo";
 import { useExploreSSE } from "../../context/ExploreSSEContext";
 import { AuthContext } from "../../auth/AuthProvider";
 import { useWebSocket } from "../../context/WebSocketContext";
@@ -380,14 +380,6 @@ export default function Explore() {
       .finally(() => setNewsLoading(false));
   }, [PYTHON_HOST]);
 
-  // Image resolver
-  const images = import.meta.glob("../../assets/*.{png,jpg,jpeg,svg,webp}", { eager: true });
-  const getImageSrc = useCallback((symbol: string): string => {
-    const name = symbol.replace(".NS", "");
-    const match = Object.keys(images).find(p => p.includes(`/${name}.`));
-    return match ? (images[match] as any).default : (images["../../assets/imageinv.png"] as any).default;
-  }, []);
-
   const handleStockClick = (stock: any) => navigate(getStockRoute(stock.symbol, stock.name));
 
   const portfolioStats = useMemo(() => ({
@@ -490,10 +482,11 @@ export default function Explore() {
             </div>
 
             <div className="mkt-price-row" key={activeCfg.key} style={{ display: 'flex', alignItems: 'center', gap: '14px', animation: 'slideFadeRight 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
-              <img 
-                src={new URL(getImageSrc(activeCfg.symbol), import.meta.url).href} 
-                alt={activeCfg.label}
+              <StockLogo 
+                symbol={activeCfg.symbol} 
+                className="mkt-index-logo"
                 style={{ width: '44px', height: '44px', borderRadius: '12px', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}
+                fallbackToAvatar={false}
               />
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
                 <span className="mkt-price-val">
@@ -552,9 +545,7 @@ export default function Explore() {
                     <td className="db2-rank">{idx + 1}</td>
                     <td>
                       <div className="db2-co-cell">
-                        <img src={new URL(getImageSrc(m.symbol), import.meta.url).href}
-                          onError={(e) => (e.currentTarget.src = paperbulllogo)}
-                          alt={m.name} className="db2-co-logo" />
+                        <StockLogo symbol={m.symbol} name={m.name} className="db2-co-logo" fallbackToAvatar={false} />
                         <div>
                           <div className="db2-co-name">{toTitleCase(m.name)}</div>
                           <div className="db2-co-sym">{m.symbol.replace(".NS", "")}</div>
@@ -652,11 +643,11 @@ export default function Explore() {
                     title={`Open ${followedData[safeFollowIdx].symbol.replace('.NS', '')} stock page`}
                   >
                     <div className="mkt-price-row" key={followedData[safeFollowIdx].symbol} style={{ display: 'flex', alignItems: 'center', gap: '14px', animation: 'slideFadeRight 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
-                      <img 
-                        src={new URL(getImageSrc(followedData[safeFollowIdx].symbol), import.meta.url).href} 
-                        alt={followedData[safeFollowIdx].symbol}
+                      <StockLogo 
+                        symbol={followedData[safeFollowIdx].symbol} 
+                        className="db2-follow-logo"
                         style={{ width: '44px', height: '44px', borderRadius: '12px', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}
-                        onError={(e) => (e.currentTarget.src = paperbulllogo)}
+                        fallbackToAvatar={false}
                       />
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
                         <span className="mkt-price-val">
@@ -702,9 +693,7 @@ export default function Explore() {
                 const chg = Math.abs(price - price / (1 + pct / 100)).toFixed(2);
                 return (
                   <div key={s.symbol} className="db2-traded-row" onClick={() => handleStockClick(s)}>
-                    <img src={new URL(getImageSrc(s.symbol), import.meta.url).href}
-                      onError={(e) => (e.currentTarget.src = paperbulllogo)}
-                      alt={s.name} className="db2-traded-logo" />
+                    <StockLogo symbol={s.symbol} name={s.name} className="db2-traded-logo" fallbackToAvatar={false} />
                     <div className="db2-traded-info">
                       <span className="db2-traded-name">{toTitleCase(s.name)}</span>
                       <span className="db2-traded-sym">{s.symbol.replace(".NS", "")}</span>
@@ -793,9 +782,7 @@ export default function Explore() {
                     const pct = h.percent || 0;
                     return (
                       <div key={h.symbol} className="db2-pf-row" onClick={() => handleStockClick(h)}>
-                        <img src={new URL(getImageSrc(h.symbol), import.meta.url).href}
-                          onError={(e) => (e.currentTarget.src = paperbulllogo)}
-                          alt={h.name} className="db2-pf-logo" />
+                        <StockLogo symbol={h.symbol} name={h.name} className="db2-pf-logo" fallbackToAvatar={false} />
                         <div className="db2-pf-info">
                           <span className="db2-pf-name">{toTitleCase((h.name || "").split(" ").slice(0, 2).join(" "))} LTD</span>
                           <span className="db2-pf-val-inv">₹{(h.current || h.price || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>

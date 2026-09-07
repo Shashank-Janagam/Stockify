@@ -8,6 +8,8 @@ import { resolveStockProfile, getSimilarStocks } from "./profileResolver.js";
 
 const router = express.Router();
 import { db } from "../../db/sql.js";
+import { getDb } from "../../db/mongo.js";
+import requireAuth from "../../Middleware/requireAuth.js";
 
 router.get("/list", async (req, res) => {
   try {
@@ -76,10 +78,10 @@ router.get("/:symbol/history", async (req, res) => {
 
   try {
     const data = await getYahooIndiaHistory(symbol, days);
-    res.json(data);
+    res.json(data || []);
   } catch (err) {
-    console.log("Market closed------------------")
-    res.status(500).json({ error: "Failed to fetch history" });
+    console.warn(`[IndiaLiveHistory] Could not fetch history for ${symbol}:`, err.message);
+    res.json([]);
   }
 });
 router.get("/:symbol/quote", async (req, res) => {
@@ -123,6 +125,70 @@ router.get("/:symbol/similar", async (req, res) => {
   } catch (err) {
     console.error("Similar endpoint error:", err);
     res.status(500).json({ error: "Failed to retrieve similar stocks" });
+  }
+});
+
+// ── GET FOLLOW STATUS (Supports Stocks & Indices) ──
+router.get("/:symbol/follow-status", requireAuth, async (req, res) => {
+  try {
+    const rawSymbol = req.params.symbol;
+    if (!rawSymbol) return res.status(400).json({ error: "Symbol is required" });
+
+    const cleanSymbol = rawSymbol.trim().toUpperCase();
+    const userId = req.user?.uid;
+
+    const dbMongo = getDb();
+    const users = dbMongo.collection("users");
+
+    const user = await users.findOne({ _id: userId }, { projection: { followedStocks: 1 } });
+    const isFollowed = (user?.followedStocks || []).some(
+      s => s.symbol === cleanSymbol || s.symbol === cleanSymbol.replace(/\.NS$/, "")
+    );
+
+    res.json({ isFollowed, isFollowing: isFollowed });
+  } catch (err) {
+    console.error("Check follow status error:", err);
+    res.status(500).json({ error: "Failed to check follow status" });
+  }
+});
+
+// ── TOGGLE FOLLOW (Supports Stocks & Indices) ──
+router.post("/:symbol/follow", requireAuth, async (req, res) => {
+  try {
+    const rawSymbol = req.params.symbol;
+    if (!rawSymbol) return res.status(400).json({ error: "Symbol is required" });
+
+    const cleanSymbol = rawSymbol.trim().toUpperCase();
+    const name = req.body?.name || cleanSymbol;
+    const userId = req.user?.uid;
+
+    const dbMongo = getDb();
+    const users = dbMongo.collection("users");
+
+    const user = await users.findOne({ _id: userId }, { projection: { followedStocks: 1 } });
+    const isFollowed = (user?.followedStocks || []).some(
+      s => s.symbol === cleanSymbol || s.symbol === cleanSymbol.replace(/\.NS$/, "")
+    );
+
+    if (isFollowed) {
+      // Unfollow
+      await users.updateOne(
+        { _id: userId },
+        { $pull: { followedStocks: { symbol: { $in: [cleanSymbol, cleanSymbol.replace(/\.NS$/, "")] } } } }
+      );
+      res.json({ success: true, isFollowed: false, isFollowing: false });
+    } else {
+      // Follow
+      await users.updateOne(
+        { _id: userId },
+        { $push: { followedStocks: { symbol: cleanSymbol, name, followedAt: new Date() } } },
+        { upsert: true }
+      );
+      res.json({ success: true, isFollowed: true, isFollowing: true });
+    }
+  } catch (err) {
+    console.error("Toggle follow error:", err);
+    res.status(500).json({ error: "Failed to toggle follow status" });
   }
 });
 
