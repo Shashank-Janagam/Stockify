@@ -75,10 +75,22 @@ def create_app():
         mcp_mount_path = "/"
         print("[Transport] Fallback: Using legacy SSE transport at /sse", flush=True)
 
+    import contextlib
+
+    @contextlib.asynccontextmanager
+    async def app_lifespan(app_instance):
+        # Propagate lifespan to the nested MCP app so its internal task groups initialize
+        if hasattr(mcp_app, "router") and hasattr(mcp_app.router, "lifespan_context"):
+            async with mcp_app.router.lifespan_context(mcp_app):
+                yield
+        else:
+            yield
+
     # Build the top-level Starlette app.
     # IMPORTANT: Starlette matches routes IN ORDER — specific routes MUST come
     # before Mount(), otherwise Mount("/") swallows everything.
     app = Starlette(
+        lifespan=app_lifespan,
         routes=[
             # Health & root endpoints (matched before mount)
             Route("/health", health_handler, methods=["GET"]),
