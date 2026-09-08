@@ -232,14 +232,20 @@ const LOGO_MEMORY_CACHE = new Map<string, string>();
 export function getCachedLogo(symbol: string): string | null {
   if (!symbol) return null;
   const clean = symbol.replace(/\.(NS|BO)$/, "").replace(/^NSE_EQ\|/, "").trim().toUpperCase();
+  
   if (LOGO_MEMORY_CACHE.has(clean)) {
-    return LOGO_MEMORY_CACHE.get(clean)!;
+    const memUrl = LOGO_MEMORY_CACHE.get(clean)!;
+    if (memUrl.startsWith(AZURE_BLOB_BASE)) return memUrl;
   }
+  
   try {
     const stored = localStorage.getItem(`pb_logo_${clean}`);
-    if (stored) {
+    if (stored && stored.startsWith(AZURE_BLOB_BASE)) {
       LOGO_MEMORY_CACHE.set(clean, stored);
       return stored;
+    } else if (stored) {
+      // Invalidate old localhost/google cached URLs
+      localStorage.removeItem(`pb_logo_${clean}`);
     }
   } catch (_) {}
   return null;
@@ -267,7 +273,7 @@ export function setCachedLogo(symbol: string, url: string): void {
  * 5. Dynamic Website Domain (if provided from profile)
  * 6. Azure Blob general fallback
  */
-export function getStockLogoCandidates(symbol: string, domainOrName?: string): string[] {
+export function getStockLogoCandidates(symbol: string, _domainOrName?: string): string[] {
   if (!symbol) return [];
   const clean = symbol
     .replace(".NS", "")
@@ -295,25 +301,7 @@ export function getStockLogoCandidates(symbol: string, domainOrName?: string): s
     }
   }
 
-  // 4. "Go Out" - Verified High-Resolution Google Favicon (128px) via Curated Domains
-  const mappedDomain = COMPANY_DOMAINS[clean] || COMPANY_DOMAINS[clean.replace(/[^A-Z0-9]/g, "")];
-  if (mappedDomain) {
-    const googleUrl = `https://www.google.com/s2/favicons?domain=${mappedDomain}&sz=128`;
-    if (!candidates.includes(googleUrl)) {
-      candidates.push(googleUrl);
-    }
-  }
-
-  // 5. Dynamic Website Domain (if provided from profile/company name)
-  if (domainOrName) {
-    const raw = domainOrName.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
-    if (raw.includes(".") && !raw.includes(" ")) {
-      const dynamicGoogleUrl = `https://www.google.com/s2/favicons?domain=${raw}&sz=128`;
-      if (!candidates.includes(dynamicGoogleUrl)) {
-        candidates.push(dynamicGoogleUrl);
-      }
-    }
-  }
+  // Removed Google favicon and dynamic domain fallbacks per user request.
 
   // 6. Azure Blob general fallback check
   const defaultAzure = `${AZURE_BLOB_BASE}/${encodeURIComponent(clean)}.png`;
