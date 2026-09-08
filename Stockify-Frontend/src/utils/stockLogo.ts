@@ -1,28 +1,7 @@
 // src/utils/stockLogo.ts
 const AZURE_BLOB_BASE = "https://mystockifyassets.blob.core.windows.net/assets";
 
-// ── 1. BUNDLED LOCAL ASSETS (Vite Eager Glob) ──
-// Auto-discovers all local assets in src/assets/*.png, *.webp, *.svg
-const localAssetModules = import.meta.glob<{ default: string }>("../assets/*.{png,webp,svg,jpg,jpeg}", {
-  eager: true,
-});
-
-export const LOCAL_ASSET_LOGOS: Record<string, string> = {};
-
-for (const path in localAssetModules) {
-  const fileName = path.split("/").pop() || "";
-  const nameWithoutExt = fileName.replace(/\.(png|webp|svg|jpg|jpeg)$/i, "").toUpperCase();
-  const assetUrl =
-    (localAssetModules[path] as any)?.default || (localAssetModules[path] as unknown as string);
-
-  if (assetUrl) {
-    LOCAL_ASSET_LOGOS[fileName.toUpperCase()] = assetUrl;
-    LOCAL_ASSET_LOGOS[nameWithoutExt] = assetUrl;
-    if (nameWithoutExt.endsWith(".NS")) {
-      LOCAL_ASSET_LOGOS[nameWithoutExt.replace(/\.NS$/, "")] = assetUrl;
-    }
-  }
-}
+// Local asset bundling removed in favor of Azure Blob Storage
 
 /**
  * Known symbols verified in Azure Blob Storage
@@ -300,16 +279,7 @@ export function getStockLogoCandidates(symbol: string, domainOrName?: string): s
 
   const candidates: string[] = [];
 
-  // 1. Check Bundled Local Assets First (Instant local asset with zero network latency)
-  const localAsset =
-    LOCAL_ASSET_LOGOS[clean] ||
-    LOCAL_ASSET_LOGOS[symbol.toUpperCase()] ||
-    LOCAL_ASSET_LOGOS[`${clean}.PNG`] ||
-    LOCAL_ASSET_LOGOS[`${clean}.WEBP`];
-
-  if (localAsset) {
-    candidates.push(localAsset);
-  }
+  // Local assets check removed.
 
   // 2. Cached working URL (From previous successful renders)
   const cached = getCachedLogo(clean);

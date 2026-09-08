@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getStockLogoCandidates, setCachedLogo, getCachedLogo } from "../../utils/stockLogo";
-import defaultLogo from "../../assets/imageinv.png";
+const defaultLogo = "https://mystockifyassets.blob.core.windows.net/assets/imageinv.png";
 
 interface StockLogoProps {
   symbol: string;

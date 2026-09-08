@@ -2,7 +2,7 @@ import "../../Styles/orderPanel.css";
 import { useState, useEffect } from "react";
 import { useContext } from "react";
 import { AuthContext } from "../../auth/AuthProvider";
-import imageinvest from "../../assets/imageinv.png";
+const imageinvest = "https://mystockifyassets.blob.core.windows.net/assets/imageinv.png";
 import AddMoneyCard from "../funds/AddMoneyCard";
 
 type OrderPanelProps = {

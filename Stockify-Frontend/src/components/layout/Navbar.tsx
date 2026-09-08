@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import "../../Styles/Navbar.css";
-import logo from "../../assets/logos/paperbull.png";
+const logo = "https://mystockifyassets.blob.core.windows.net/assets/logos/paperbull.png";
 import { AuthContext } from "../../auth/AuthProvider";
 import { useContext, useEffect, useRef, useState } from "react";
 import type { User } from "firebase/auth";
