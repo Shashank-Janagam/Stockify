@@ -75,19 +75,19 @@ def create_app():
         mcp_mount_path = "/"
         print("[Transport] Fallback: Using legacy SSE transport at /sse", flush=True)
 
-    # Build the top-level Starlette app
+    # Build the top-level Starlette app.
+    # IMPORTANT: Starlette matches routes IN ORDER — specific routes MUST come
+    # before Mount(), otherwise Mount("/") swallows everything.
     app = Starlette(
         routes=[
-            # Mount MCP transport (Streamable HTTP at /mcp, or SSE fallback at /)
-            Mount(mcp_mount_path, app=mcp_app),
-
-            # Health & root endpoints
-            Route("/", root_handler, methods=["GET", "HEAD"]),
+            # Health & root endpoints (matched before mount)
             Route("/health", health_handler, methods=["GET"]),
+            Route("/", root_handler, methods=["GET", "HEAD"]),
 
             # OAuth 2.0 Discovery Endpoints (RFC 8414, RFC 9728)
             Route("/.well-known/oauth-protected-resource", handle_protected_resource_metadata, methods=["GET"]),
             Route("/.well-known/oauth-protected-resource/mcp", handle_protected_resource_metadata, methods=["GET"]),
+            Route("/.well-known/oauth-protected-resource/sse", handle_protected_resource_metadata, methods=["GET"]),
             Route("/.well-known/oauth-authorization-server", handle_oauth_metadata, methods=["GET"]),
             Route("/.well-known/openid-configuration", handle_oauth_metadata, methods=["GET"]),
 
@@ -100,6 +100,9 @@ def create_app():
             # Browser Login Portal
             Route("/auth/login", handle_oauth_login_page, methods=["GET"]),
             Route("/auth/callback", handle_oauth_callback, methods=["POST"]),
+
+            # MCP transport LAST — catches /mcp (streamable) or / (SSE fallback)
+            Mount(mcp_mount_path, app=mcp_app),
         ]
     )
 
