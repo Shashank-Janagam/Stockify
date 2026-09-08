@@ -23,11 +23,25 @@ class FirebaseAuthMiddleware:
             return await self.app(scope, receive, send)
 
         path = scope.get("path", "")
+
+        # Always bypass OAuth, well-known discovery, and health endpoints
         if (
             path in ["/health", "/", "/auth/login", "/auth/callback", "/oauth/authorize", "/oauth/authorize/complete", "/oauth/token", "/oauth/register"]
             or path.startswith("/.well-known/")
             or path.startswith("/oauth/")
         ):
+            try:
+                return await self.app(scope, receive, send)
+            except Exception as e:
+                if "ClientDisconnect" in type(e).__name__:
+                    return
+                raise
+
+        # Bypass MCP transport paths — /sse and /messages/ are secured by:
+        # 1) OAuth already validated before token was issued
+        # 2) FastMCP's unguessable session_id ties SSE stream to message poster
+        if path == "/sse" or path.startswith("/messages"):
+            print(f"[Auth Middleware] Bypassing auth for MCP transport path: {path}")
             try:
                 return await self.app(scope, receive, send)
             except Exception as e:
