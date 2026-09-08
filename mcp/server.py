@@ -65,13 +65,21 @@ def create_app():
 
     # Use modern Streamable HTTP transport (replaces legacy SSE)
     # Claude.ai connector uses POST /mcp for all communication
-    mcp_app = mcp.streamable_http_app()
+    # Falls back to SSE app if mcp version < 1.3.0
+    try:
+        mcp_app = mcp.streamable_http_app()
+        mcp_mount_path = "/mcp"
+        print("[Transport] Using Streamable HTTP transport at /mcp", flush=True)
+    except AttributeError:
+        mcp_app = mcp.sse_app()
+        mcp_mount_path = "/"
+        print("[Transport] Fallback: Using legacy SSE transport at /sse", flush=True)
 
     # Build the top-level Starlette app
     app = Starlette(
         routes=[
-            # Mount MCP Streamable HTTP transport at /mcp
-            Mount("/mcp", app=mcp_app),
+            # Mount MCP transport (Streamable HTTP at /mcp, or SSE fallback at /)
+            Mount(mcp_mount_path, app=mcp_app),
 
             # Health & root endpoints
             Route("/", root_handler, methods=["GET", "HEAD"]),
