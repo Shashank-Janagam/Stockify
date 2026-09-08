@@ -59,27 +59,44 @@ async def health_handler(request: Any) -> Any:
 # ==============================================================================
 
 def create_app():
-    """Build and configure the Starlette ASGI application for SSE and OAuth."""
-    app = mcp.sse_app()
+    """Build and configure the Starlette ASGI application for Streamable HTTP and OAuth."""
+    from starlette.applications import Starlette
+    from starlette.routing import Mount, Route
 
-    # 1. Claude OAuth 2.0 Discovery Endpoints (RFC 8414, RFC 9728 & OpenID Connect)
-    app.add_route("/.well-known/oauth-protected-resource", handle_protected_resource_metadata, methods=["GET"])
-    app.add_route("/.well-known/oauth-protected-resource/sse", handle_protected_resource_metadata, methods=["GET"])
-    app.add_route("/.well-known/oauth-protected-resource/messages", handle_protected_resource_metadata, methods=["GET"])
-    app.add_route("/.well-known/oauth-authorization-server", handle_oauth_metadata, methods=["GET"])
-    app.add_route("/.well-known/openid-configuration", handle_oauth_metadata, methods=["GET"])
-    app.add_route("/oauth/register", handle_oauth_register, methods=["POST"])
-    app.add_route("/oauth/authorize", handle_oauth_authorize_page, methods=["GET"])
-    app.add_route("/oauth/authorize/complete", handle_oauth_authorize_complete, methods=["POST"])
-    app.add_route("/oauth/token", handle_oauth_token, methods=["POST"])
+    # Use modern Streamable HTTP transport (replaces legacy SSE)
+    # Claude.ai connector uses POST /mcp for all communication
+    mcp_app = mcp.streamable_http_app()
 
-    # 2. Browser Login Portal
-    app.add_route("/auth/login", handle_oauth_login_page, methods=["GET"])
-    app.add_route("/auth/callback", handle_oauth_callback, methods=["POST"])
+    # Build the top-level Starlette app
+    app = Starlette(
+        routes=[
+            # Mount MCP Streamable HTTP transport at /mcp
+            Mount("/mcp", app=mcp_app),
 
-    # 3. Middlewares — NOTE: in Starlette, last add_middleware() call is OUTERMOST (runs first)
-    # Order: request → FirebaseAuth → CORS → app
-    # FirebaseAuth must be inner so CORS preflight OPTIONS bypass auth first
+            # Health & root endpoints
+            Route("/", root_handler, methods=["GET", "HEAD"]),
+            Route("/health", health_handler, methods=["GET"]),
+
+            # OAuth 2.0 Discovery Endpoints (RFC 8414, RFC 9728)
+            Route("/.well-known/oauth-protected-resource", handle_protected_resource_metadata, methods=["GET"]),
+            Route("/.well-known/oauth-protected-resource/mcp", handle_protected_resource_metadata, methods=["GET"]),
+            Route("/.well-known/oauth-authorization-server", handle_oauth_metadata, methods=["GET"]),
+            Route("/.well-known/openid-configuration", handle_oauth_metadata, methods=["GET"]),
+
+            # OAuth 2.0 Endpoints
+            Route("/oauth/register", handle_oauth_register, methods=["POST"]),
+            Route("/oauth/authorize", handle_oauth_authorize_page, methods=["GET"]),
+            Route("/oauth/authorize/complete", handle_oauth_authorize_complete, methods=["POST"]),
+            Route("/oauth/token", handle_oauth_token, methods=["POST"]),
+
+            # Browser Login Portal
+            Route("/auth/login", handle_oauth_login_page, methods=["GET"]),
+            Route("/auth/callback", handle_oauth_callback, methods=["POST"]),
+        ]
+    )
+
+    # Middlewares — NOTE: in Starlette, last add_middleware() call is OUTERMOST (runs first)
+    # Request flow: CORSMiddleware → FirebaseAuthMiddleware → app
     app.add_middleware(FirebaseAuthMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -140,7 +157,7 @@ if __name__ == "__main__":
             proto = "https" if has_ssl else "http"
 
             print(f"Starting PaperBull MCP Server on {proto}://{args.host}:{args.port}", flush=True)
-            print(f"  - SSE Endpoint: {proto}://{args.host}:{args.port}/sse", flush=True)
+            print(f"  - MCP Endpoint (Streamable HTTP): {proto}://{args.host}:{args.port}/mcp", flush=True)
             print(f"  - OAuth Login Page: {proto}://localhost:{args.port}/auth/login", flush=True)
             print(f"  - Health Check: {proto}://{args.host}:{args.port}/health", flush=True)
             print(f"  - Firebase Auth: {'Configured & Ready' if firebase_initialized else 'Fallback mode (Dev bypass enabled)'}", flush=True)

@@ -37,10 +37,10 @@ class FirebaseAuthMiddleware:
                     return
                 raise
 
-        # Bypass MCP transport paths — /sse and /messages/ are secured by:
+        # Bypass MCP transport — /mcp uses Streamable HTTP (POST), secured by:
         # 1) OAuth already validated before token was issued
-        # 2) FastMCP's unguessable session_id ties SSE stream to message poster
-        if path == "/sse" or path.startswith("/messages"):
+        # 2) Bearer token in Authorization header validated by Claude.ai
+        if path == "/mcp" or path.startswith("/mcp/"):
             print(f"[Auth Middleware] Bypassing auth for MCP transport path: {path}")
             try:
                 return await self.app(scope, receive, send)
