@@ -78,7 +78,7 @@ p{
 /* LEFT */
 .modal-left {
   width: 45%;
-  background-image: url("../assets/loginback.svg");
+  background-image: url("https://mystockifyassets.blob.core.windows.net/assets/loginback.svg");
   color: white;
   padding: 2.5rem;
   

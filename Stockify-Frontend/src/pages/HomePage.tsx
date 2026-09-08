@@ -1,5 +1,5 @@
-﻿import "../Styles/HomePage.css"
-import homeimage from "../assets/logos/bull bgl.png"
+import "../Styles/HomePage.css"
+const homeimage = "https://mystockifyassets.blob.core.windows.net/assets/logos/bull%20bgl.png";
 import { useContext } from "react"
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../auth/AuthProvider";

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import "../../Styles/LoginModule.css"
-import google from "../../assets/google.png";
+const google = "https://mystockifyassets.blob.core.windows.net/assets/google.png";
 import { loginWithEmail,loginWithGoogle , getSignInMethods} from "../../auth/login";
 // import { useNavigate } from "react-router-dom";
 import { sendPasswordResetEmail } from "firebase/auth";
