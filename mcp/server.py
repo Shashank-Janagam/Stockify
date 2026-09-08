@@ -22,6 +22,7 @@ from oauth import (
     handle_oauth_metadata,
     handle_oauth_register,
     handle_oauth_token,
+    handle_protected_resource_metadata,
 )
 
 # Import all MCP tool definitions, resources, and prompt templates
@@ -58,22 +59,68 @@ async def health_handler(request: Any) -> Any:
 # ==============================================================================
 
 def create_app():
-    """Build and configure the Starlette ASGI application for SSE and OAuth."""
-    app = mcp.sse_app()
+    """Build and configure the Starlette ASGI application for Streamable HTTP and OAuth."""
+    from starlette.applications import Starlette
+    from starlette.routing import Mount, Route
 
-    # 1. Claude OAuth 2.0 Discovery Endpoints (RFC 8414 / OpenID Connect)
-    app.add_route("/.well-known/oauth-authorization-server", handle_oauth_metadata, methods=["GET"])
-    app.add_route("/.well-known/openid-configuration", handle_oauth_metadata, methods=["GET"])
-    app.add_route("/oauth/register", handle_oauth_register, methods=["POST"])
-    app.add_route("/oauth/authorize", handle_oauth_authorize_page, methods=["GET"])
-    app.add_route("/oauth/authorize/complete", handle_oauth_authorize_complete, methods=["POST"])
-    app.add_route("/oauth/token", handle_oauth_token, methods=["POST"])
+    # Use modern Streamable HTTP transport (replaces legacy SSE)
+    # Claude.ai connector uses POST /mcp for all communication
+    # Falls back to SSE app if mcp version < 1.3.0
+    try:
+        mcp_app = mcp.streamable_http_app()
+        mcp_mount_path = "/"
+        print("[Transport] Using Streamable HTTP transport (internally binds to /mcp)", flush=True)
+    except AttributeError:
+        mcp_app = mcp.sse_app()
+        mcp_mount_path = "/"
+        print("[Transport] Fallback: Using legacy SSE transport at /sse", flush=True)
 
-    # 2. Browser Login Portal
-    app.add_route("/auth/login", handle_oauth_login_page, methods=["GET"])
-    app.add_route("/auth/callback", handle_oauth_callback, methods=["POST"])
+    import contextlib
 
-    # 3. Middlewares (CORS & Authentication)
+    @contextlib.asynccontextmanager
+    async def app_lifespan(app_instance):
+        # Propagate lifespan to the nested MCP app so its internal task groups initialize
+        if hasattr(mcp_app, "router") and hasattr(mcp_app.router, "lifespan_context"):
+            async with mcp_app.router.lifespan_context(mcp_app):
+                yield
+        else:
+            yield
+
+    # Build the top-level Starlette app.
+    # IMPORTANT: Starlette matches routes IN ORDER — specific routes MUST come
+    # before Mount(), otherwise Mount("/") swallows everything.
+    app = Starlette(
+        lifespan=app_lifespan,
+        routes=[
+            # Health & root endpoints (matched before mount)
+            Route("/health", health_handler, methods=["GET"]),
+            Route("/", root_handler, methods=["GET", "HEAD"]),
+
+            # OAuth 2.0 Discovery Endpoints (RFC 8414, RFC 9728)
+            Route("/.well-known/oauth-protected-resource", handle_protected_resource_metadata, methods=["GET"]),
+            Route("/.well-known/oauth-protected-resource/mcp", handle_protected_resource_metadata, methods=["GET"]),
+            Route("/.well-known/oauth-protected-resource/sse", handle_protected_resource_metadata, methods=["GET"]),
+            Route("/.well-known/oauth-authorization-server", handle_oauth_metadata, methods=["GET"]),
+            Route("/.well-known/openid-configuration", handle_oauth_metadata, methods=["GET"]),
+
+            # OAuth 2.0 Endpoints
+            Route("/oauth/register", handle_oauth_register, methods=["POST"]),
+            Route("/oauth/authorize", handle_oauth_authorize_page, methods=["GET"]),
+            Route("/oauth/authorize/complete", handle_oauth_authorize_complete, methods=["POST"]),
+            Route("/oauth/token", handle_oauth_token, methods=["POST"]),
+
+            # Browser Login Portal
+            Route("/auth/login", handle_oauth_login_page, methods=["GET"]),
+            Route("/auth/callback", handle_oauth_callback, methods=["POST"]),
+
+            # MCP transport LAST — catches /mcp (streamable) or / (SSE fallback)
+            Mount(mcp_mount_path, app=mcp_app),
+        ]
+    )
+
+    # Middlewares — NOTE: in Starlette, last add_middleware() call is OUTERMOST (runs first)
+    # Request flow: CORSMiddleware → FirebaseAuthMiddleware → app
+    app.add_middleware(FirebaseAuthMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -81,7 +128,6 @@ def create_app():
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.add_middleware(FirebaseAuthMiddleware)
 
     return app
 
@@ -91,55 +137,65 @@ def create_app():
 # ==============================================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Stockify MCP Server")
-    parser.add_argument(
-        "--transport",
-        choices=["sse", "stdio", "streamable-http"],
-        default=os.getenv("MCP_TRANSPORT", "sse"),
-        help="Transport protocol to use (default: sse)",
-    )
-    parser.add_argument(
-        "--host",
-        default=MCP_HOST,
-        help=f"Host address to bind to (default: {MCP_HOST})",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=MCP_PORT,
-        help=f"Port to bind to (default: {MCP_PORT})",
-    )
-    parser.add_argument(
-        "--ssl-keyfile",
-        default=os.getenv("SSL_KEYFILE"),
-        help="Path to SSL private key file for direct HTTPS",
-    )
-    parser.add_argument(
-        "--ssl-certfile",
-        default=os.getenv("SSL_CERTFILE"),
-        help="Path to SSL certificate fullchain file for direct HTTPS",
-    )
-    args = parser.parse_args()
+    import sys
+    import traceback
 
-    if args.transport == "stdio":
-        mcp.run(transport="stdio")
-    else:
-        app = create_app()
-
-        has_ssl = bool(args.ssl_keyfile and args.ssl_certfile)
-        proto = "https" if has_ssl else "http"
-
-        print(f"Starting PaperBull MCP Server on {proto}://{args.host}:{args.port}")
-        print(f"  - SSE Endpoint: {proto}://{args.host}:{args.port}/sse")
-        print(f"  - OAuth Login Page: {proto}://localhost:{args.port}/auth/login")
-        print(f"  - Health Check: {proto}://{args.host}:{args.port}/health")
-        print(f"  - Firebase Auth: {'Configured & Ready' if firebase_initialized else 'Fallback mode (Dev bypass enabled)'}")
-        print(f"  - Require Auth: {'Enforced (401 on invalid token)' if REQUIRE_AUTH else 'Optional (Bypass allowed)'}")
-
-        uvicorn.run(
-            app,
-            host=args.host,
-            port=args.port,
-            ssl_keyfile=args.ssl_keyfile,
-            ssl_certfile=args.ssl_certfile,
+    try:
+        parser = argparse.ArgumentParser(description="Stockify MCP Server")
+        parser.add_argument(
+            "--transport",
+            choices=["sse", "stdio", "streamable-http"],
+            default=os.getenv("MCP_TRANSPORT", "sse"),
+            help="Transport protocol to use (default: sse)",
         )
+        parser.add_argument(
+            "--host",
+            default=os.getenv("MCP_HOST", MCP_HOST),
+            help=f"Host address to bind to (default: {MCP_HOST})",
+        )
+        parser.add_argument(
+            "--port",
+            type=int,
+            default=int(os.getenv("MCP_PORT", MCP_PORT)),
+            help=f"Port to bind to (default: {MCP_PORT})",
+        )
+        parser.add_argument(
+            "--ssl-keyfile",
+            default=os.getenv("SSL_KEYFILE"),
+            help="Path to SSL private key file for direct HTTPS",
+        )
+        parser.add_argument(
+            "--ssl-certfile",
+            default=os.getenv("SSL_CERTFILE"),
+            help="Path to SSL certificate fullchain file for direct HTTPS",
+        )
+        args, _ = parser.parse_known_args()
+
+        if args.transport == "stdio":
+            mcp.run(transport="stdio")
+        else:
+            app = create_app()
+
+            has_ssl = bool(args.ssl_keyfile and args.ssl_certfile)
+            proto = "https" if has_ssl else "http"
+
+            print(f"Starting PaperBull MCP Server on {proto}://{args.host}:{args.port}", flush=True)
+            print(f"  - MCP Endpoint (Streamable HTTP): {proto}://{args.host}:{args.port}/mcp", flush=True)
+            print(f"  - OAuth Login Page: {proto}://localhost:{args.port}/auth/login", flush=True)
+            print(f"  - Health Check: {proto}://{args.host}:{args.port}/health", flush=True)
+            print(f"  - Firebase Auth: {'Configured & Ready' if firebase_initialized else 'Fallback mode (Dev bypass enabled)'}", flush=True)
+            print(f"  - Require Auth: {'Enforced (401 on invalid token)' if REQUIRE_AUTH else 'Optional (Bypass allowed)'}", flush=True)
+
+            uvicorn.run(
+                app,
+                host=args.host,
+                port=args.port,
+                ssl_keyfile=args.ssl_keyfile,
+                ssl_certfile=args.ssl_certfile,
+                log_level="info",
+            )
+    except Exception as e:
+        print(f"[FATAL SERVER ERROR] {e}", file=sys.stderr, flush=True)
+        traceback.print_exc()
+        sys.exit(1)
+

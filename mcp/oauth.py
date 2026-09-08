@@ -41,6 +41,21 @@ async def handle_oauth_metadata(request: Request):
     })
 
 
+async def handle_protected_resource_metadata(request: Request):
+    """RFC 9728 OAuth 2.0 Protected Resource Metadata (required by Claude Web & Desktop)"""
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or f"{MCP_HOST}:{MCP_PORT}"
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    base = f"{proto}://{host}"
+
+    return JSONResponse({
+        "resource": f"{base}/mcp",
+        "authorization_servers": [base],
+        "scopes_supported": ["openid", "profile", "email", "paperbull:trade", "paperbull:read"],
+        "bearer_methods_supported": ["header"],
+        "resource_documentation": f"{base}/",
+    })
+
+
 async def handle_oauth_register(request: Request):
     """RFC 7591 Dynamic Client Registration (DCR)"""
     try:
@@ -197,6 +212,8 @@ OAUTH_AUTHORIZE_HTML = """<!DOCTYPE html>
     const redirectUri = params.get('redirect_uri') || '';
     const state = params.get('state') || '';
     const codeChallenge = params.get('code_challenge') || '';
+    const scope = params.get('scope') || 'openid profile email paperbull:trade paperbull:read';
+    const resource = params.get('resource') || '';
 
     async function signInWithGoogle() {
       const btn = document.getElementById('googleBtn');
@@ -217,7 +234,9 @@ OAUTH_AUTHORIZE_HTML = """<!DOCTYPE html>
             client_id: clientId,
             redirect_uri: redirectUri,
             state: state,
-            code_challenge: codeChallenge
+            code_challenge: codeChallenge,
+            scope: scope,
+            resource: resource
           })
         });
 
@@ -257,6 +276,7 @@ async def handle_oauth_authorize_complete(request: Request):
         code_challenge = data.get("code_challenge", "")
 
         if not token:
+            print("[OAuth Authorize Error] Missing Firebase token in payload")
             return JSONResponse({"status": "error", "message": "Missing Firebase token"}, status_code=400)
 
         decoded = firebase_auth.verify_id_token(token, check_revoked=False) if firebase_initialized else {"uid": "oauth_user", "email": "user@paperbull.com"}
@@ -264,6 +284,8 @@ async def handle_oauth_authorize_complete(request: Request):
         email = decoded.get("email", "")
         name = decoded.get("name", "Trader")
 
+        scope = data.get("scope") or "openid profile email paperbull:trade paperbull:read"
+        resource = data.get("resource", "")
         # Create authorization code (expires in 10 minutes)
         code = f"code_{secrets.token_urlsafe(32)}"
         OAUTH_CODES[code] = {
@@ -273,6 +295,8 @@ async def handle_oauth_authorize_complete(request: Request):
             "client_id": client_id,
             "redirect_uri": redirect_uri,
             "code_challenge": code_challenge,
+            "scope": scope,
+            "resource": resource,
             "expires_at": time.time() + 600,
         }
 
@@ -280,40 +304,71 @@ async def handle_oauth_authorize_complete(request: Request):
         sep = "&" if "?" in redirect_uri else "?"
         redirect_url = f"{redirect_uri}{sep}code={code}&state={state}" if redirect_uri else f"/auth/login?code={code}"
 
+        print(f"[OAuth Authorize Complete] ✅ Code generated for {email} ({uid}) -> Redirecting to: {redirect_url[:80]}...")
+
         return JSONResponse({
             "status": "success",
             "code": code,
             "redirect_url": redirect_url,
         })
     except Exception as e:
+        print(f"[OAuth Authorize Exception] ❌ {e}")
         return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
 
 
 async def handle_oauth_token(request: Request):
     """RFC 6749 Token Endpoint (Exchanges code for access_token)"""
+    import base64
     try:
         content_type = request.headers.get("content-type", "")
         if "application/json" in content_type:
-            data = await request.json()
+            try:
+                data = await request.json()
+            except Exception:
+                data = {}
         else:
-            form = await request.form()
-            data = dict(form)
+            try:
+                form = await request.form()
+                data = dict(form)
+            except Exception:
+                body = await request.body()
+                data = dict(urllib.parse.parse_qsl(body.decode("utf-8", errors="ignore")))
+
+        # Also check query parameters as fallback
+        for k, v in request.query_params.items():
+            if k not in data:
+                data[k] = v
+
+        # Extract client credentials from Authorization header if present
+        auth_header = request.headers.get("authorization", "")
+        client_id = data.get("client_id", "")
+        if auth_header.startswith("Basic "):
+            try:
+                decoded_b64 = base64.b64decode(auth_header[6:].strip()).decode("utf-8", errors="ignore")
+                if ":" in decoded_b64:
+                    client_id, _ = decoded_b64.split(":", 1)
+            except Exception as e:
+                print(f"[OAuth Token Warning] Failed to decode Basic Auth: {e}")
 
         grant_type = data.get("grant_type", "authorization_code")
-        client_id = data.get("client_id", "")
+        print(f"[OAuth Token Request] Grant type: '{grant_type}', code present: {bool(data.get('code'))}, client_id: '{client_id}'")
 
         if grant_type == "authorization_code":
-            code = data.get("code")
+            code = data.get("code", "").strip()
             if not code or code not in OAUTH_CODES:
+                print(f"[OAuth Token Error] ❌ Invalid or expired authorization code: '{code}'. Active codes: {list(OAUTH_CODES.keys())}")
                 return JSONResponse({"error": "invalid_grant", "error_description": "Invalid or expired authorization code"}, status_code=400)
 
             code_info = OAUTH_CODES.pop(code)
             if code_info["expires_at"] < time.time():
+                print(f"[OAuth Token Error] ❌ Authorization code expired for {code_info.get('email')}")
                 return JSONResponse({"error": "invalid_grant", "error_description": "Authorization code has expired"}, status_code=400)
 
             uid = code_info["uid"]
             email = code_info["email"]
             name = code_info["name"]
+            scope = code_info.get("scope") or data.get("scope") or "openid profile email paperbull:trade paperbull:read"
+            resource = code_info.get("resource") or data.get("resource") or ""
 
             access_token = f"pb_access_{secrets.token_urlsafe(32)}"
             refresh_token = f"pb_refresh_{secrets.token_urlsafe(32)}"
@@ -323,6 +378,7 @@ async def handle_oauth_token(request: Request):
                 "email": email,
                 "name": name,
                 "client_id": client_id,
+                "resource": resource,
                 "expires_at": time.time() + 86400 * 30, # 30 days
             }
 
@@ -335,22 +391,29 @@ async def handle_oauth_token(request: Request):
             }
 
             save_session(user_id=uid, email=email, token=access_token, name=name)
+            print(f"[OAuth Token Success] 🚀 Access token for {email} | scopes: '{scope}' | resource: '{resource}'")
 
-            return JSONResponse({
+            token_response: Dict[str, Any] = {
                 "access_token": access_token,
-                "token_type": "Bearer",
+                "token_type": "bearer",
                 "expires_in": 86400 * 30,
                 "refresh_token": refresh_token,
-                "scope": "paperbull:trade",
-            })
+                "scope": scope,
+            }
+            if resource:
+                token_response["resource"] = resource
+
+            return JSONResponse(token_response)
 
         elif grant_type == "refresh_token":
-            refresh_token = data.get("refresh_token")
+            refresh_token = data.get("refresh_token", "").strip()
             if not refresh_token or refresh_token not in OAUTH_REFRESH:
+                print("[OAuth Token Error] ❌ Invalid refresh token")
                 return JSONResponse({"error": "invalid_grant", "error_description": "Invalid refresh token"}, status_code=400)
 
             ref_info = OAUTH_REFRESH[refresh_token]
             if ref_info["expires_at"] < time.time():
+                print("[OAuth Token Error] ❌ Refresh token expired")
                 return JSONResponse({"error": "invalid_grant", "error_description": "Refresh token expired"}, status_code=400)
 
             new_access_token = f"pb_access_{secrets.token_urlsafe(32)}"
@@ -362,6 +425,8 @@ async def handle_oauth_token(request: Request):
                 "expires_at": time.time() + 86400 * 30,
             }
 
+            print(f"[OAuth Token Success] 🔄 Refreshed access token for {ref_info['email']}")
+
             return JSONResponse({
                 "access_token": new_access_token,
                 "token_type": "Bearer",
@@ -370,9 +435,11 @@ async def handle_oauth_token(request: Request):
             })
 
         else:
+            print(f"[OAuth Token Error] ❌ Unsupported grant type: {grant_type}")
             return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
 
     except Exception as e:
+        print(f"[OAuth Token Exception] ❌ {e}")
         return JSONResponse({"error": "server_error", "error_description": str(e)}, status_code=500)
 
 

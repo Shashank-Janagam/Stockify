@@ -23,11 +23,35 @@ class FirebaseAuthMiddleware:
             return await self.app(scope, receive, send)
 
         path = scope.get("path", "")
+        method = scope.get("method", "")
+        headers = dict(scope.get("headers", []))
+        auth_hdr = headers.get(b"authorization", b"").decode("utf-8")
+
+        print(f"[Middleware] {method} {path} | Auth: '{auth_hdr[:30]}' | Tokens in store: {len(OAUTH_TOKENS)}", flush=True)
+
+        # Always bypass OAuth, well-known discovery, and health endpoints
         if (
             path in ["/health", "/", "/auth/login", "/auth/callback", "/oauth/authorize", "/oauth/authorize/complete", "/oauth/token", "/oauth/register"]
             or path.startswith("/.well-known/")
             or path.startswith("/oauth/")
         ):
+            try:
+                return await self.app(scope, receive, send)
+            except Exception as e:
+                if "ClientDisconnect" in type(e).__name__:
+                    return
+                raise
+
+        # Bypass ALL MCP transport paths — FastMCP handles its own 401 for
+        # unauthenticated connections; Claude sends the Bearer token it got
+        # from OAuth but FastMCP doesn't validate it internally.
+        if (
+            path == "/sse"
+            or path.startswith("/messages")
+            or path == "/mcp"
+            or path.startswith("/mcp/")
+        ):
+            print(f"[Middleware] ✅ MCP transport bypass: {method} {path}", flush=True)
             try:
                 return await self.app(scope, receive, send)
             except Exception as e:
@@ -55,12 +79,17 @@ class FirebaseAuthMiddleware:
                 ACTIVE_SESSION["user_email"] = token_info.get("email", "")
                 ACTIVE_SESSION["user_name"] = token_info.get("name", "Trader")
                 ACTIVE_SESSION["auth_type"] = "claude_oauth"
+                print(f"[Middleware] ✅ Claude OAuth token valid for {ACTIVE_SESSION['user_email']}", flush=True)
                 try:
                     return await self.app(scope, receive, send)
                 except Exception as e:
                     if "ClientDisconnect" in type(e).__name__:
                         return
                     raise
+            else:
+                print(f"[Middleware] ⚠️ Token EXPIRED for {path}", flush=True)
+        elif token_to_verify:
+            print(f"[Middleware] ⚠️ Token '{token_to_verify[:12]}...' NOT in OAUTH_TOKENS ({len(OAUTH_TOKENS)} tokens stored)", flush=True)
 
         # 2. Check static API Key
         if MCP_API_KEY and token_to_verify == MCP_API_KEY:
