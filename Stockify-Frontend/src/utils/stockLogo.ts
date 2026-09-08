@@ -273,7 +273,7 @@ export function setCachedLogo(symbol: string, url: string): void {
  * 5. Dynamic Website Domain (if provided from profile)
  * 6. Azure Blob general fallback
  */
-export function getStockLogoCandidates(symbol: string, domainOrName?: string): string[] {
+export function getStockLogoCandidates(symbol: string, _domainOrName?: string): string[] {
   if (!symbol) return [];
   const clean = symbol
     .replace(".NS", "")
