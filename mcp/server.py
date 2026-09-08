@@ -68,8 +68,8 @@ def create_app():
     # Falls back to SSE app if mcp version < 1.3.0
     try:
         mcp_app = mcp.streamable_http_app()
-        mcp_mount_path = "/mcp"
-        print("[Transport] Using Streamable HTTP transport at /mcp", flush=True)
+        mcp_mount_path = "/"
+        print("[Transport] Using Streamable HTTP transport (internally binds to /mcp)", flush=True)
     except AttributeError:
         mcp_app = mcp.sse_app()
         mcp_mount_path = "/"
@@ -168,7 +168,7 @@ if __name__ == "__main__":
             proto = "https" if has_ssl else "http"
 
             print(f"Starting PaperBull MCP Server on {proto}://{args.host}:{args.port}", flush=True)
-            print(f"  - MCP Endpoint (Streamable HTTP): {proto}://{args.host}:{args.port}/mcp/", flush=True)
+            print(f"  - MCP Endpoint (Streamable HTTP): {proto}://{args.host}:{args.port}/mcp", flush=True)
             print(f"  - OAuth Login Page: {proto}://localhost:{args.port}/auth/login", flush=True)
             print(f"  - Health Check: {proto}://{args.host}:{args.port}/health", flush=True)
             print(f"  - Firebase Auth: {'Configured & Ready' if firebase_initialized else 'Fallback mode (Dev bypass enabled)'}", flush=True)

@@ -48,7 +48,7 @@ async def handle_protected_resource_metadata(request: Request):
     base = f"{proto}://{host}"
 
     return JSONResponse({
-        "resource": f"{base}/mcp/",
+        "resource": f"{base}/mcp",
         "authorization_servers": [base],
         "scopes_supported": ["openid", "profile", "email", "paperbull:trade", "paperbull:read"],
         "bearer_methods_supported": ["header"],
