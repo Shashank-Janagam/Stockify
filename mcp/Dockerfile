@@ -34,8 +34,9 @@ ENV PATH=/home/mcpuser/.local/bin:$PATH
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Copy application source code
+# Copy application source code and grant write permissions
 COPY --chown=mcpuser:mcpuser . /app
+RUN chmod -R 775 /app
 
 # Switch to non-root user
 USER mcpuser

@@ -24,9 +24,10 @@ ACTIVE_SESSION = {
 
 def load_saved_session():
     """Load persistent session from .paperbull_session.json if available."""
-    if os.path.exists(SESSION_FILE_PATH):
+    target_path = SESSION_FILE_PATH if os.path.exists(SESSION_FILE_PATH) else "/tmp/.paperbull_session.json"
+    if os.path.exists(target_path):
         try:
-            with open(SESSION_FILE_PATH, "r", encoding="utf-8") as f:
+            with open(target_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             ACTIVE_SESSION["user_id"] = data.get("uid") or data.get("user_id", "")
             ACTIVE_SESSION["user_email"] = data.get("email", "")
@@ -87,6 +88,12 @@ def update_claude_desktop_config(user_id: str, email: str, session_token: Option
 
 def save_session(user_id: str, email: str, token: str = "", name: str = "Trader") -> bool:
     """Persist active session to .paperbull_session.json and update Claude Desktop config."""
+    ACTIVE_SESSION["user_id"] = user_id
+    ACTIVE_SESSION["user_email"] = email
+    ACTIVE_SESSION["user_name"] = name
+    ACTIVE_SESSION["session_cookie"] = token
+    ACTIVE_SESSION["auth_type"] = "oauth"
+
     try:
         session_data = {
             "uid": user_id,
@@ -97,20 +104,21 @@ def save_session(user_id: str, email: str, token: str = "", name: str = "Trader"
             "session_cookie": token,
             "saved_at": os.getenv("CURRENT_TIME", "")
         }
-        with open(SESSION_FILE_PATH, "w", encoding="utf-8") as f:
-            json.dump(session_data, f, indent=2)
-
-        ACTIVE_SESSION["user_id"] = user_id
-        ACTIVE_SESSION["user_email"] = email
-        ACTIVE_SESSION["user_name"] = name
-        ACTIVE_SESSION["session_cookie"] = token
-        ACTIVE_SESSION["auth_type"] = "oauth"
+        
+        target_path = SESSION_FILE_PATH
+        try:
+            with open(target_path, "w", encoding="utf-8") as f:
+                json.dump(session_data, f, indent=2)
+        except (PermissionError, OSError):
+            target_path = "/tmp/.paperbull_session.json"
+            with open(target_path, "w", encoding="utf-8") as f:
+                json.dump(session_data, f, indent=2)
 
         update_claude_desktop_config(user_id=user_id, email=email, session_token=token)
         return True
     except Exception as e:
-        print(f"[PaperBull Auth Error] Could not save session: {e}")
-        return False
+        print(f"[PaperBull Auth Warning] Session saved in-memory (disk write skipped: {e})")
+        return True
 
 def clear_saved_session() -> bool:
     """Clear saved session file and reset active session."""
