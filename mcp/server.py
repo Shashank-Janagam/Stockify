@@ -168,7 +168,7 @@ if __name__ == "__main__":
             proto = "https" if has_ssl else "http"
 
             print(f"Starting PaperBull MCP Server on {proto}://{args.host}:{args.port}", flush=True)
-            print(f"  - MCP Endpoint (Streamable HTTP): {proto}://{args.host}:{args.port}/mcp", flush=True)
+            print(f"  - MCP Endpoint (Streamable HTTP): {proto}://{args.host}:{args.port}/mcp/", flush=True)
             print(f"  - OAuth Login Page: {proto}://localhost:{args.port}/auth/login", flush=True)
             print(f"  - Health Check: {proto}://{args.host}:{args.port}/health", flush=True)
             print(f"  - Firebase Auth: {'Configured & Ready' if firebase_initialized else 'Fallback mode (Dev bypass enabled)'}", flush=True)
