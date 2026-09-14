@@ -16,18 +16,17 @@ jobs:
           username: ${{ secrets.AZURE_VM_USER }}
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
+            set -e
             echo "Connected to Azure VM"
 
             cd ~/Stockify
 
-            echo "Pulling latest code..."
-            git pull origin main
+            echo "Fetching and forcefully pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
 
-            echo "Building images..."
-            docker compose build
-
-            echo "Starting services..."
-            docker compose up -d
+            echo "Rebuilding and starting services..."
+            docker compose up --build -d
 
             echo "Removing unused images..."
             docker image prune -f
