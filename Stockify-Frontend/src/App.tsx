@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import NavBar from "./components/layout/Navbar.tsx";
 import LoginModal from "./components/auth/LoginModule.tsx";
 import CookieConsent from "./components/layout/CookieConsent.tsx";
@@ -24,6 +24,8 @@ import Disclaimer from "./pages/Disclaimer.tsx";
 import CustomerSupport from "./pages/CustomerSupport.tsx";
 import NewsPage from "./pages/NewsPage.tsx";
 import { PortfolioThemeProvider } from "./context/PortfolioThemeContext";
+
+import { AuthContext } from "./auth/AuthProvider.tsx";
 
 /* ---------------- TITLE MANAGER ---------------- */
 
@@ -60,6 +62,13 @@ const RouteTitleManager = () => {
 
 const App = () => {
   const [showLogin, setShowLogin] = useState(false);
+  const { user } = useContext(AuthContext);
+
+  useEffect(() => {
+    if (user) {
+      setShowLogin(false);
+    }
+  }, [user]);
 
   // Load Razorpay once
   useEffect(() => {

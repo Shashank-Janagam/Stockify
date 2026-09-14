@@ -71,7 +71,7 @@ function scheduleReconnect() {
     reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         connectWs();
-    }, 10000);
+    }, 100000);
 }
 
 function subscribe(symbols) {

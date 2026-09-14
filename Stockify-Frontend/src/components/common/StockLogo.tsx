@@ -22,7 +22,7 @@ export const StockLogo: React.FC<StockLogoProps> = ({
   avatarClassName = "stock-symbol-avatar",
 }) => {
   const cachedUrl = getCachedLogo(symbol);
-  const candidates = getStockLogoCandidates(symbol, domain || name);
+  const candidates = getStockLogoCandidates(symbol);
   const [candidateIdx, setCandidateIdx] = useState(0);
   const [hasError, setHasError] = useState(false);
 

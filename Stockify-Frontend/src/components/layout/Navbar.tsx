@@ -57,13 +57,15 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
-        setOpenSearch(true);
+        if (user) {
+          setOpenSearch(true);
+        }
       }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [user]);
 
   /* ---------- LOGOUT ---------- */
   const handleLogout = async () => {
@@ -127,13 +129,15 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
         {/* ---------------- RIGHT ---------------- */}
         <div className="nav-right">
           {/* SEARCH */}
-          <div
-            className="search-box"
-            onClick={() => setOpenSearch(true)}
-          >
-            <input placeholder="Search Stocks..." readOnly />
-            <span className="shortcut">Ctrl + K</span>
-          </div>
+          {user && (
+            <div
+              className="search-box"
+              onClick={() => setOpenSearch(true)}
+            >
+              <input placeholder="Search Stocks..." readOnly />
+              <span className="shortcut">Ctrl + K</span>
+            </div>
+          )}
 
           {/* PROFILE (ONLY THIS IS DELAYED) */}
           <div className="profile-dropdown-container" ref={dropdownRef}>
@@ -249,7 +253,7 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
               </>
             ) : (
               <button className="login-btn" onClick={onLoginClick}>
-                Login / Signup
+                Login
               </button>
             )}
           </div>

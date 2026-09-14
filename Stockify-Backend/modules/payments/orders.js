@@ -31,7 +31,7 @@ export async function incrementWalletBalance(userId, amount) {
   // 1️⃣ Update Balance (wallet_accounts)
   console.log("Crediting wallet for user:", userId, "amount:", amount);
   await db.query(
-    `UPDATE wallet_accounts SET available_balance = available_balance + $1, updated_at = NOW() AT TIME ZONE 'Asia/Kolkata' WHERE user_id = $2`,
+    `UPDATE wallet_accounts SET available_balance = available_balance + $1, updated_at = NOW() AT TIME ZONE 'Asia/Kolkata' WHERE user_id = $2 AND (account_type = 'LIVE' OR account_type IS NULL)`,
     [amount, userId]
   );
 
@@ -56,7 +56,7 @@ export async function addUserTransaction({
     INSERT INTO wallet_transactions
     (user_id, reference_type, transaction_type, amount, balance_after, created_at)
     VALUES 
-    ($1, 'DEPOSIT', 'DEPOSIT', $2, (SELECT available_balance FROM wallet_accounts WHERE user_id=$1), NOW() AT TIME ZONE 'Asia/Kolkata')
+    ($1, 'DEPOSIT', 'DEPOSIT', $2, (SELECT available_balance FROM wallet_accounts WHERE user_id=$1 AND (account_type = 'LIVE' OR account_type IS NULL)), NOW() AT TIME ZONE 'Asia/Kolkata')
     `,
     [userId, amount]
   );

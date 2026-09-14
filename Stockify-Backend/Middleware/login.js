@@ -1,4 +1,4 @@
-﻿import express from "express"
+import express from "express"
 import admin from "./admin.js"
 const router=express.Router()
 router.post("/", async (req, res) => {
@@ -10,6 +10,18 @@ router.post("/", async (req, res) => {
     console.log("token received:", token ? "YES" : "NO");
 
     const expiresIn = 5000*60*60;
+
+    // Verify token to get UID
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    
+    // Check if user exists in the SQL database
+    const { db } = await import("../db/sql.js");
+    const userRes = await db.query(`SELECT id FROM users WHERE uid = $1`, [decodedToken.uid]);
+    
+    if (userRes.rows.length === 0) {
+      console.warn(`User ${decodedToken.uid} not found in database. Registration is disabled.`);
+      return res.status(403).json({ error: "Registrations not allowed." });
+    }
 
     const sessionCookie = await admin
       .auth()

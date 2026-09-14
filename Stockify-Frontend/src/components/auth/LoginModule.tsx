@@ -3,7 +3,7 @@ import "../../Styles/LoginModule.css"
 const google = "https://mystockifyassets.blob.core.windows.net/assets/google.png";
 import { loginWithEmail,loginWithGoogle , getSignInMethods} from "../../auth/login";
 // import { useNavigate } from "react-router-dom";
-import { sendPasswordResetEmail } from "firebase/auth";
+import { sendPasswordResetEmail, getAdditionalUserInfo } from "firebase/auth";
 import { auth } from "../../firebase"; // adjust path if needed
 import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../../auth/AuthProvider";
@@ -65,7 +65,7 @@ function LoginModal({ onClose }: LoginModalProps) {
         return; 
       }
       if (!hasGoogle && !hasPassword) {
-        setError("Account does not exist. Please use 'Continue with Google'.");
+        setError("Registrations not allowed.");
         return; 
       }
 
@@ -100,7 +100,7 @@ function LoginModal({ onClose }: LoginModalProps) {
       const userCredentials = await loginWithEmail(email, password);
       const idToken = await userCredentials.user.getIdToken()
 
-      await fetch(`${HOST}/api/login`, {
+      const response = await fetch(`${HOST}/api/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -108,6 +108,12 @@ function LoginModal({ onClose }: LoginModalProps) {
         credentials: "include",
         body: JSON.stringify({ token: idToken })
       });
+
+      if (!response.ok) {
+        await auth.signOut();
+        throw new Error("Backend login rejected. Registrations not allowed.");
+      }
+
       navigate("/dashboard");
       handleClose();
     } catch (error: any) {
@@ -131,9 +137,23 @@ function LoginModal({ onClose }: LoginModalProps) {
       setIsloading(true)
       setError(null);
       const userCredentials = await loginWithGoogle();
+      
+      const additionalInfo = getAdditionalUserInfo(userCredentials);
+      if (additionalInfo?.isNewUser) {
+        try {
+          await userCredentials.user.delete();
+        } catch (delErr) {
+          console.error("Failed to delete new user:", delErr);
+          await auth.signOut(); // Fallback sign out if delete fails
+        }
+        setError("Registrations not allowed.");
+        setIsloading(false);
+        return;
+      }
+
       const idToken = await userCredentials.user.getIdToken()
 
-      await fetch(`${HOST}/api/login`, {
+      const response = await fetch(`${HOST}/api/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -141,6 +161,12 @@ function LoginModal({ onClose }: LoginModalProps) {
         credentials: "include",
         body: JSON.stringify({ token: idToken })
       });
+
+      if (!response.ok) {
+        await auth.signOut();
+        throw new Error("Backend login rejected.");
+      }
+
       navigate("/dashboard");
       handleClose();
     } catch (error) {

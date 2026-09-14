@@ -52,7 +52,7 @@ export default function BalanceCard({
 
     const fetchBalance = async () => {
       try {
-        const res = await fetch(`${HOST}/api/getBalance/getBalance`, {
+        const res = await fetch(`${HOST}/api/getBalance/getBalance?t=${Date.now()}`, {
           credentials: "include",
         });
 

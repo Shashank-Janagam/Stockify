@@ -15,8 +15,11 @@ import CompanyProfile from "../components/stocks/CompanyProfile";
 import StockSectorAlerts from "../components/stocks/StockSectorAlerts";
 import { useContext } from "react"
 
-import { AuthContext } from "../auth/AuthProvider";// import type { Stock } from "../data/stocks";
+import { AuthContext } from "../auth/AuthProvider";
 import StockChart from "../components/charts/StockChart";
+import ReplayControls from "../components/stocks/ReplayControls";
+import ReplayHistory from "../components/stocks/ReplayHistory";
+
 /* =========================
    TYPES
 ========================= */
@@ -141,10 +144,24 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   const [candleInterval, setCandleInterval] = useState<"1m" | "5m">("1m");
   const [loading, setLoading] = useState(true);
 
-  const [lineData, setLineData] = useState<
-    { x: number; y: number }[]
-  >([]);
+  const [lineData, setLineData] = useState<{ x: number; y: number }[]>([]);
   const [marketState, setMarketState] = useState<string | null>(null);
+
+  // --- LOCAL SIMULATION STATE ---
+  const [simActive, setSimActive] = useState(false);
+  const [simDate, setSimDate] = useState(() => {
+    // Default to yesterday
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    // Skip back past weekends
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+    return d.toISOString().split("T")[0];
+  });
+  const [simTime, setSimTime] = useState<number | null>(null);
+  const [simSpeed, setSimSpeed] = useState(1);
+  const [simPlaying, setSimPlaying] = useState(false);
+  const [simFullData, setSimFullData] = useState<any[]>([]);
+  const [simSessionId, setSimSessionId] = useState<number | null>(null);
 
   const HOST = import.meta.env.VITE_HOST_ADDRESS || ""
   const [refresh, setRefresh] = useState(0)
@@ -232,24 +249,154 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
   useEffect(() => {
     if (!token) return;
-    fetch(`${HOST}/api/sellstock/holding/${symbol}`, {
-      method: "GET",
-      credentials: "include"
+    if (simActive && simSessionId) {
+      Promise.all([
+        fetch(`${HOST}/api/simulation/positions?session_id=${simSessionId}`, { method: "GET", credentials: "include" }).then(res => res.json()),
+        fetch(`${HOST}/api/simulation/trades/${symbol}?session_id=${simSessionId}`, { method: "GET", credentials: "include" }).then(res => res.json())
+      ])
+      .then(([positionsData, tradesData]) => {
+        const filtered = positionsData.filter((p: any) => p.symbol === symbol || p.symbol === symbol + ".NS");
+        let total = 0, intra = 0, deliv = 0;
+        filtered.forEach((p: any) => {
+          total += p.quantity;
+          if (p.productType === "Intraday") intra += p.quantity;
+          else deliv += p.quantity;
+        });
+        setTrades(tradesData || []);
+        setAvailableQty(total);
+        setIntradayQty(intra);
+        setDeliveryQty(deliv);
+      })
+      .catch(err => console.error("Failed to fetch sim positions/trades", err));
+    } else {
+      fetch(`${HOST}/api/sellstock/holding/${symbol}`, {
+        method: "GET",
+        credentials: "include"
+      })
+        .then(res => res.json())
+        .then(data => {
+          setTrades(data.trades);
+          setAvailableQty(data.totalQuantity);
+          setIntradayQty(data.intradayQuantity || 0);
+          setDeliveryQty(data.deliveryQuantity || 0);
+        });
+    }
+  }, [symbol, token, refresh, simActive, simSessionId]);
 
-    })
-      .then(res => res.json())
-      .then(data => {
-        setTrades(data.trades);
-        setAvailableQty(data.totalQuantity);
-        setIntradayQty(data.intradayQuantity || 0);
-        setDeliveryQty(data.deliveryQuantity || 0);
+  // --- SIMULATION TICKER ---
+  useEffect(() => {
+    if (!simActive || !simPlaying || simFullData.length === 0) return;
+    
+    // Default to the first timestamp of the day if not set
+    if (!simTime && simFullData.length > 0) {
+      setSimTime(simFullData[0].x);
+    }
+
+    const tickDuration = 1000 / simSpeed;
+
+    const intervalId = setInterval(() => {
+      setSimTime(prev => {
+        if (!prev) return simFullData[0].x;
+        const nextTime = prev + 60000; // Always step exactly 1 minute at a time
+        
+        // Find all candles up to nextTime
+        const visibleCandles = simFullData.filter(c => c.x <= nextTime);
+        if (visibleCandles.length > 0) {
+          const lastCandle = visibleCandles[visibleCandles.length - 1];
+          setPrice(lastCandle.c);
+          setChange(lastCandle.c - simFullData[0].o);
+          setPercent(((lastCandle.c - simFullData[0].o) / simFullData[0].o) * 100);
+          
+          setData(visibleCandles);
+          setLineData(visibleCandles.map(c => ({ x: c.x, y: c.c })));
+        }
+
+        // Stop if we reached the end
+        if (nextTime >= simFullData[simFullData.length - 1].x) {
+          setSimPlaying(false);
+          return simFullData[simFullData.length - 1].x;
+        }
+        
+        return nextTime;
       });
-  }, [symbol, token, refresh]);
+    }, tickDuration);
 
+    return () => clearInterval(intervalId);
+  }, [simActive, simPlaying, simFullData, simSpeed]);
 
+  const toggleSimulation = () => {
+    if (simActive) {
+      // Mark session as completed when exiting
+      if (simSessionId) {
+        fetch(`${HOST}/api/replay/sessions/${simSessionId}/complete`, {
+          method: 'POST', credentials: 'include'
+        }).catch(() => {});
+      }
+      setSimActive(false);
+      setSimPlaying(false);
+      setSimTime(null);
+      setSimFullData([]);
+      setSimSessionId(null);
+      rerefresh();
+    } else {
+      setSimActive(true);
+    }
+  };
 
+  const loadSimulationData = async () => {
+    setLoading(true);
+    setTimeframe("1D");
+    try {
+      // 1. Create a new isolated replay session
+      const sessionRes = await fetch(`${HOST}/api/replay/sessions`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol: symbol.replace('.NS', ''),
+          replay_date: simDate,
+          interval_used: '1m',
+          initial_capital: 100000,
+        }),
+      });
+      const sessionData = await sessionRes.json();
+      if (!sessionRes.ok || !sessionData.sessionId) {
+        alert('Failed to create replay session. Please try again.');
+        setLoading(false);
+        return;
+      }
+      setSimSessionId(sessionData.sessionId);
 
+      // 2. Fetch 1m candles (7 days back), filter by selected date
+      const res = await fetch(`${HOST}/api/stocks/${symbol}/history?days=7&interval=1m`);
+      const candles = await res.json();
+      if (candles && candles.length > 0) {
+        const shifted = candles.map((d: any) => ({ ...d, x: d.x + 5.5 * 3600 * 1000 }));
+        const targetDateStr = new Date(simDate).toISOString().split('T')[0];
+        const filtered = shifted.filter((c: any) => {
+          const cDateStr = new Date(c.x).toISOString().split('T')[0];
+          return cDateStr === targetDateStr;
+        });
 
+        if (filtered.length > 0) {
+          setSimFullData(filtered);
+          setSimTime(filtered[0].x);
+          setBaseline(filtered[0].o);
+          setPrice(filtered[0].o);
+          setData([filtered[0]]);
+          setLineData([{ x: filtered[0].x, y: filtered[0].o }]);
+        } else {
+          alert(`No 1m market data found for ${simDate}. Please select a different trading day.`);
+          setSimActive(false);
+          setSimSessionId(null);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -329,7 +476,10 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     setLineData([]);
 
     // 🟢 MARKET OPEN / REPLAY → WS
-    if (marketState === "REGULAR") {
+    if (simActive) {
+      // In simulation mode, do not connect to live websocket or fetch static data
+      return;
+    } else if (marketState === "REGULAR") {
       subscribe("STOCK_LIVE", { symbol, interval: candleInterval });
     }
     // 🔴 MARKET CLOSED → STATIC
@@ -388,7 +538,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   ========================= */
   const [data, setData] = useState<Candle2[]>([]);
   useEffect(() => {
-    if (timeframe === "1D") return;
+    if (timeframe === "1D" || simActive) return;
 
     const days = timeframeToDays[timeframe];
 
@@ -568,60 +718,63 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
           change={change}
           percent={percent}
           timeframe={timeframe}
-          marketState={marketState}
+          marketState={simActive ? "SIMULATION" : marketState}
+          simulatedTime={simTime}
           quote={quote}
           profile={profile}
         />
-        <div className="chart-controls">
-          <TimeframeBar
-            active={timeframe}
-            onChange={setTimeframe}
-          />
+        {!simActive && (
+          <div className="chart-controls">
+            <TimeframeBar
+              active={timeframe}
+              onChange={setTimeframe}
+            />
 
-          <div className="chart-type-toggle">
+            <div className="chart-type-toggle">
+              <button
+                className={chartType === "line" ? "active" : ""}
+                onClick={() => setChartType("line")}
+              >
+                Line
+              </button>
+              <button
+                className={chartType === "candle" ? "active" : ""}
+                onClick={() => setChartType("candle")}
+              >
+                Candles
+              </button>
+              {chartType === "candle" && timeframe === "1D" && (
+                <>
+                  <div style={{width: 1, backgroundColor: '#e2e8f0', margin: '0 4px', height: '16px'}}></div>
+                  <button
+                    className={candleInterval === "1m" ? "active" : ""}
+                    onClick={() => setCandleInterval("1m")}
+                  >
+                    1m
+                  </button>
+                  <button
+                    className={candleInterval === "5m" ? "active" : ""}
+                    onClick={() => setCandleInterval("5m")}
+                  >
+                    5m
+                  </button>
+                </>
+              )}
+            </div>
+
             <button
-              className={chartType === "line" ? "active" : ""}
-              onClick={() => setChartType("line")}
+              className="terminal-btn"
+              onClick={() => window.open(`https://www.tradingview.com/chart/?symbol=NSE:${(symbol || "").replace(".NS", "")}`, "_blank")}
             >
-              Line
+              <span>Terminal</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
             </button>
-            <button
-              className={chartType === "candle" ? "active" : ""}
-              onClick={() => setChartType("candle")}
-            >
-              Candles
-            </button>
-            {chartType === "candle" && timeframe === "1D" && (
-              <>
-                <div style={{width: 1, backgroundColor: '#e2e8f0', margin: '0 4px', height: '16px'}}></div>
-                <button
-                  className={candleInterval === "1m" ? "active" : ""}
-                  onClick={() => setCandleInterval("1m")}
-                >
-                  1m
-                </button>
-                <button
-                  className={candleInterval === "5m" ? "active" : ""}
-                  onClick={() => setCandleInterval("5m")}
-                >
-                  5m
-                </button>
-              </>
-            )}
           </div>
-
-          <button
-            className="terminal-btn"
-            onClick={() => window.open(`https://www.tradingview.com/chart/?symbol=NSE:${(symbol || "").replace(".NS", "")}`, "_blank")}
-          >
-            <span>Terminal</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
-            </svg>
-          </button>
-        </div>
+        )}
 
         {loading && <GraphSkeleton />}
 
@@ -632,14 +785,14 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
                 lineData={lineData}
                 timeframe={timeframe}
                 referencePrice={baseline}
-                marketState={marketState ?? ""}
+                marketState={simActive ? "SIMULATION" : (marketState ?? "")}
                 trades={trades}
                 percent={percent.toString()}
                 pendingSL={pendingSL}
               />
             ) : (() => {
               let fixedRange = undefined;
-              if (timeframe === "1D") {
+              if (timeframe === "1D" || simActive) {
                 const anchorTs = data.length > 0 ? data[data.length - 1].x : Date.now();
                 const d = new Date(anchorTs);
                 const marketOpen = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 9, 15, 0);
@@ -649,6 +802,46 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
               return <StockChart data={formattedData} fixedXRange={fixedRange} />;
             })()}
           </div>
+        )}
+
+        <div style={{ marginTop: '2px', marginBottom: '8px' }}>
+          <ReplayControls
+            isActive={simActive}
+            isDataLoaded={simFullData.length > 0}
+            selectedDate={simDate}
+            simulatedTime={simTime}
+            speed={simSpeed}
+            onToggleActive={toggleSimulation}
+            onDateChange={(d) => { setSimDate(d); setSimFullData([]); setSimTime(null); setSimPlaying(false); }}
+            onSpeedChange={setSimSpeed}
+            onPlayPause={() => setSimPlaying(!simPlaying)}
+            onLoadData={loadSimulationData}
+            isPlaying={simPlaying}
+            totalTicks={simFullData.length}
+            currentTick={simFullData.findIndex(c => c.x === simTime)}
+            onSeek={(idx) => {
+              if (simFullData[idx]) {
+                setSimTime(simFullData[idx].x);
+                const visibleCandles = simFullData.filter(c => c.x <= simFullData[idx].x);
+                if (visibleCandles.length > 0) {
+                  const lastCandle = visibleCandles[visibleCandles.length - 1];
+                  setPrice(lastCandle.c);
+                  setChange(lastCandle.c - simFullData[0].o);
+                  setPercent(((lastCandle.c - simFullData[0].o) / simFullData[0].o) * 100);
+                  setData(visibleCandles);
+                  setLineData(visibleCandles.map(c => ({ x: c.x, y: c.c })));
+                }
+              }
+            }}
+          />
+        </div>
+
+        {/* Replay History — only shown when sim is active */}
+        {simActive && (
+          <ReplayHistory
+            symbol={symbol}
+            activeSessionId={simSessionId}
+          />
         )}
 
         {/* ── CONSTITUENT STOCKS / HOLDINGS (For Indices & Mutual Funds/ETFs) ── */}
@@ -681,6 +874,9 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
             deliveryQty={deliveryQty}
             refresh={refresh}
             rerefresh={rerefresh}
+            isSimulation={simActive}
+            simulatedTime={simTime}
+            replaySessionId={simSessionId}
           />
           <CompanyNewsPanel symbol={symbol} />
         </div>

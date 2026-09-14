@@ -42,6 +42,18 @@ const [isGoogleOnlyUser, setIsGoogleOnlyUser] = useState(false);
 
            // 2. If session invalid (race condition or expired), try to restore it silently
            if (!isSessionValid) {
+             // 🚨 PREVENT NEW USER REGISTRATION:
+             // Do not automatically hit /api/login if it's a brand new user
+             // They will be handled (and deleted) by LoginModule.tsx
+             const createdAt = Number((firebaseUser.metadata as any).createdAt || 0);
+             const lastLoginAt = Number((firebaseUser.metadata as any).lastLoginAt || 0);
+             
+             if (createdAt > 0 && Math.abs(lastLoginAt - createdAt) < 5000) {
+                console.warn("New user detected globally. Skipping session restore.");
+                setLoading(false);
+                return;
+             }
+             
              console.log("Session missing or inactive. Attempting to restore session...");
              const idToken = await firebaseUser.getIdToken();
              const loginRes = await fetch(`${HOST}/api/login`, {

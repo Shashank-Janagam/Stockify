@@ -12,6 +12,7 @@ type StockHeaderProps = {
   marketState?: string | null;
   quote?: any;
   profile?: any;
+  simulatedTime?: number | null;
 };
 
 export default function StockHeader({
@@ -22,7 +23,8 @@ export default function StockHeader({
   percent,
   marketState,
   quote,
-  profile
+  profile,
+  simulatedTime
 }: StockHeaderProps) {
   const [isFollowing, setIsFollowing] = useState(false);
   const [loadingFollow, setLoadingFollow] = useState(false);
@@ -156,10 +158,16 @@ export default function StockHeader({
           </div>
           <div className="timestamp-row">
             <span className="timestamp">
-              {new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric", hour12: true })} IST
+              {simulatedTime 
+                ? new Date(simulatedTime).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric", hour12: true }) 
+                : new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric", hour12: true })} IST
             </span>
             <span className="dot-separator">•</span>
-            <span className="market-state">Market {marketState === "REGULAR" ? "Open" : "Closed"}</span>
+            <span className="market-state">
+              {marketState === "SIMULATION" 
+                ? "Simulated Market" 
+                : `Market ${marketState === "REGULAR" ? "Open" : "Closed"}`}
+            </span>
           </div>
         </div>
 

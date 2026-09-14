@@ -32,6 +32,10 @@ import paperbullRoutes from "./modules/paperbull/paperbull.routes.js";
 import { spawn } from "child_process";
 import path from "path";
 import { initTelegramBot } from "./modules/telegram/bot.js";
+import simWalletRoutes from "./modules/simulation/simWallet.routes.js";
+import simBuyStock from "./modules/simulation/simBuyStock.js";
+import simSellStock from "./modules/simulation/simSellStock.js";
+import replaySessionRoutes from "./modules/simulation/replaySession.routes.js";
 
 import login from "./Middleware/login.js"
 import rateLimit from "express-rate-limit";
@@ -169,6 +173,10 @@ app.post("/api/algo/backtest/all", async (req, res) => {
 });
 
 // app.use("/api/stocks",indiaReplay);
+app.use("/api/simulation", simWalletRoutes);
+app.use("/api/simulation", simBuyStock);
+app.use("/api/simulation", simSellStock);
+app.use("/api/replay", replaySessionRoutes);
 
 app.get("api/health", (req, res) => {
   res.status(200).send("OK");

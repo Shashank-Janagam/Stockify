@@ -34,11 +34,11 @@ export  class WebSocketManager {
     this.indicesInterval = null;
     this.lastIndicesData = null;
     this.INDICES = [
-      { symbol: "^NSEI",             label: "NIFTY 50" },
-      { symbol: "^BSESN",            label: "SENSEX" },
-      { symbol: "^NSEBANK",          label: "BANKNIFTY" },
-      { symbol: "^CNXIT",            label: "NIFTY IT" },
-      { symbol: "^CNXFIN",           label: "FINNIFTY" },
+      { symbol: "^NSEI",                   label: "NIFTY 50" },
+      { symbol: "^BSESN",                  label: "SENSEX" },
+      { symbol: "^NSEBANK",                label: "BANKNIFTY" },
+      { symbol: "NIFTY_FIN_SERVICE.NS",    label: "FINNIFTY" },
+      { symbol: "NIFTY_MIDCAP_100.NS",     label: "MIDCPNIFTY" },
     ];
 
     try {
@@ -456,22 +456,57 @@ export  class WebSocketManager {
     // Subscribe once to all index symbols — released when last subscriber leaves
     upstoxFeedService.subscribe(this.INDICES.map(i => i.symbol));
 
-    const sendUpdate = () => {
+    const sendUpdate = async () => {
       try {
         if (this.indicesSubscribers.size === 0) {
           if (this.indicesInterval) { clearInterval(this.indicesInterval); this.indicesInterval = null; }
           return;
         }
-        const mapped = this.INDICES.map(idx => {
+        
+        const missing = [];
+        let mapped = [];
+        
+        this.INDICES.forEach(idx => {
           const tick = upstoxFeedService.getTick(idx.symbol);
-          return {
-            symbol: idx.symbol,
-            label: idx.label,
-            price: tick?.price ?? null,
-            change: tick?.change ?? 0,
-            percent: tick?.percent ?? 0,
-          };
+          if (tick) {
+            mapped.push({
+              symbol: idx.symbol,
+              label: idx.label,
+              price: tick.price,
+              change: tick.change,
+              percent: tick.percent,
+            });
+          } else {
+            missing.push(idx);
+          }
         });
+        
+        if (missing.length > 0) {
+            const missingSymbols = missing.map(i => i.symbol);
+            const yahooQuotes = await MultiStockYahoo(missingSymbols);
+            
+            missing.forEach(idx => {
+                const yQuote = yahooQuotes.find(q => q.symbol === idx.symbol || q.symbol === idx.symbol + ".NS");
+                if (yQuote) {
+                    mapped.push({
+                        symbol: idx.symbol,
+                        label: idx.label,
+                        price: yQuote.price,
+                        change: yQuote.change,
+                        percent: yQuote.percent,
+                    });
+                } else {
+                    mapped.push({
+                        symbol: idx.symbol,
+                        label: idx.label,
+                        price: null,
+                        change: 0,
+                        percent: 0,
+                    });
+                }
+            });
+        }
+        
         this.lastIndicesData = mapped;
         const payload = JSON.stringify({ type: "INDICES_UPDATE", data: mapped });
         this.indicesSubscribers.forEach(sub => {
@@ -482,7 +517,7 @@ export  class WebSocketManager {
       }
     };
 
-    this.indicesInterval = setInterval(sendUpdate, 1000);
+    this.indicesInterval = setInterval(sendUpdate, 4000);
     sendUpdate();
   }
 
