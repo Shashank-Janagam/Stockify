@@ -9,10 +9,11 @@ interface HomePageProps {
 }
 
 const HomePage = ({ onLoginClick }: HomePageProps) => {
-  const { user } = useContext(AuthContext);
+  const { user, loading } = useContext(AuthContext);
   const navigate = useNavigate();
   
   function getStarted() {
+    if (loading) return; // Wait for auth resolution
     if (user) {
       navigate("/dashboard");
     } else {

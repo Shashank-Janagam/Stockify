@@ -83,7 +83,7 @@ router.post("/buy", requireAuth, async (req, res) => {
         userId = ins.rows[0].id;
         userMobile = ins.rows[0].Mobile;
         await client.query(
-          `INSERT INTO wallet_accounts (user_id, available_balance) VALUES ($1, 0)`,
+          `INSERT INTO wallet_accounts (user_id, available_balance, account_type) VALUES ($1, 0, 'LIVE')`,
           [userId]
         );
         await client.query("COMMIT");
@@ -174,7 +174,7 @@ router.post("/buy", requireAuth, async (req, res) => {
     const totalPrice = pricePerShare * quantity;
 
     const walletRes = await client.query(
-      `SELECT available_balance FROM wallet_accounts WHERE user_id = $1 FOR UPDATE`,
+      `SELECT available_balance FROM wallet_accounts WHERE user_id = $1 AND (account_type = 'LIVE' OR account_type IS NULL) FOR UPDATE`,
       [userId]
     );
     const balance = Number(walletRes.rows[0]?.available_balance ?? 0);
@@ -187,7 +187,7 @@ router.post("/buy", requireAuth, async (req, res) => {
     await client.query(
       `UPDATE wallet_accounts
        SET available_balance = $1, updated_at = NOW() AT TIME ZONE 'Asia/Kolkata'
-       WHERE user_id = $2`,
+       WHERE user_id = $2 AND (account_type = 'LIVE' OR account_type IS NULL)`,
       [newBalance, userId]
     );
 

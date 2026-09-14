@@ -10,11 +10,18 @@ router.get("/getBalance", requireAuth, async (req, res) => {
     const { uid, name, email } = req.user;
     const redisKey = `wallet:balance:${uid}`; // use uid as key
 
+    // Disable browser caching
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     // 1️⃣ Try Redis cache
     const cached = await redis.get(redisKey);
     if (cached) {
+      console.log(`[getBalance] CACHE HIT for ${redisKey}:`, cached);
       return res.json(JSON.parse(cached));
     }
+    console.log(`[getBalance] CACHE MISS for ${redisKey}`);
 
     // 2️⃣ Resolve User & Wallet (Lazy Init)
     let userRes = await db.query(`SELECT id FROM users WHERE uid = $1`, [uid]);
@@ -28,7 +35,7 @@ router.get("/getBalance", requireAuth, async (req, res) => {
       );
       userId = insert.rows[0].id;
       // Default Wallet
-      await db.query(`INSERT INTO wallet_accounts (user_id, available_balance) VALUES ($1, 0)`, [userId]);
+      await db.query(`INSERT INTO wallet_accounts (user_id, available_balance, account_type) VALUES ($1, 0, 'LIVE')`, [userId]);
       await db.query("COMMIT");
     } else {
       userId = userRes.rows[0].id;
@@ -36,7 +43,7 @@ router.get("/getBalance", requireAuth, async (req, res) => {
 
     // 3️⃣ Fetch Balance
     const walletRes = await db.query(
-        `SELECT available_balance, blocked_balance FROM wallet_accounts WHERE user_id = $1`,
+        `SELECT available_balance, blocked_balance FROM wallet_accounts WHERE user_id = $1 AND (account_type = 'LIVE' OR account_type IS NULL)`,
         [userId]
     );
 

@@ -728,7 +728,7 @@ export function StockChartIndia({
   const minPriceFinal = Math.min(...allVisiblePrices);
   const maxPriceFinal = Math.max(...allVisiblePrices);
   const pad = (maxPriceFinal - minPriceFinal) * 0.12 || minPriceFinal * 0.005 || 1;
-  const isMarketOpen = marketState === "REGULAR";
+  const isMarketOpen = marketState === "REGULAR" || marketState === "SIMULATION";
   const [lineColor, setLineColor] = useState("");
   useEffect(() => {
     const pct = Number(percent) || 0;

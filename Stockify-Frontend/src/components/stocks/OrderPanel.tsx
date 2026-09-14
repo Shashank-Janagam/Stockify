@@ -26,6 +26,9 @@ type OrderPanelProps = {
     mode: "Delivery" | "Intraday";
     qty: number;
   }) => void;
+  isSimulation?: boolean;
+  simulatedTime?: number | null;
+  replaySessionId?: number | null;
 };
 
 type Balance = {
@@ -57,6 +60,9 @@ export default function OrderPanel({
   deliveryQty = 0,
   refresh,
   rerefresh,
+  isSimulation = false,
+  simulatedTime = null,
+  replaySessionId = null,
 }: OrderPanelProps) {
   const [tab, setTab] = useState<"BUY" | "SELL">("BUY");
   const [mode, setMode] = useState<"Delivery" | "Intraday">("Delivery");
@@ -99,17 +105,25 @@ export default function OrderPanel({
         finalSlPrice = slType === "PRICE" ? val : price * (1 + val / 100);
       }
 
-      const res = await fetch(`${HOST_ADDR}/api/orderExecution/buy`, {
+      const endpoint = isSimulation ? "/api/simulation/buy" : "/api/orderExecution/buy";
+      const payload: any = {
+        symbol,
+        quantity: finalQty,
+        sl_enabled: slEnabled,
+        sl_price: Number(finalSlPrice.toFixed(2)),
+        product_type: mode,
+      };
+      if (isSimulation) {
+        payload.simulated_price = price;
+        payload.simulated_time = simulatedTime;
+        payload.replay_session_id = replaySessionId;
+      }
+
+      const res = await fetch(`${HOST_ADDR}${endpoint}`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          symbol,
-          quantity: finalQty,
-          sl_enabled: slEnabled,
-          sl_price: Number(finalSlPrice.toFixed(2)),
-          product_type: mode,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -140,17 +154,25 @@ export default function OrderPanel({
         finalSlPrice = slType === "PRICE" ? val : price * (1 - val / 100);
       }
 
-      const res = await fetch(`${HOST_ADDR}/api/sellstock/sell`, {
+      const endpoint = isSimulation ? "/api/simulation/sell" : "/api/sellstock/sell";
+      const payload: any = {
+        symbol,
+        quantity: finalQty,
+        sl_enabled: slEnabled,
+        sl_price: Number(finalSlPrice.toFixed(2)),
+        product_type: mode,
+      };
+      if (isSimulation) {
+        payload.simulated_price = price;
+        payload.simulated_time = simulatedTime;
+        payload.replay_session_id = replaySessionId;
+      }
+
+      const res = await fetch(`${HOST_ADDR}${endpoint}`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          symbol,
-          quantity: finalQty,
-          sl_enabled: slEnabled,
-          sl_price: Number(finalSlPrice.toFixed(2)),
-          product_type: mode,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -205,10 +227,20 @@ export default function OrderPanel({
 
   useEffect(() => {
     if (!token) return;
+
+    // If simulation mode is active but session not yet created, show sim starting balance
+    if (isSimulation && !replaySessionId) {
+      setBalance({ cash: 100000, blocked: 0 });
+      return;
+    }
+
     let mounted = true;
     const fetchBalance = async () => {
       try {
-        const res = await fetch(`${HOST_ADDR}/api/getBalance/getBalance`, {
+        const url = isSimulation
+          ? `/api/simulation/balance?session_id=${replaySessionId}`
+          : "/api/getBalance/getBalance";
+        const res = await fetch(`${HOST_ADDR}${url}`, {
           method: "GET",
           credentials: "include",
         });
@@ -221,7 +253,19 @@ export default function OrderPanel({
     };
     fetchBalance();
     return () => { mounted = false; };
-  }, [token, refresh]);
+  }, [token, refresh, isSimulation, replaySessionId]);
+
+  const handleSimReset = async () => {
+    try {
+      const res = await fetch(`${HOST_ADDR}/api/simulation/reset-wallet`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) rerefresh();
+    } catch(err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     const required = Number(qty || 0) * price;
@@ -310,6 +354,12 @@ export default function OrderPanel({
 
   return (
     <div className="order-panel">
+      {isSimulation && (
+        <div style={{ backgroundColor: '#f59e0b', color: 'white', padding: '6px 12px', fontSize: '0.85rem', fontWeight: 'bold', borderRadius: '4px', textAlign: 'center', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>SIMULATION MODE</span>
+          <button onClick={handleSimReset} title="Reset simulation wallet" style={{background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem', padding: 0}}>↻</button>
+        </div>
+      )}
 
       {/* ── HEADER ── */}
       <div className="op-header">

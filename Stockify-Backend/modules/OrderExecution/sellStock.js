@@ -205,7 +205,7 @@ router.post("/sell", requireAuth, async (req, res) => {
 
     const walletRes = await client.query(
       `UPDATE wallet_accounts SET available_balance = available_balance + $1
-       WHERE user_id = $2 RETURNING available_balance`,
+       WHERE user_id = $2 AND (account_type = 'LIVE' OR account_type IS NULL) RETURNING available_balance`,
       [sellValue, userId]
     );
     const newBalance = walletRes.rows[0].available_balance;
