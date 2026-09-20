@@ -41,28 +41,31 @@ class RSI:
         list[float] — RSI values 0–100; NaN until period+1 candles are available.
         """
         n = len(candles)
-        result = [float("nan")] * n
         if n < period + 1 or period < 1:
-            return result
+            return [float("nan")] * n
 
+        import pandas as pd
+        import numpy as np
+        
         prices  = [getattr(c, source) for c in candles]
-        changes = [prices[i] - prices[i - 1] for i in range(1, n)]
+        series = pd.Series(prices)
+        
+        # Calculate daily returns
+        delta = series.diff()
+        
+        # Make two series: one for lower closes and one for higher closes
+        up = delta.clip(lower=0)
+        down = -1 * delta.clip(upper=0)
+        
+        # Wilder's smoothing uses alpha = 1 / period
+        roll_up = up.ewm(alpha=1/period, adjust=False, min_periods=period).mean()
+        roll_down = down.ewm(alpha=1/period, adjust=False, min_periods=period).mean()
+        
+        # Calculate RS and RSI
+        rs = roll_up / roll_down
+        rsi = 100.0 - (100.0 / (1.0 + rs))
+        
+        # Fill inf cases where roll_down is 0
+        rsi = rsi.replace([np.inf, -np.inf], 100.0)
 
-        # Seed: simple average of first `period` gains and losses
-        avg_gain = sum(max(ch, 0) for ch in changes[:period]) / period
-        avg_loss = sum(abs(min(ch, 0)) for ch in changes[:period]) / period
-
-        rs = avg_gain / avg_loss if avg_loss != 0 else math.inf
-        result[period] = 100 - (100 / (1 + rs))
-
-        # Wilder's smoothing for the remainder
-        for i in range(period + 1, n):
-            change   = changes[i - 1]
-            gain     = max(change, 0)
-            loss     = abs(min(change, 0))
-            avg_gain = (avg_gain * (period - 1) + gain) / period
-            avg_loss = (avg_loss * (period - 1) + loss) / period
-            rs       = avg_gain / avg_loss if avg_loss != 0 else math.inf
-            result[i] = 100 - (100 / (1 + rs))
-
-        return result
+        return rsi.fillna(float("nan")).tolist()

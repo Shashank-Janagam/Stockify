@@ -46,68 +46,81 @@ class SuperTrend:
         n = len(candles)
         nan = float("nan")
 
-        supertrend = [nan] * n
-        trend      = [0]  * n
-        upper_band = [nan] * n
-        lower_band = [nan] * n
-
         if n == 0:
-            return SuperTrendResult(supertrend, trend, upper_band, lower_band)
+            return SuperTrendResult([], [], [], [])
 
+        import pandas as pd
+        import numpy as np
+        
         atr = ATR.calculate(candles, period=period)
-
+        atr_arr = np.array(atr)
+        
+        high = np.array([c.high for c in candles])
+        low = np.array([c.low for c in candles])
+        close = np.array([c.close for c in candles])
+        
+        hl2 = (high + low) / 2.0
+        
+        raw_up = hl2 + (multiplier * atr_arr)
+        raw_dn = hl2 - (multiplier * atr_arr)
+        
+        upper_band = np.full(n, nan)
+        lower_band = np.full(n, nan)
+        supertrend = np.full(n, nan)
+        trend = np.zeros(n, dtype=int)
+        
+        # SuperTrend is inherently path-dependent, so we use a fast numpy loop
         prev_upper = nan
         prev_lower = nan
-        prev_st    = nan
-
+        prev_st = nan
+        
         for i in range(1, n):
-            atr_val = atr[i]
-            if atr_val != atr_val:  # NaN
+            if np.isnan(atr_arr[i]):
                 continue
-
-            hl2     = (candles[i].high + candles[i].low) / 2.0
-            raw_up  = hl2 + multiplier * atr_val
-            raw_dn  = hl2 - multiplier * atr_val
-
-            # Upper band: can only decrease (tightens in bullish trend)
-            upper_band[i] = (
-                min(raw_up, prev_upper)
-                if (prev_upper == prev_upper and raw_up > prev_upper)
-                else raw_up
-            )
-
-            # Lower band: can only increase (tightens in bearish trend)
-            lower_band[i] = (
-                max(raw_dn, prev_lower)
-                if (prev_lower == prev_lower and raw_dn < prev_lower)
-                else raw_dn
-            )
-
-            close = candles[i].close
-
-            if prev_st != prev_st:  # First valid ATR — initialize bullish
-                trend[i]      = 1
+                
+            r_up = raw_up[i]
+            r_dn = raw_dn[i]
+            c = close[i]
+            
+            # Upper band logic
+            if not np.isnan(prev_upper) and prev_upper < r_up and close[i-1] < prev_upper:
+                upper_band[i] = prev_upper
+            else:
+                upper_band[i] = r_up
+                
+            # Lower band logic
+            if not np.isnan(prev_lower) and prev_lower > r_dn and close[i-1] > prev_lower:
+                lower_band[i] = prev_lower
+            else:
+                lower_band[i] = r_dn
+                
+            # Trend logic
+            if np.isnan(prev_st):
+                trend[i] = 1
                 supertrend[i] = lower_band[i]
-            elif prev_st == prev_upper:  # Was bearish
-                if close > upper_band[i]:
+            elif prev_st == prev_upper: # Was bearish
+                if c > upper_band[i]:
                     trend[i] = 1
+                    supertrend[i] = lower_band[i]
                 else:
                     trend[i] = -1
-                supertrend[i] = lower_band[i] if trend[i] == 1 else upper_band[i]
-            else:                         # Was bullish
-                if close < lower_band[i]:
+                    supertrend[i] = upper_band[i]
+            else: # Was bullish
+                if c < lower_band[i]:
                     trend[i] = -1
+                    supertrend[i] = upper_band[i]
                 else:
                     trend[i] = 1
-                supertrend[i] = lower_band[i] if trend[i] == 1 else upper_band[i]
-
+                    supertrend[i] = lower_band[i]
+                    
             prev_upper = upper_band[i]
             prev_lower = lower_band[i]
-            prev_st    = supertrend[i]
-
+            prev_st = supertrend[i]
+            
+        # Convert NaN to float("nan") for JSON serialization compatibility
         return SuperTrendResult(
-            supertrend=supertrend,
-            trend=trend,
-            upper_band=upper_band,
-            lower_band=lower_band,
+            supertrend=pd.Series(supertrend).fillna(float("nan")).tolist(),
+            trend=trend.tolist(),
+            upper_band=pd.Series(upper_band).fillna(float("nan")).tolist(),
+            lower_band=pd.Series(lower_band).fillna(float("nan")).tolist(),
         )

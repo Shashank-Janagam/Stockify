@@ -195,66 +195,102 @@ async def get_all_news(
         }
     }
 
+@app.get("/api/test_yf/{symbol}")
+async def test_yf(symbol: str):
+    try:
+        ticker = yf.Ticker(symbol)
+        news = await run_in_threadpool(lambda: ticker.news)
+        return {"status": "success", "count": len(news) if news else 0, "news": news}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/news/stock/{symbol}")
 async def get_stock_news(
     symbol: str = Path(..., title="The stock symbol"),
     live: bool = Query(False)
 ):
     if live:
-        print(f"Fetching dynamically (overall market) to map for {symbol} on user request...")
-        # 1. Fetch overall market announcements
-        market_announcements = await run_in_threadpool(fetch_overall_market_announcements)
-        if market_announcements:
-            # 2. Map them to stocks using existing resolve logic
-            await resolve_announcement_symbols(market_announcements)
+        print(f"Fetching dynamically (yfinance) for {symbol} on user request...")
+        symbol_base = symbol.split('.')[0].upper()
+        
+        # 1. Fetch yfinance news
+        try:
+            yf_sym = f"{symbol_base}.NS"
+            ticker = yf.Ticker(yf_sym)
+            yf_news = await run_in_threadpool(lambda: ticker.news)
             
-            # 3. Filter for matching announcements
-            symbol_base = symbol.split('.')[0].upper()
-            matching_announcements = []
-            for ann in market_announcements:
-                ann_sym = str(ann.get("symbol", "")).upper()
-                ann_sym_base = ann_sym.split('.')[0]
-                if ann_sym == symbol.upper() or ann_sym_base == symbol_base:
-                    matching_announcements.append(ann)
-            
-            if matching_announcements:
-                # 4. Check what we already have in the DB to avoid re-enriching everything
+            if yf_news:
+                # 2. Format to match announcement schema
+                new_raw = []
+                for item in yf_news:
+                    if not isinstance(item, dict):
+                        continue
+                    
+                    content = item.get("content")
+                    if not isinstance(content, dict):
+                        content = item
+                        
+                    title = content.get("title", "")
+                    summary = content.get("summary", "")
+                    pub_date_str = content.get("pubDate", "")
+                    
+                    link_obj = content.get("clickThroughUrl")
+                    link = link_obj.get("url", "") if isinstance(link_obj, dict) else ""
+                    
+                    news_id = content.get("id", str(hash(title)))
+                    
+                    if not title:
+                        continue
+                        
+                    # Handle pubDate parsing
+                    try:
+                        # yfinance usually returns ISO 8601 with Z e.g. "2026-08-08T00:01:00Z"
+                        pub_date = datetime.strptime(pub_date_str.replace("Z", "+0000"), "%Y-%m-%dT%H:%M:%S%z")
+                        announced_at = pub_date.isoformat()
+                    except:
+                        announced_at = datetime.now().isoformat()
+                        
+                    new_raw.append({
+                        "bse_id": news_id,
+                        "scrip_code": "",
+                        "symbol": symbol,
+                        "company_name": symbol_base,
+                        "headline": title,
+                        "summary": summary,
+                        "pdf_url": link,
+                        "announced_at": announced_at,
+                        "category": "news",
+                        "sentiment": "neutral",
+                        "ai_summary": summary # Use the yfinance summary directly to avoid slow PDF parsing
+                    })
+                    
+                # 3. Check existing in DB
                 existing_docs = await announcements_collection.find({
                     "symbol": {"$regex": f"^{symbol_base}", "$options": "i"}
                 }).to_list(length=1000)
                 existing_ids = {str(doc["bse_id"]) for doc in existing_docs}
                 
-                ten_days_ago = datetime.now() - timedelta(days=10)
-                new_raw = []
-                for ann in matching_announcements:
+                # We skip `enrich_announcements_batch` here because yfinance gives us news articles,
+                # not PDF BSE announcements. `llm_enrichment.py` expects PDFs.
+                # Just save the formatted yfinance news directly to DB.
+                saved_count = 0
+                for ann in new_raw:
                     if str(ann["bse_id"]) not in existing_ids:
-                        try:
-                            # Parse date like '2026-05-27T17:59:49.16'
-                            ann_date = datetime.fromisoformat(ann["announced_at"].split('.')[0])
-                            if ann_date >= ten_days_ago:
-                                new_raw.append(ann)
-                        except Exception:
-                            new_raw.append(ann)
-                
-                if new_raw:
-                    # 5. Enrich only the new matching announcements
-                    enriched = await run_in_threadpool(enrich_announcements_batch, new_raw)
-                    
-                    # 6. Save the new enriched announcements to MongoDB
-                    for ann in enriched:
                         await announcements_collection.update_one(
                             {"bse_id": ann["bse_id"]},
                             {"$set": ann},
                             upsert=True
                         )
-                    print(f"Stored {len(enriched)} new announcements dynamically for {symbol}")
+                        saved_count += 1
+                        
+                print(f"Stored {saved_count} new yfinance announcements dynamically for {symbol}")
+        except Exception as e:
+            print(f"Error dynamically fetching yfinance news for {symbol}: {e}")
                 
-    # Return latest news from DB (only from the past 10 days)
-    ten_days_ago_iso = (datetime.now() - timedelta(days=10)).isoformat()
+    # Return latest news from DB
     symbol_base = symbol.split('.')[0].upper()
     cursor = announcements_collection.find({
-        "symbol": {"$in": [symbol.upper(), f"{symbol_base}.NS", f"{symbol_base}.BO", symbol_base]},
-        "announced_at": {"$gte": ten_days_ago_iso}
+        "symbol": {"$in": [symbol.upper(), f"{symbol_base}.NS", f"{symbol_base}.BO", symbol_base]}
     }).sort("announced_at", -1).limit(20)
     
     docs = await cursor.to_list(length=20)

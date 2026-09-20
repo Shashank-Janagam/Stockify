@@ -33,30 +33,33 @@ class VWAP:
         list[float] — VWAP values; valid from index 0.
         """
         n = len(candles)
-        result = [float("nan")] * n
-        cum_tpv   = 0.0  # cumulative (typical price × volume)
-        cum_vol   = 0.0  # cumulative volume
-        current_day = None
+        if n == 0:
+            return []
 
-        for i, c in enumerate(candles):
-            # Detect new day and reset accumulators
-            if reset_daily and c.timestamp:
-                try:
-                    day = datetime.fromisoformat(
-                        c.timestamp.replace("Z", "+00:00")
-                    ).date().isoformat()
-                except (ValueError, AttributeError):
-                    day = c.timestamp[:10]  # fallback: first 10 chars
+        import pandas as pd
+        import numpy as np
+        
+        high = np.array([c.high for c in candles])
+        low = np.array([c.low for c in candles])
+        close = np.array([c.close for c in candles])
+        volume = np.array([c.volume for c in candles])
+        volume = np.maximum(volume, 0.0) # ensure positive volume
+        
+        typical_price = (high + low + close) / 3.0
+        tpv = typical_price * volume
+        
+        if reset_daily:
+            # Extract just the date string (first 10 chars "YYYY-MM-DD")
+            dates = [c.timestamp[:10] if c.timestamp else "1970-01-01" for c in candles]
+            
+            df = pd.DataFrame({'tpv': tpv, 'vol': volume, 'date': dates})
+            cum_tpv = df.groupby('date')['tpv'].cumsum()
+            cum_vol = df.groupby('date')['vol'].cumsum()
+            
+            vwap = np.where(cum_vol > 0, cum_tpv / cum_vol, typical_price)
+        else:
+            cum_tpv = np.cumsum(tpv)
+            cum_vol = np.cumsum(volume)
+            vwap = np.where(cum_vol > 0, cum_tpv / cum_vol, typical_price)
 
-                if day != current_day:
-                    cum_tpv     = 0.0
-                    cum_vol     = 0.0
-                    current_day = day
-
-            typical_price = (c.high + c.low + c.close) / 3.0
-            vol           = max(c.volume, 0.0)
-            cum_tpv      += typical_price * vol
-            cum_vol      += vol
-            result[i]     = cum_tpv / cum_vol if cum_vol > 0 else typical_price
-
-        return result
+        return pd.Series(vwap).fillna(float("nan")).tolist()

@@ -37,17 +37,17 @@ class EMA:
         list[float] — EMA values; NaN until period is filled.
         """
         n = len(candles)
-        result = [float("nan")] * n
         if n < period or period < 1:
-            return result
+            return [float("nan")] * n
 
-        k = 2.0 / (period + 1)
+        import pandas as pd
         prices = [getattr(c, source) for c in candles]
-
-        # Seed: SMA of first `period` values
-        result[period - 1] = sum(prices[:period]) / period
-
-        for i in range(period, n):
-            result[i] = prices[i] * k + result[i - 1] * (1 - k)
-
-        return result
+        
+        # Pandas vectorized EMA
+        series = pd.Series(prices)
+        
+        # The exact formula used previously was EMA seed = SMA(period), then k = 2/(p+1).
+        # We can replicate standard financial EMA precisely using adjust=False and min_periods=period
+        ema = series.ewm(span=period, adjust=False, min_periods=period).mean()
+        
+        return ema.fillna(float("nan")).tolist()

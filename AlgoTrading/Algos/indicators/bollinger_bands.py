@@ -50,32 +50,28 @@ class BollingerBands:
         if n == 0:
             return BBResult([], [], [], [], [])
 
-        nan    = float("nan")
-        middle = SMA.calculate(candles, period=period, source=source)
+        import pandas as pd
+        import numpy as np
+
         prices = [getattr(c, source) for c in candles]
+        series = pd.Series(prices)
 
-        upper     = [nan] * n
-        lower     = [nan] * n
-        bandwidth = [nan] * n
-        percent_b = [nan] * n
+        middle = series.rolling(window=period).mean()
+        # original code used population standard deviation: variance = sum(...) / period
+        # pandas uses sample standard deviation by default (ddof=1). We set ddof=0 for population std_dev.
+        std_dev = series.rolling(window=period).std(ddof=0)
 
-        for i in range(period - 1, n):
-            mid = middle[i]
-            if mid != mid:  # NaN check
-                continue
-
-            window   = prices[i - period + 1 : i + 1]
-            variance = sum((p - mid) ** 2 for p in window) / period
-            std_dev  = math.sqrt(variance)
-
-            upper[i] = mid + multiplier * std_dev
-            lower[i] = mid - multiplier * std_dev
-            rng      = upper[i] - lower[i]
-
-            bandwidth[i] = rng / mid if mid != 0 else nan
-            percent_b[i] = (prices[i] - lower[i]) / rng if rng != 0 else 0.5
+        upper = middle + (multiplier * std_dev)
+        lower = middle - (multiplier * std_dev)
+        
+        rng = upper - lower
+        bandwidth = np.where(middle != 0, rng / middle, np.nan)
+        percent_b = np.where(rng != 0, (series - lower) / rng, 0.5)
 
         return BBResult(
-            upper=upper, middle=middle, lower=lower,
-            bandwidth=bandwidth, percent_b=percent_b,
+            upper=upper.fillna(float("nan")).tolist(),
+            middle=middle.fillna(float("nan")).tolist(),
+            lower=lower.fillna(float("nan")).tolist(),
+            bandwidth=pd.Series(bandwidth).fillna(float("nan")).tolist(),
+            percent_b=pd.Series(percent_b).fillna(float("nan")).tolist(),
         )

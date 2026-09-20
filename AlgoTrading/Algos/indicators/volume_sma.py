@@ -31,12 +31,17 @@ class VolumeSMA:
         list[float] — Volume SMA values; NaN until period is filled.
         """
         n = len(candles)
-        result = [float("nan")] * n
         if period < 1 or n < period:
-            return result
+            return [float("nan")] * n
 
-        volumes = [max(c.volume, 0.0) for c in candles]
-        for i in range(period - 1, n):
-            result[i] = sum(volumes[i - period + 1 : i + 1]) / period
-
-        return result
+        import pandas as pd
+        import numpy as np
+        
+        volumes = np.array([c.volume for c in candles])
+        volumes = np.maximum(volumes, 0.0) # ensure positive
+        
+        # Pandas vectorized SMA
+        series = pd.Series(volumes)
+        sma = series.rolling(window=period).mean()
+        
+        return sma.fillna(float("nan")).tolist()

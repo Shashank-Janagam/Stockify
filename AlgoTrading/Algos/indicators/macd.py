@@ -57,27 +57,25 @@ class MACD:
         if n == 0:
             return MACDResult([], [], [])
 
-        nan = float("nan")
-        fast_ema = EMA.calculate(candles, period=fast_period,  source=source)
-        slow_ema = EMA.calculate(candles, period=slow_period,  source=source)
+        import pandas as pd
+        import numpy as np
+
+        prices = [getattr(c, source) for c in candles]
+        series = pd.Series(prices)
 
         # MACD line = fast EMA - slow EMA
-        macd_line = [
-            (f - s) if (f == f and s == s) else nan
-            for f, s in zip(fast_ema, slow_ema)
-        ]
+        fast_ema = series.ewm(span=fast_period, adjust=False, min_periods=fast_period).mean()
+        slow_ema = series.ewm(span=slow_period, adjust=False, min_periods=slow_period).mean()
+        macd_line = fast_ema - slow_ema
 
-        # Build synthetic Candle objects from MACD values for EMA calculation
-        from datetime import datetime
-        synthetic = [
-            Candle(timestamp=str(i), open=v, high=v, low=v, close=v, volume=0)
-            for i, v in enumerate(macd_line)
-        ]
-        signal_line = EMA.calculate(synthetic, period=signal_period, source="close")
+        # Signal line = EMA of MACD line
+        signal_line = macd_line.ewm(span=signal_period, adjust=False, min_periods=signal_period).mean()
 
-        histogram = [
-            (m - s) if (m == m and s == s) else nan
-            for m, s in zip(macd_line, signal_line)
-        ]
+        # Histogram
+        histogram = macd_line - signal_line
 
-        return MACDResult(macd=macd_line, signal=signal_line, histogram=histogram)
+        return MACDResult(
+            macd=macd_line.fillna(float("nan")).tolist(),
+            signal=signal_line.fillna(float("nan")).tolist(),
+            histogram=histogram.fillna(float("nan")).tolist()
+        )

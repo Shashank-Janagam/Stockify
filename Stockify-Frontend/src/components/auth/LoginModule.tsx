@@ -64,10 +64,13 @@ function LoginModal({ onClose }: LoginModalProps) {
         setError("Account exists with Google. Please use 'Continue with Google'.");
         return; 
       }
-      if (!hasGoogle && !hasPassword) {
-        setError("Registrations not allowed.");
+      if (!hasGoogle && !hasPassword && methods.length > 0) {
+        // Edge case: has other methods but not google/password
+        setError("Please login with your existing provider.");
         return; 
       }
+      
+      // If no methods (new user) or has password, proceed.
 
       
       // If methods is empty, we can't tell if user exists or not (unless protection is off).
@@ -123,8 +126,34 @@ function LoginModal({ onClose }: LoginModalProps) {
         setError("Incorrect password or account used Google Login.");
       } else if (error.code === "auth/email-already-in-use") {
         setError("Account already exists. Please login.");
-      }else if(error.code=="auth/user-not-found"){
-        setError("Account not found. Please login using Google");
+      } else if(error.code === "auth/user-not-found" || error.code === "auth/invalid-login-credentials") {
+         // Attempt to sign up since user doesn't exist
+         try {
+           const { signupWithEmail } = await import("../../auth/login");
+           await signupWithEmail(email, password);
+           
+           // Automatically log them in to backend after signup
+           const newUserCredentials = await loginWithEmail(email, password);
+           const idToken = await newUserCredentials.user.getIdToken();
+           
+           const response = await fetch(`${HOST}/api/login`, {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             credentials: "include",
+             body: JSON.stringify({ token: idToken })
+           });
+           
+           if (!response.ok) {
+             await auth.signOut();
+             throw new Error("Backend login rejected.");
+           }
+           navigate("/dashboard");
+           handleClose();
+         } catch (signupErr: any) {
+           setError(signupErr.message || "Failed to create account.");
+         }
+      } else {
+        setError(error.message || "Login failed");
       }
     } finally {
       setIsloading(false);
@@ -139,17 +168,7 @@ function LoginModal({ onClose }: LoginModalProps) {
       const userCredentials = await loginWithGoogle();
       
       const additionalInfo = getAdditionalUserInfo(userCredentials);
-      if (additionalInfo?.isNewUser) {
-        try {
-          await userCredentials.user.delete();
-        } catch (delErr) {
-          console.error("Failed to delete new user:", delErr);
-          await auth.signOut(); // Fallback sign out if delete fails
-        }
-        setError("Registrations not allowed.");
-        setIsloading(false);
-        return;
-      }
+      // New users are now allowed, so we don't delete them.
 
       const idToken = await userCredentials.user.getIdToken()
 
@@ -360,7 +379,7 @@ function LoginModal({ onClose }: LoginModalProps) {
     <span className="btn-loader">
     </span>
   ) : (
-    "Login"
+    "Login / Signup"
   )}
 </button>
 
