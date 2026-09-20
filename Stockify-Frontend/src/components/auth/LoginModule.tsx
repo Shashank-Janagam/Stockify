@@ -3,7 +3,7 @@ import "../../Styles/LoginModule.css"
 const google = "https://mystockifyassets.blob.core.windows.net/assets/google.png";
 import { loginWithEmail,loginWithGoogle , getSignInMethods} from "../../auth/login";
 // import { useNavigate } from "react-router-dom";
-import { sendPasswordResetEmail, getAdditionalUserInfo } from "firebase/auth";
+import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../../firebase"; // adjust path if needed
 import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../../auth/AuthProvider";
@@ -167,7 +167,6 @@ function LoginModal({ onClose }: LoginModalProps) {
       setError(null);
       const userCredentials = await loginWithGoogle();
       
-      const additionalInfo = getAdditionalUserInfo(userCredentials);
       // New users are now allowed, so we don't delete them.
 
       const idToken = await userCredentials.user.getIdToken()
