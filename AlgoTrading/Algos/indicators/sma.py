@@ -34,13 +34,14 @@ class SMA:
         list[float] — SMA values; NaN until period is filled.
         """
         n = len(candles)
-        result = [float("nan")] * n
         if period < 1 or n < period:
-            return result
+            return [float("nan")] * n
 
+        import pandas as pd
         prices = [getattr(c, source) for c in candles]
-
-        for i in range(period - 1, n):
-            result[i] = sum(prices[i - period + 1 : i + 1]) / period
-
-        return result
+        
+        # Pandas vectorized SMA
+        series = pd.Series(prices)
+        sma = series.rolling(window=period).mean()
+        
+        return sma.fillna(float("nan")).tolist()

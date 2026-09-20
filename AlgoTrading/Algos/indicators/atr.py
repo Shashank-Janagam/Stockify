@@ -33,22 +33,31 @@ class ATR:
         list[float] — ATR values; NaN until period+1 candles are available.
         """
         n = len(candles)
-        result = [float("nan")] * n
         if n < period + 1 or period < 1:
-            return result
+            return [float("nan")] * n
 
-        # True Range (index 0 has no prevClose, so TR starts at index 1)
-        tr = [float("nan")] * n
-        for i in range(1, n):
-            h, l       = candles[i].high, candles[i].low
-            prev_close = candles[i - 1].close
-            tr[i] = max(h - l, abs(h - prev_close), abs(l - prev_close))
+        import pandas as pd
+        import numpy as np
 
-        # Seed: simple average of first `period` TR values (indices 1..period)
-        result[period] = sum(tr[1 : period + 1]) / period
+        # Extract vectors
+        high = np.array([c.high for c in candles])
+        low = np.array([c.low for c in candles])
+        close = np.array([c.close for c in candles])
 
-        # Wilder's smoothing
-        for i in range(period + 1, n):
-            result[i] = (result[i - 1] * (period - 1) + tr[i]) / period
+        # Shift close by 1 for prev_close (first element will be NaN)
+        prev_close = np.roll(close, 1)
+        prev_close[0] = np.nan
 
-        return result
+        # Calculate True Range components
+        tr1 = high - low
+        tr2 = np.abs(high - prev_close)
+        tr3 = np.abs(low - prev_close)
+
+        # True Range is the element-wise maximum
+        tr = np.maximum(np.maximum(tr1, tr2), tr3)
+
+        # Convert to Pandas Series to use Wilder's smoothing (EMA with alpha=1/period)
+        tr_series = pd.Series(tr)
+        atr = tr_series.ewm(alpha=1/period, adjust=False, min_periods=period).mean()
+
+        return atr.fillna(float("nan")).tolist()

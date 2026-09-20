@@ -107,7 +107,7 @@ router.get("/", requireAuth, async (req, res) => {
         s.symbol,
         s.stock_name
       FROM wallet_transactions wt
-      LEFT JOIN trades t ON (wt.reference_type = 'TRADE' AND wt.reference_id = t.id)
+      LEFT JOIN trades t ON (wt.reference_type = 'TRADE' AND wt.reference_id = t.id::text)
       LEFT JOIN stocks s ON t.stock_id = s.id
       WHERE wt.user_id = $1
       ORDER BY wt.created_at DESC
