@@ -23,6 +23,7 @@ import CookiePolicy from "./pages/CookiePolicy.tsx";
 import Disclaimer from "./pages/Disclaimer.tsx";
 import CustomerSupport from "./pages/CustomerSupport.tsx";
 import NewsPage from "./pages/NewsPage.tsx";
+import AegisPage from "./pages/AegisPage.tsx";
 import { PortfolioThemeProvider } from "./context/PortfolioThemeContext";
 
 import { AuthContext } from "./auth/AuthProvider.tsx";
@@ -48,6 +49,7 @@ const RouteTitleManager = () => {
       "/cookie-policy": "PaperBull | Cookie Policy",
       "/algo-backtest": "PaperBull | Algo Backtest",
       "/algo-backtest/studio": "PaperBull | Strategy Studio",
+      "/aegis": "PaperBull | AEGIS — AI Insights",
       "/live-trading": "PaperBull | Live Trading Room",
       "/support": "PaperBull | Customer Support",
     };
@@ -184,6 +186,15 @@ const App = () => {
                 <Route path="/disclaimer" element={<Disclaimer />} />
                 <Route path="/support" element={<CustomerSupport />} />
                 <Route path="/news" element={<NewsPage />} />
+
+                <Route
+                  path="/aegis"
+                  element={
+                    <ProtectedRoute>
+                      <AegisPage />
+                    </ProtectedRoute>
+                  }
+                />
 
               </Routes>
             </div>

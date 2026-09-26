@@ -1,57 +1,88 @@
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
-from models.state import MarketState
+"""
+synthesizer.py
+──────────────
+Final intelligence layer — weaves all agent outputs into a single polished response.
+
+Correctly works with both:
+  - 1-agent responses (no synthesis needed — just re-presents cleanly)
+  - N-agent parallel responses (full synthesis)
+"""
 
 import os
-import sys
 from dotenv import load_dotenv
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from models.llm_factory import get_llm
+from models.state import MarketState
 
-# Load env from the Aegis directory
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
-# The synthesizer doesn't need tools, just a good reasoning model
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite",
-    temperature=0.3,
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+llm = get_llm(temperature=0.3)
 
-SYNTHESIZER_SYSTEM_PROMPT = """You are Aegis Synthesizer, the final intelligence layer of the Aegis financial system.
-You have just received raw research and technical data from multiple specialized sub-agents.
+SYNTHESIZER_SYSTEM_PROMPT = """You are Aegis, the final response layer of an institutional-grade AI financial system.
 
-Your job is to:
-1. Seamlessly weave their findings together into a single, cohesive, institutional-grade narrative.
-2. Present the final answer to the user beautifully using Markdown (bolding, tables, or bullet points where appropriate).
-3. Do NOT mention "the research agent found" or "the market agent said". Present the final response as a unified voice (you are Aegis).
+You have just received research, data, and analysis from multiple specialized sub-agents that ran in parallel or sequentially.
 
-Synthesize the context provided and answer the user's original query."""
+Your job:
+1. Synthesize all the data into ONE single, cohesive, beautifully formatted response.
+2. Use Markdown: bold headers, tables, and bullet points where appropriate.
+3. Speak in unified first-person as "Aegis" — never say "the research agent found" or "the market agent said."
+4. If any agent data contains an error message or limitation, either work around it or note it briefly at the end. Do NOT lead with failures.
+5. If only one agent ran, present its output cleanly and concisely without saying "synthesizing."
+6. This is a simulated paper-trading environment — never add disclaimers about financial advice.
+7. If a trade was executed, clearly confirm it (stock, quantity, price, order type). Ensure your summary includes ALL executed stocks and their exact quantities. Do not truncate the list.
+8. CRITICAL: If you see one or multiple JSON blocks (e.g. `{"status": "trade_executed"...}`) in any agent's output, you MUST include ALL of them EXACTLY as they are at the very end of your response. Do not miss any.
 
-def synthesizer_node(state: MarketState):
-    """Takes the outputs of the parallel agents and synthesizes them."""
+Answer the user's original question directly and completely."""
+
+
+async def synthesizer_node(state: MarketState):
+    """Synthesizes all agent outputs into a final user-facing response."""
     messages = state.get("messages", [])
-    routes = state.get("route_decision", [])
     
-    # If no agents ran, just return (shouldn't happen)
-    if not routes:
-        return {"messages": []}
-        
-    num_agents = len(routes)
+    # Find the last HumanMessage — that's the user's query for this turn
+    user_query = ""
+    for msg in reversed(messages):
+        if hasattr(msg, "type") and msg.type == "human":
+            user_query = msg.content
+            break
+        if isinstance(msg, HumanMessage):
+            user_query = msg.content
+            break
+
+    # Collect all AIMessages that were added after the last HumanMessage
+    # These are the agent outputs for this turn
+    agent_outputs = []
+    collecting = False
+    for msg in messages:
+        if isinstance(msg, HumanMessage) or (hasattr(msg, "type") and msg.type == "human"):
+            if msg.content == user_query:
+                collecting = True
+                agent_outputs = []  # reset on each matching human message
+                continue
+        if collecting and (isinstance(msg, AIMessage) or (hasattr(msg, "type") and msg.type == "ai")):
+            content = msg.content
+            if isinstance(content, list):
+                content = "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in content)
+            if content and not content.startswith("⚠️"):
+                agent_name = getattr(msg, "name", None) or "agent"
+                agent_outputs.append((agent_name, content))
+
+    if not agent_outputs:
+        # Fallback: no valid agent outputs found
+        return {"messages": [AIMessage(content="I wasn't able to retrieve the requested information. Please try again.")]}
+
+    # If only 1 agent ran, it was already streamed to the user. No need to synthesize.
+    if len(agent_outputs) == 1:
+        return {}
     
-    # Extract the original user query and the agent outputs
-    # The user query is just before the agent outputs
-    user_query_msg = messages[-(num_agents + 1)]
-    agent_outputs = messages[-num_agents:]
-    
-    # Format the context for the synthesizer
-    context = "Here is the raw data gathered by the specialized sub-agents:\n\n"
-    for idx, msg in enumerate(agent_outputs):
-        context += f"--- Data Source {idx + 1} ---\n{msg.content}\n\n"
-        
-    synthesis_messages = [
+    context = "\n\n".join(
+        f"## {name.replace('_', ' ').title()} Output\n{content}"
+        for name, content in agent_outputs
+    )
+    synthesis_msgs = [
         SystemMessage(content=SYNTHESIZER_SYSTEM_PROMPT),
-        HumanMessage(content=f"User Query: {user_query_msg.content}\n\n{context}")
+        HumanMessage(content=f"User asked: {user_query}\n\n{context}")
     ]
-    
-    response = llm.invoke(synthesis_messages)
-    
+
+    response = await llm.ainvoke(synthesis_msgs)
     return {"messages": [response]}

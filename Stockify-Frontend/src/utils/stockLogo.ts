@@ -12,6 +12,12 @@ const KNOWN_AZURE_LOGOS: Record<string, string> = {
   "^NSEBANK": `${AZURE_BLOB_BASE}/%5ENSEBANK.webp`,
   "^CNXIT": `${AZURE_BLOB_BASE}/%5ECNXIT.webp`,
   "^CNXFIN": `${AZURE_BLOB_BASE}/%5ECNXFIN.webp`,
+  NIFTY: `${AZURE_BLOB_BASE}/%5ENSEI.webp`,
+  NIFTY50: `${AZURE_BLOB_BASE}/%5ENSEI.webp`,
+  SENSEX: `${AZURE_BLOB_BASE}/%5EBSESN.webp`,
+  BANKNIFTY: `${AZURE_BLOB_BASE}/%5ENSEBANK.webp`,
+  NIFTYBANK: `${AZURE_BLOB_BASE}/%5ENSEBANK.webp`,
+  FINNIFTY: `${AZURE_BLOB_BASE}/%5ECNXFIN.webp`,
   TCS: `${AZURE_BLOB_BASE}/TCS.webp`,
   RELIANCE: `${AZURE_BLOB_BASE}/RELIANCE.png`,
   INFY: `${AZURE_BLOB_BASE}/INFY.png`,
@@ -303,10 +309,14 @@ export function getStockLogoCandidates(symbol: string): string[] {
 
   // Removed Google favicon and dynamic domain fallbacks per user request.
 
-  // 6. Azure Blob general fallback check
-  const defaultAzure = `${AZURE_BLOB_BASE}/${encodeURIComponent(clean)}.png`;
-  if (!candidates.includes(defaultAzure)) {
-    candidates.push(defaultAzure);
+  // 6. Azure Blob general fallback check (.png then .webp)
+  const defaultAzurePng = `${AZURE_BLOB_BASE}/${encodeURIComponent(clean)}.png`;
+  if (!candidates.includes(defaultAzurePng)) {
+    candidates.push(defaultAzurePng);
+  }
+  const defaultAzureWebp = `${AZURE_BLOB_BASE}/${encodeURIComponent(clean)}.webp`;
+  if (!candidates.includes(defaultAzureWebp)) {
+    candidates.push(defaultAzureWebp);
   }
 
   return candidates;

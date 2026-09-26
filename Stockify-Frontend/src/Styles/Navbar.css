@@ -17,6 +17,26 @@
   justify-content: center;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont;
   border-bottom: 1px solid #efefef;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* AEGIS AUTO-HIDE NAVBAR */
+.aegis-navbar-trigger {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 24px;
+  z-index: 1001;
+}
+.groww-navbar.aegis-auto-hide {
+  transform: translateY(-100%);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+}
+.groww-navbar.aegis-auto-hide:hover,
+.aegis-navbar-trigger:hover + .groww-navbar.aegis-auto-hide {
+  transform: translateY(0);
 }
 
 /* INNER CONTAINER (LOCK WIDTH) */

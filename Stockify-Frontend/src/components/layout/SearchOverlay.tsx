@@ -7,6 +7,7 @@ import { AuthContext } from "../../auth/AuthProvider";
 interface SearchOverlayProps {
   isOpen: boolean;
   onClose: () => void;
+  onSelectStock?: (stock: { symbol: string; name: string }) => void;
 }
 
 interface StockResult {
@@ -161,7 +162,7 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
   );
 }
 
-const SearchOverlay = ({ isOpen, onClose }: SearchOverlayProps) => {
+const SearchOverlay = ({ isOpen, onClose, onSelectStock }: SearchOverlayProps) => {
   const navigate = useNavigate();
   const [recent, setRecent] = useState<RecentStock[]>([]);
   const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
@@ -211,6 +212,12 @@ const SearchOverlay = ({ isOpen, onClose }: SearchOverlayProps) => {
       },
       body: JSON.stringify({ symbol: stock.symbol, name: stock.name }),
     }).catch(() => {}); // ignore failure safely
+
+    if (onSelectStock) {
+      onSelectStock(stock);
+      handleClose();
+      return;
+    }
 
     // ✅ 2. navigate
     navigate(getStockRoute(stock.symbol, stock.name));

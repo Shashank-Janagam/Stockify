@@ -11,7 +11,6 @@ from tools.research_tools import (
     search_web
 )
 
-from langchain.agents import create_agent
 from models.state import MarketState
 
 # Bind the tools
@@ -24,19 +23,13 @@ RESEARCH_TOOLS = [
 
 import sys
 from dotenv import load_dotenv
+from models.llm_factory import get_llm
 
 # Load env from the Aegis directory
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
 # Configure the LLM
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite",
-    temperature=0.3,
-    max_tokens=2048,
-    timeout=None,
-    max_retries=2,
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+llm = get_llm(temperature=0.3)
 
 RESEARCH_SYSTEM_PROMPT = """You are Aegis Research, a premier macroeconomic and equity research analyst for the Indian Stock Market.
 Your primary role is to provide deep insights using news, corporate filings, macroeconomic data (RBI/MOSPI), and general web search.
@@ -56,23 +49,36 @@ Guidelines:
 - If a user asks about a specific company event, use `get_company_announcements`.
 
 Current Date Context: 2026-09-20
+
+NEWS SENTIMENT OUTPUT FORMAT:
+When you fetch and summarize financial news for a stock, you MUST output a JSON block like this at the end of your response, capturing the top 3 news items and a sentiment label (Bullish, Bearish, or Neutral):
+
+```json
+{
+  "status": "news_sentiment",
+  "symbol": "RELIANCE",
+  "news": [
+    {
+      "headline": "Reliance announces record profits",
+      "summary": "The company reported a 20% jump in Q4 net profit, beating estimates.",
+      "sentiment": "Bullish"
+    }
+  ]
+}
+```
 """
 
-research_agent_executor = create_agent(
+from langgraph.prebuilt import create_react_agent
+research_agent_executor = create_react_agent(
     model=llm,
     tools=RESEARCH_TOOLS,
-    system_prompt=RESEARCH_SYSTEM_PROMPT
+    prompt=RESEARCH_SYSTEM_PROMPT
 )
 
-def research_agent(state: MarketState):
-    recent_messages = state["messages"][-4:] if len(state["messages"]) > 4 else state["messages"]
-    
-    messages = [
-        SystemMessage(content=RESEARCH_SYSTEM_PROMPT),
-        *recent_messages
-    ]
-
-    response = research_agent_executor.invoke({"messages": messages})
-    return {
-        "messages": [response["messages"][-1]]
-    }
+async def research_agent(state: MarketState):
+    """Legacy node wrapper."""
+    recent_messages = state["messages"][-6:] if len(state["messages"]) > 6 else state["messages"]
+    from agents.agent_runner import run_agent_with_retry
+    from langchain_core.messages import AIMessage
+    content = await run_agent_with_retry(research_agent_executor, list(recent_messages), "research_agent")
+    return {"messages": [AIMessage(content=content)]}

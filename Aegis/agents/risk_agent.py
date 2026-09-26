@@ -2,7 +2,7 @@ import os
 import sys
 import json
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
+from models.llm_factory import get_llm
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
@@ -29,14 +29,7 @@ RISK_TOOLS = [
 ]
 
 # Configure the LLM
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite",
-    temperature=0.2,
-    max_tokens=2048,
-    timeout=None,
-    max_retries=2,
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+llm = get_llm(temperature=0.2)
 
 RISK_SYSTEM_PROMPT = """You are Aegis Risk, an institutional risk manager and quantitative analyst for the Indian Stock Market.
 
@@ -54,6 +47,21 @@ When asked to evaluate risk:
 3. Provide a definitive conclusion on whether the asset is High, Medium, or Low Risk.
 
 Do not provide general investment advice or predict future prices. Stick strictly to historical and mathematical risk evaluation.
+
+RISK PROFILE OUTPUT FORMAT:
+When you evaluate a stock's risk, you MUST output a JSON block like this at the end of your response, replacing the values with the actual metrics:
+
+```json
+{
+  "status": "risk_profile",
+  "symbol": "TCS",
+  "metrics": {
+    "volatility": 15.2,
+    "beta": 0.8,
+    "sharpe": 1.2
+  }
+}
+```
 """
 
 from langgraph.prebuilt import create_react_agent
@@ -66,13 +74,10 @@ risk_agent_executor = create_react_agent(
 
 
 
-def risk_agent_node(state: MarketState):
-    """Executes the risk agent."""
-    messages = state.get("messages", [])
-    
-    # Run the executor and return the new message
-    response = risk_agent_executor.invoke({"messages": messages})
-    
-    return {
-        "messages": [response["messages"][-1]]
-    }
+async def risk_agent_node(state: MarketState):
+    """Legacy node wrapper."""
+    recent_messages = state["messages"][-6:] if len(state["messages"]) > 6 else state["messages"]
+    from agents.agent_runner import run_agent_with_retry
+    from langchain_core.messages import AIMessage
+    content = await run_agent_with_retry(risk_agent_executor, list(recent_messages), "risk_agent")
+    return {"messages": [AIMessage(content=content)]}

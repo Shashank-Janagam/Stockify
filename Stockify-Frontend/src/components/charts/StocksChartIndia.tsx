@@ -426,8 +426,16 @@ if (!Array.isArray(dataPoints) || !dataPoints.length) return;
 
     if (!Number.isFinite(tradeTime) || !Number.isFinite(tradePrice)) return;
 
-    const x = xScale.getPixelForValue(tradeTime);
+    let x = xScale.getPixelForValue(tradeTime);
     const y = yScale.getPixelForValue(tradePrice);
+
+    if (!Number.isFinite(x)) {
+      // Fallback for timeseries scale where exact timestamp might not be plotted
+      const closest = dataPoints.reduce((prev, curr) =>
+        Math.abs(curr.x - tradeTime) < Math.abs(prev.x - tradeTime) ? curr : prev
+      );
+      x = xScale.getPixelForValue(closest.x);
+    }
 
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
 
@@ -691,8 +699,12 @@ export function StockChartIndia({
 
   const lastCandleTs = lineData.length ? lineData[lineData.length - 1].x : Date.now();
   const validTradeTimestamps = trades
-    .map(t => typeof t.createdAtIST === 'number' ? t.createdAtIST : new Date(t.createdAtIST).getTime())
-    .filter(t => !isNaN(t));
+    .map((t: any) => {
+      const rawDate = t.createdAtIST || t.created_at || t.createdAt;
+      const ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
+      return ts + (5.5 * 3600 * 1000);
+    })
+    .filter((t: number) => !isNaN(t));
   const maxTradeTs = validTradeTimestamps.length ? Math.max(...validTradeTimestamps) : 0;
   const chartMax = Math.max(lastCandleTs, maxTradeTs);
 
@@ -700,26 +712,32 @@ export function StockChartIndia({
   const finalMarketClose = Math.max(marketClose, chartMax);
 
   const tradePoints = trades
-    .map(t => {
-      const ts = typeof t.createdAtIST === 'number' ? t.createdAtIST : new Date(t.createdAtIST).getTime();
+    .map((t: any) => {
+      const rawDate = t.createdAtIST || t.created_at || t.createdAt;
+      let ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
+      if (!isNaN(ts)) ts += (5.5 * 3600 * 1000);
+      const rawPrice = t.pricePerShare ?? t.price_per_share ?? t.price ?? 0;
       return {
         x: isNaN(ts) ? Date.now() : ts,
-        y: Number(t.pricePerShare) || 0,
+        y: Number(rawPrice) || 0,
         side: t.side,
         quantity: t.quantity || 1
       };
     })
-    .filter(t => !isNaN(t.x) && !isNaN(t.y));
+    .filter((t: any) => !isNaN(t.x) && !isNaN(t.y));
 
   currentIndex = lineData.length - 1;
   const is1D = timeframe === "1D";
 
   // Include trade prices in the scale so markers aren't cut off vertically
   const allVisiblePrices: number[] = lineData.map(d => d.y).filter(y => y != null && !isNaN(y));
-  trades.forEach(t => {
-    const ts = typeof t.createdAtIST === 'number' ? t.createdAtIST : new Date(t.createdAtIST).getTime();
-    if (!isNaN(ts) && ts >= marketOpen && ts <= finalMarketClose && t.pricePerShare != null && !isNaN(t.pricePerShare)) {
-      allVisiblePrices.push(Number(t.pricePerShare));
+  trades.forEach((t: any) => {
+    const rawDate = t.createdAtIST || t.created_at || t.createdAt;
+    let ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
+    if (!isNaN(ts)) ts += (5.5 * 3600 * 1000);
+    const rawPrice = t.pricePerShare ?? t.price_per_share ?? t.price;
+    if (!isNaN(ts) && ts >= marketOpen && ts <= finalMarketClose && rawPrice != null && !isNaN(Number(rawPrice))) {
+      allVisiblePrices.push(Number(rawPrice));
     }
   });
 
