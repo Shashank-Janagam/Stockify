@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import "../../Styles/Navbar.css";
 const logo = "https://mystockifyassets.blob.core.windows.net/assets/logos/paperbull.png";
 import { AuthContext } from "../../auth/AuthProvider";
@@ -15,7 +15,10 @@ interface NavbarProps {
 
 const NavBar = ({ onLoginClick }: NavbarProps) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading, logout, isGoogleOnlyUser } = useContext(AuthContext);
+
+  const isAegis = location.pathname.startsWith("/aegis");
 
   const [openSearch, setOpenSearch] = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
@@ -81,7 +84,8 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
 
   return (
     <>
-      <nav className="groww-navbar"><div className="nav-inner">
+      {isAegis && <div className="aegis-navbar-trigger"></div>}
+      <nav className={`groww-navbar ${isAegis ? "aegis-auto-hide" : ""}`}><div className="nav-inner">
         {/* ---------------- LEFT ---------------- */}
         <div className="nav-left">
           <div
@@ -108,19 +112,19 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
                 <NavLink to="/portfolio" className="tab1">
                   Portfolio
                 </NavLink>
-                <NavLink to="/algo-backtest/studio" className="tab1">
-                  ⚡ Strategy Studio
-                </NavLink>
-                <NavLink to="/live-trading" className="tab1">
-                  🤖 Live Trading
-                </NavLink>
+
                 <NavLink to="/user/balance" className="tab1">
                   Funds
                 </NavLink>
                 <NavLink to="/news" className="tab1">
                   News
                 </NavLink>
-                
+                <NavLink to="/aegis" className="tab1">
+                  ✨ AEGIS
+                </NavLink>
+                <NavLink to="/algo-backtest/studio" className="tab1" style={{ color: 'var(--pb-green, #089981)', fontWeight: 'bold' }}>
+                  🐂 Studio
+                </NavLink>
               </>
             )}
           </div>

@@ -259,6 +259,10 @@ def get_stock_history_data(symbol: str, days: str = "1", start_date: Optional[st
         if df.empty:
             return []
 
+        df.dropna(subset=["Open", "High", "Low", "Close"], inplace=True)
+        if df.empty:
+            return []
+
         candles = []
         for index, row in df.iterrows():
             ts = int(index.timestamp() * 1000)
@@ -479,9 +483,26 @@ def get_similar_stocks_direct(symbol: str) -> Dict[str, Any]:
                 }
         return {
             "symbol": clean_sym,
-            "sector": "Equities",
             "similar_stocks": ["RELIANCE", "TCS", "INFY", "HDFCBANK"],
         }
+
+
+def get_sector_stocks_direct(sector_name: str) -> Dict[str, Any]:
+    """Get all stocks in a specified sector."""
+    target = sector_name.strip().lower()
+    
+    # Try exact match first
+    for sec, peers in DYNAMIC_SECTOR_MAP.items():
+        if sec.lower() == target or target in sec.lower():
+            return {
+                "sector": sec,
+                "stocks": list(peers)
+            }
+            
+    # Fallback if no sector found
+    return {
+        "error": f"Sector '{sector_name}' not found. Available sectors: {', '.join(DYNAMIC_SECTOR_MAP.keys())}"
+    }
 
 
 
@@ -654,6 +675,9 @@ def get_specific_indicator(symbol: str, indicator_type: str, period: int = 14) -
         ticker = yf.Ticker(yf_sym)
         # Pull 2 years to ensure we have enough data for 200-day moving averages
         df = ticker.history(period="2y")
+        # Forward fill and drop NaNs to prevent indicators like SMA/VWAP from returning NaN
+        df = df.ffill().dropna(subset=["Open", "High", "Low", "Close", "Volume"])
+        
         if df.empty:
             return {"error": "No historical data available"}
             

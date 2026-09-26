@@ -1,8 +1,13 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import "../../Styles/PolicyPages.css";
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
+  const location = useLocation();
+
+  if (location.pathname.startsWith("/aegis")) {
+    return null;
+  }
 
   return (
     <footer className="site-footer">

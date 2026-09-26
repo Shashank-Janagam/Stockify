@@ -572,6 +572,135 @@ def health_check():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# AEGIS NATIVE ENDPOINT
+# ══════════════════════════════════════════════════════════════════════════════
+
+def translate_aegis_to_json_strategy(aegis: dict) -> dict:
+    indicator_map = {}
+    
+    def make_indicator_key(name, params):
+        base = name.lower()
+        if params and "period" in params:
+            return f"{base}_{params['period']}"
+        return base
+        
+    def translate_condition(cond):
+        op = cond.get("operator")
+        op_map = {
+            "greater_than": "GreaterThan",
+            "less_than": "LessThan",
+            "equal_to": "Equal",
+            "crosses_above": "CrossAbove",
+            "crosses_below": "CrossBelow",
+            "price_above": "GreaterThan",
+            "price_below": "LessThan",
+        }
+        at_type = op_map.get(op, "GreaterThan")
+        ind_name = cond.get("indicator")
+        params = cond.get("params", {})
+        ind_key = make_indicator_key(ind_name, params)
+        
+        if ind_key not in indicator_map:
+            indicator_map[ind_key] = {"name": ind_name.upper(), "key": ind_key, "params": params}
+            
+        if op in ["price_above", "price_below"]:
+            ref = cond.get("reference", {})
+            if ref and ref.get("indicator"):
+                ref_params = {"period": ref["period"]} if ref.get("period") else {}
+                ref_key = make_indicator_key(ref["indicator"], ref_params)
+                if ref_key not in indicator_map:
+                    indicator_map[ref_key] = {"name": ref["indicator"].upper(), "key": ref_key, "params": ref_params}
+            else:
+                ref_key = ind_key
+            return {"type": at_type, "args": ["close", ref_key]}
+            
+        elif op in ["crosses_above", "crosses_below"]:
+            ref = cond.get("reference", {})
+            if ref and ref.get("indicator"):
+                ref_params = {"period": ref["period"]} if ref.get("period") else {}
+                ref_key = make_indicator_key(ref["indicator"], ref_params)
+                if ref_key not in indicator_map:
+                    indicator_map[ref_key] = {"name": ref["indicator"].upper(), "key": ref_key, "params": ref_params}
+                second_arg = ref_key
+            elif cond.get("value") == "SIGNAL":
+                second_arg = f"{ind_key}.signal"
+            elif isinstance(cond.get("value"), (int, float)):
+                second_arg = float(cond["value"])
+            else:
+                second_arg = ind_key
+            return {"type": at_type, "args": [ind_key, second_arg]}
+            
+        else:
+            val = float(cond.get("value", 0))
+            return {"type": at_type, "args": [ind_key, val]}
+            
+    entry_conds = [translate_condition(c) for c in aegis.get("entry_conditions", [])]
+    exit_conds = [translate_condition(c) for c in aegis.get("exit_conditions", [])]
+    
+    rm = aegis.get("risk_management", {})
+    risk_mgmt = {}
+    if rm.get("trailing_stop_pct") is not None:
+        risk_mgmt["stop_loss"] = {"type": "TRAILING_PCT", "value": rm["trailing_stop_pct"]}
+    elif rm.get("stop_loss_pct") is not None:
+        risk_mgmt["stop_loss"] = {"type": "PCT", "value": rm["stop_loss_pct"]}
+        
+    if rm.get("take_profit_pct") is not None:
+        risk_mgmt["take_profit"] = {"type": "PCT", "value": rm["take_profit_pct"]}
+        
+    config = {
+        "strategy_name": aegis.get("name", "Aegis Generated Strategy"),
+        "indicators": list(indicator_map.values()),
+        "entry_rules": {
+            "type": aegis.get("entry_logic", "AND").upper(),
+            "conditions": entry_conds
+        },
+        "exit_rules": {
+            "type": aegis.get("exit_logic", "OR").upper(),
+            "conditions": exit_conds
+        },
+        "risk_management": risk_mgmt,
+        "position_sizing": {
+            "mode": "PERCENT_EQUITY",
+            "percent_equity": rm.get("max_position_pct", 10)
+        },
+        "portfolio_guardrails": {
+            "max_open_positions": 1,
+            "reentry_cooldown_bars": 2
+        }
+    }
+    return config
+
+class AegisExecuteRequest(BaseModel):
+    symbol: str
+    aegis_strategy: dict
+    period: Optional[str] = "1y"
+    interval: Optional[str] = None
+    initial_capital: Optional[float] = 100000.0
+
+@app.post("/aegis/execute")
+async def execute_aegis(req: AegisExecuteRequest):
+    """Native execution endpoint for AEGIS JSON specifications."""
+    try:
+        json_config = translate_aegis_to_json_strategy(req.aegis_strategy)
+        cls = strategy_registry.get("JsonStrategy")
+        strategy_instance = cls(params={"strategy_config": json_config})
+        
+        candles = load_candles(req.symbol, period=req.period, interval=req.interval)
+        if len(candles) < 15:
+            raise HTTPException(status_code=400, detail="Not enough data.")
+            
+        engine = BacktestEngine(initial_capital=req.initial_capital)
+        report = engine.run(strategy_instance, candles, symbol=req.symbol)
+        
+        return {
+            "success": True,
+            "report": _serialize_report(report)
+        }
+    except Exception as e:
+        logger.error(f"AEGIS execution failed: {e}")
+        return {"success": False, "error": str(e)}
+
+# ══════════════════════════════════════════════════════════════════════════════
 # PaperBull Strategy Studio — Native API Endpoints
 # ══════════════════════════════════════════════════════════════════════════════
 

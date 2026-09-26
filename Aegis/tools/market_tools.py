@@ -7,6 +7,7 @@ from .market_service import (
     search_stocks_direct,
     get_stock_profile_direct,
     get_similar_stocks_direct,
+    get_sector_stocks_direct,
     get_financial_statements,
     get_key_metrics,
     get_analyst_recommendations,
@@ -44,6 +45,11 @@ def get_stock_profile(symbol: str):
 def get_sector_peers(symbol: str):
     """Get similar stocks or sector peers."""
     return json.dumps(get_similar_stocks_direct(symbol))
+
+@tool
+def get_stocks_in_sector(sector_name: str):
+    """Get a list of all stock symbols belonging to a specific sector (e.g. 'IT', 'Technology', 'Banking', 'Energy')."""
+    return json.dumps(get_sector_stocks_direct(sector_name))
 
 @tool
 def get_financials(symbol: str):

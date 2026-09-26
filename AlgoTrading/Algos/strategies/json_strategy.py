@@ -122,12 +122,15 @@ class JsonStrategy(BaseStrategy):
             elif lower == "hl2":
                 return [(c.high + c.low) / 2.0 for c in candles]
             elif arg in self._indicator_cache:
-                return self._indicator_cache[arg]
+                return self._indicator_cache[arg][:len(candles)]
             elif "." in arg:
                 base_key, attr = arg.split(".", 1)
                 if base_key in self._indicator_cache:
                     obj = self._indicator_cache[base_key]
-                    return getattr(obj, attr) if hasattr(obj, attr) else None
+                    val = getattr(obj, attr) if hasattr(obj, attr) else None
+                    if isinstance(val, list):
+                        return val[:len(candles)]
+                    return val
         
         # If it's a number (threshold) or list, return directly
         return arg
