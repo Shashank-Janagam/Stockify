@@ -46,6 +46,7 @@ services:
     environment:
       - UPSTOX_WS_URL=ws://upstox-backend:4141
 
+
   pressrelease-cron:
     build:
       context: ./MultiAgent/PressRelease

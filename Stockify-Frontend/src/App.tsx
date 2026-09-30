@@ -12,7 +12,6 @@ import Settings from "./pages/Settings.tsx";
 import StockPageSSE from "./pages/StokesPageSSE.tsx";
 import FundsPage from "./pages/FundsPage.tsx";
 import PaperBullStudio from "./pages/PaperBullStudio.tsx";
-import LiveTradingPage from "./pages/LiveTradingPage.tsx";
 import { ExploreSSEProvider } from "./context/ExploreSSEContext";
 import { WebSocketProvider } from "./context/WebSocketContext";
 import Portfolio from "./pages/Portfolio.tsx";
@@ -171,14 +170,7 @@ const App = () => {
                   }
                 />
 
-                <Route
-                  path="/live-trading"
-                  element={
-                    <ProtectedRoute>
-                      <LiveTradingPage />
-                    </ProtectedRoute>
-                  }
-                />
+                
                 {/* ---- Policy Pages ---- */}
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<TermsAndConditions />} />

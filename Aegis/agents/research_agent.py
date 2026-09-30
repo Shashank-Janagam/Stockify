@@ -8,7 +8,11 @@ from tools.research_tools import (
     get_financial_news,
     get_company_announcements,
     get_macro_data,
-    search_web
+    search_web,
+    search_web_duckduckgo,
+    get_company_fundamental_data,
+    get_detailed_financial_statements,
+    get_stock_analyst_recommendations
 )
 
 from models.state import MarketState
@@ -18,7 +22,11 @@ RESEARCH_TOOLS = [
     get_financial_news,
     get_company_announcements,
     get_macro_data,
-    search_web
+    search_web,
+    search_web_duckduckgo,
+    get_company_fundamental_data,
+    get_detailed_financial_statements,
+    get_stock_analyst_recommendations
 ]
 
 import sys

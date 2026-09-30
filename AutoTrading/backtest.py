@@ -7,15 +7,10 @@ from indicator_engine.dsl import DSLEvaluator, LogicalCondition
 from typing import Dict, Any, List
 import json
 
-app = FastAPI()
+from fastapi import APIRouter
+router = APIRouter()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
 
 class EvaluateRequest(BaseModel):
     ticker: str
@@ -25,13 +20,14 @@ class EvaluateRequest(BaseModel):
     sell_strategy: Dict[str, Any]
     initial_capital: float = 100000.0
     stop_loss_pct: float = 0.05
+    stop_loss_type: str = "fixed"
     timeframe: str = "1D"
 
-@app.get("/health")
+@router.get("/health")
 def health_check():
     return {"status": "AutoTrading Python Engine is LIVE!"}
 
-@app.post("/evaluate")
+@router.post("/evaluate")
 def evaluate_strategy(req: EvaluateRequest):
     try:
         tickers = [t.strip() for t in req.ticker.split(',') if t.strip()]
@@ -122,6 +118,7 @@ def evaluate_strategy(req: EvaluateRequest):
             capital = capital_per_ticker
             shares_held = 0
             buy_price = 0.0
+            highest_price = 0.0
             trades = 0
             
             trade_log = []
@@ -140,16 +137,24 @@ def evaluate_strategy(req: EvaluateRequest):
                         
                 price_history.append(point)
                 
+                # 0. Update Trailing High
+                if shares_held > 0:
+                    highest_price = max(highest_price, current_price)
+
                 # 1. Stop Loss
-                if shares_held > 0 and current_price <= buy_price * (1 - req.stop_loss_pct):
-                    sell_value = shares_held * current_price
-                    trade_pnl = sell_value - (shares_held * buy_price)
-                    capital += sell_value
-                    trades += 1
-                    trade_log.append({"ticker": ticker, "type": "STOP_LOSS", "date": date_str, "price": round(current_price, 2), "shares": shares_held, "pnl": round(trade_pnl, 2), "capital": round(capital, 2), "reason": f"Stop Loss Hit (-{req.stop_loss_pct*100}%)"})
-                    shares_held = 0
-                    buy_price = 0.0
-                    continue 
+                if shares_held > 0:
+                    sl_price = highest_price * (1 - req.stop_loss_pct) if req.stop_loss_type == 'trailing' else buy_price * (1 - req.stop_loss_pct)
+                    if current_price <= sl_price:
+                        sell_value = shares_held * current_price
+                        trade_pnl = sell_value - (shares_held * buy_price)
+                        capital += sell_value
+                        trades += 1
+                        sl_name = "Trailing Stop" if req.stop_loss_type == 'trailing' else "Stop Loss"
+                        trade_log.append({"ticker": ticker, "type": "STOP_LOSS", "date": date_str, "price": round(current_price, 2), "shares": shares_held, "pnl": round(trade_pnl, 2), "capital": round(capital, 2), "reason": f"{sl_name} Hit (-{req.stop_loss_pct*100}%)"})
+                        shares_held = 0
+                        buy_price = 0.0
+                        highest_price = 0.0
+                        continue 
 
                 # 2. Buy Signal
                 if row['buy_signal'] and shares_held == 0:
@@ -158,6 +163,7 @@ def evaluate_strategy(req: EvaluateRequest):
                         cost = shares_held * current_price
                         capital -= cost
                         buy_price = current_price
+                        highest_price = current_price
                         reason_str = row.get('buy_reason', 'Strategy BUY Condition Met')
                         trade_log.append({"ticker": ticker, "type": "BUY", "date": date_str, "price": round(buy_price, 2), "shares": shares_held, "cost": round(cost, 2), "reason": reason_str})
                         
@@ -171,6 +177,7 @@ def evaluate_strategy(req: EvaluateRequest):
                     trade_log.append({"ticker": ticker, "type": "SELL", "date": date_str, "price": round(current_price, 2), "shares": shares_held, "pnl": round(trade_pnl, 2), "capital": round(capital, 2), "reason": reason_str})
                     shares_held = 0
                     buy_price = 0.0
+                    highest_price = 0.0
 
             if shares_held > 0:
                 current_price = float(df.iloc[-1]['close'])
@@ -218,6 +225,13 @@ def evaluate_strategy(req: EvaluateRequest):
     except Exception as e:
         return {"error": str(e)}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+import websockets
+from pymongo import MongoClient
+from indicator_engine.dsl import DSLEvaluator, LogicalCondition
+import asyncio
+import json
+import pandas as pd
+from datetime import datetime
+import argparse
+

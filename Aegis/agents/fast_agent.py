@@ -23,7 +23,8 @@ from tools.portfolio_tools import (
     get_user_transactions, buy_stock, sell_stock
 )
 from tools.research_tools import (
-    get_financial_news, get_company_announcements, get_macro_data, search_web
+    get_financial_news, get_company_announcements, get_macro_data, search_web, search_web_duckduckgo,
+    get_company_fundamental_data, get_detailed_financial_statements, get_stock_analyst_recommendations
 )
 from tools.strategy_tools import (
     submit_strategy_for_backtest, backtest_and_refine
@@ -37,7 +38,8 @@ ALL_TOOLS = [
     get_stock_quote, get_stock_history, search_stocks, get_stock_profile, get_sector_peers, get_stocks_in_sector,
     get_financials, get_metrics, get_analyst_recs, get_technicals, get_options, get_indices, get_movers, get_risk,
     check_portfolio, get_user_balance, get_portfolio_allocation, get_user_orders, get_pending_stoploss_orders, cancel_stoploss_order, get_user_transactions, buy_stock, sell_stock,
-    get_financial_news, get_company_announcements, get_macro_data, search_web,
+    get_financial_news, get_company_announcements, get_macro_data, search_web, search_web_duckduckgo,
+    get_company_fundamental_data, get_detailed_financial_statements, get_stock_analyst_recommendations,
     submit_strategy_for_backtest, backtest_and_refine
 ]
 

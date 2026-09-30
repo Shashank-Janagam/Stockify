@@ -6,6 +6,15 @@ export async function getUserId(uid, name = "Trader", email = null) {
     return res.rows[0].id;
   }
   
+  if (email) {
+    const emailRes = await db.query(`SELECT id FROM users WHERE email = $1`, [email]);
+    if (emailRes.rows.length > 0) {
+      // update uid
+      await db.query(`UPDATE users SET uid = $1 WHERE id = $2`, [uid, emailRes.rows[0].id]);
+      return emailRes.rows[0].id;
+    }
+  }
+
   // Create User
   const insertRes = await db.query(
     `INSERT INTO users (uid, name, email) VALUES ($1, $2, $3) RETURNING id`,

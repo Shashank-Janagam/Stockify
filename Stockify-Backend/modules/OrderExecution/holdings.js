@@ -451,17 +451,32 @@ router.get("/orders", requireAuth, async (req, res) => {
     if (userRes.rows.length === 0) return res.json([]);
     const userId = userRes.rows[0].id;
 
+    try { await db.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS reason VARCHAR(255)`); } catch (e) {}
+
+    try { await db.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS algo_session_id VARCHAR(100)`); } catch (e) {}
+
+    const isAlgo = req.query.is_algo;
+    let algoCondition = '';
+    if (isAlgo === 'true') algoCondition = " AND o.category = 'ALGO_SESSION'";
+    else if (isAlgo === 'false') algoCondition = " AND (o.category != 'ALGO' AND o.category != 'ALGO_SESSION' OR o.category IS NULL)";
+
     const { rows } = await db.query(
       `SELECT
          o.id, s.symbol, s.stock_name AS name,
          o.side, o.order_type, o.quantity, o.price,
          o.stop_trigger_price, o.status, o.category, o.sell_type,
          o.created_at, o.executed_at, o.updated_at,
-         t.realized_pnl
+         o.reason, o.algo_session_id,
+         t.realized_pnl,
+         (
+           SELECT json_agg(row_to_json(inner_o))
+           FROM orders inner_o
+           WHERE inner_o.algo_session_id = o.algo_session_id AND inner_o.category = 'ALGO'
+         ) as inner_trades
        FROM orders o
        JOIN stocks s ON o.stock_id = s.id
        LEFT JOIN trades t ON o.id = t.order_id
-       WHERE o.user_id = $1 AND o.status != 'PENDING'
+       WHERE o.user_id = $1 AND o.status != 'PENDING'${algoCondition}
        ORDER BY o.created_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, limit, offset]

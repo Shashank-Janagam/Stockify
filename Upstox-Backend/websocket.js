@@ -110,7 +110,70 @@ const wss = new WebSocketServer({ server });
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   next();
+});
+app.use(express.json());
+
+/**
+ * GET /api/resolve/:symbol
+ * Returns the instrument_key for a given symbol name.
+ * Used by the Python algo trading backend to verify a symbol is known.
+ */
+app.get("/api/resolve/:symbol", (req, res) => {
+  const sym = req.params.symbol;
+  const key = resolveInstrumentKey(sym);
+  if (key) {
+    const info = stockMap.get(key);
+    res.json({ found: true, instrument_key: key, symbol: info?.symbol || sym, name: info?.name || sym });
+  } else {
+    res.status(404).json({ found: false, symbol: sym, error: "Symbol not found in subscriptions" });
+  }
+});
+
+/**
+ * POST /api/subscribe
+ * Body: { symbol: "OPTIEMUS", instrument_key: "NSE_EQ|INE0B5601012", name: "OPTIEMUS INFRACOM LTD" }
+ * Dynamically injects a new symbol into the stock map and subscribes it to the Upstox feed.
+ * This allows the algo engine to subscribe to any NSE stock at runtime.
+ */
+app.post("/api/subscribe", (req, res) => {
+  const { symbol, instrument_key, name } = req.body;
+  if (!symbol || !instrument_key) {
+    return res.status(400).json({ error: "symbol and instrument_key are required" });
+  }
+  const symUpper = symbol.toUpperCase().replace(".NS", "");
+  // Add to stockMap so resolveInstrumentKey works
+  if (!stockMap.has(instrument_key)) {
+    stockMap.set(instrument_key, { symbol: symUpper, name: name || symUpper, instrument_key });
+    instrumentKeys.push(instrument_key);
+    console.log(`➕ [API] Dynamically added: ${symUpper} → ${instrument_key}`);
+  }
+  // Subscribe to Upstox feed if the connection is alive
+  if (upstoxWs && upstoxWs.readyState === WebSocket.OPEN) {
+    upstoxWs.send(Buffer.from(JSON.stringify({
+      guid: `api_sub_${symUpper}_${Date.now()}`,
+      method: "sub",
+      data: { mode: "ltpc", instrumentKeys: [instrument_key] }
+    })));
+    console.log(`📡 [API] Subscribed to Upstox feed: ${symUpper} (${instrument_key})`);
+  } else {
+    console.warn(`⚠️ [API] Upstox feed not connected, ${symUpper} queued for next connection.`);
+  }
+  res.json({ ok: true, symbol: symUpper, instrument_key });
+});
+
+/**
+ * GET /api/stocks
+ * Returns all loaded symbols (useful for debugging).
+ */
+app.get("/api/stocks", (req, res) => {
+  const list = Array.from(stockMap.entries()).map(([key, info]) => ({
+    instrument_key: key,
+    symbol: info.symbol,
+    name: info.name
+  }));
+  res.json({ count: list.length, stocks: list });
 });
 
 /**

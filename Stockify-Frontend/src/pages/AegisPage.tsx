@@ -144,7 +144,7 @@ function cellStyle(header: string, value: string): React.CSSProperties {
   }
   // Price columns
   if (/price|ltp|close|open|high|low|value|₹/.test(h)) {
-    return { fontWeight: 600, color: '#0f172a' };
+    return { fontWeight: 600, color: 'var(--text-primary)' };
   }
   return {};
 }
