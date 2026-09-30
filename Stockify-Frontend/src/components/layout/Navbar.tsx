@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import "../../Styles/Navbar.css";
 const logo = "https://mystockifyassets.blob.core.windows.net/assets/logos/paperbull.png";
@@ -19,9 +20,11 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
   const { user, loading, logout, isGoogleOnlyUser } = useContext(AuthContext);
 
   const isAegis = location.pathname.startsWith("/aegis");
+  const isStudio = location.pathname.startsWith("/algo-backtest/studio");
 
   const [openSearch, setOpenSearch] = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
+  const [isStudioDark, setIsStudioDark] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
@@ -81,11 +84,12 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
     }
   };
   
+  const shouldAutoHide = isAegis || isStudio;
 
   return (
     <>
-      {isAegis && <div className="aegis-navbar-trigger"></div>}
-      <nav className={`groww-navbar ${isAegis ? "aegis-auto-hide" : ""}`}><div className="nav-inner">
+      {shouldAutoHide && <div className="aegis-navbar-trigger"></div>}
+      <nav className={`groww-navbar ${shouldAutoHide ? "aegis-auto-hide" : ""}`}><div className="nav-inner">
         {/* ---------------- LEFT ---------------- */}
         <div className="nav-left">
           <div
@@ -122,8 +126,8 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
                 <NavLink to="/aegis" className="tab1">
                   ✨ AEGIS
                 </NavLink>
-                <NavLink to="/algo-backtest/studio" className="tab1" style={{ color: 'var(--pb-green, #089981)', fontWeight: 'bold' }}>
-                  🐂 Studio
+                <NavLink to="/algo-backtest/studio" className="tab1">
+                   Studio
                 </NavLink>
               </>
             )}

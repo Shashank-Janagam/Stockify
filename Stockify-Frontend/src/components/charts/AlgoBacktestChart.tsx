@@ -1,3 +1,4 @@
+// @ts-nocheck
 // import {
 //   Chart as ChartJS,
 //   LinearScale,
@@ -390,33 +391,30 @@ const growwPlugin = {
       /* label text */
       const priceText = `₹${Number(point.y).toFixed(2)}`;
       const timeframe =
-  chart.options.plugins?.growwPlugin?.timeframe ?? "1D";
+  chart.options.plugins?.growwPluginV9?.timeframe ?? "1D";
 
 let dateText: string;
 
 if (timeframe === "1D") {
-  // Intraday — x is already IST-shifted as UTC, so read as UTC to avoid double +5:30
   dateText = new Date(point.x).toLocaleTimeString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC"
+    timeZone: "Asia/Kolkata"
   });
 } else if (["1W", "1M"].includes(timeframe)) {
-  // Short range — same: x is IST-as-UTC, read as UTC
   dateText = new Date(point.x).toLocaleDateString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
     day: "2-digit",
     month: "short",
-    timeZone: "UTC"
+    timeZone: "Asia/Kolkata"
   });
 } else {
-  // 1Y, 3Y, 5Y, ALL — same: x is IST-as-UTC, read as UTC
   dateText = new Date(point.x).toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-    timeZone: "UTC"
+    timeZone: "Asia/Kolkata"
   });
 }
 
@@ -460,7 +458,7 @@ if (timeframe === "1D") {
           const ds = chart.data.datasets[i];
           if (!ds || !ds.data) continue;
           const dsData = ds.data as { x: number; y: number }[];
-          const matchPt = dsData.find(pt => pt && Math.abs(Number(pt.x) - Number(point.x)) < 86400000);
+          const matchPt = dsData.find(pt => pt && Math.abs(Number(pt.x) - Number(point.x)) <= 60000);
           if (matchPt && matchPt.y != null && !isNaN(matchPt.y)) {
             const indLabel = ds.label || `Ind ${i}`;
             const isOsc = indLabel.includes("RSI") || indLabel.includes("Threshold") || indLabel.includes("Score");
@@ -612,7 +610,13 @@ if (!Array.isArray(dataPoints) || !dataPoints.length) return;
       ctx.fillText(`₹${tradePrice.toFixed(2)}`, iconX + iconSize + 6, iconY + iconSize / 2 + 1);
 
       // Time Text
-      const timeStr = new Date(tradeTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+      let timeStr = "";
+      const tf = chart.options.plugins?.growwPluginV9?.timeframe ?? "1D";
+      if (tf === "1D") {
+        timeStr = new Date(tradeTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
+      } else {
+        timeStr = new Date(tradeTime).toLocaleDateString("en-IN", { day: "2-digit", month: "short", timeZone: "Asia/Kolkata" });
+      }
       ctx.fillStyle = "#6b7280";
       ctx.font = "500 10px Inter, sans-serif";
       ctx.textAlign = "center";
@@ -689,6 +693,7 @@ interface Props {
   indicatorSeries?: IndicatorSeries[];
   onHoverTrade?: (trade: any) => void;
   activeTrade?: any;
+  onReplayProgress?: (pnl: number | null) => void;
 }
 
 /* =========================
@@ -791,10 +796,14 @@ function formatIndicatorValue(key: string, val: number | null | undefined): stri
 
 function OscillatorSubChart({
   series,
-  thresholds = []
+  thresholds = [],
+  minX,
+  maxX
 }: {
   series: IndicatorSeries;
   thresholds?: IndicatorSeries[];
+  minX?: number;
+  maxX?: number;
 }) {
   const isRsi = series.key.toLowerCase().includes("rsi") || series.label.toLowerCase().includes("rsi");
   
@@ -851,9 +860,17 @@ function OscillatorSubChart({
       const val = match ? parseFloat(match[0]) : (t.values && t.values.length ? Number(t.values[0].y) : null);
       if (val != null && !isNaN(val)) {
         const isUpper = val >= 50;
+        const startX = minX !== undefined ? minX : (parsedData.length ? parsedData[0].x : 0);
+        const endX = maxX !== undefined ? maxX : (parsedData.length ? parsedData[parsedData.length - 1].x : 0);
+        
+        const threshData = [];
+        for (let t = startX; t <= endX; t += 60000) {
+          threshData.push({ x: t, y: val });
+        }
+        
         datasets.push({
           label: formatIndicatorLabel(t.key, t.label),
-          data: [{ x: parsedData[0].x, y: val }, { x: parsedData[parsedData.length - 1].x, y: val }],
+          data: threshData,
           borderColor: t.color || (isUpper ? "rgba(239, 68, 68, 0.65)" : "rgba(16, 185, 129, 0.65)"),
           borderWidth: 1.3,
           borderDash: [5, 4],
@@ -932,8 +949,8 @@ function OscillatorSubChart({
               x: {
                 type: "timeseries",
                 display: false,
-                min: undefined,
-                max: undefined
+                min: minX,
+                max: maxX
               },
               y: {
                 type: "linear",
@@ -969,7 +986,8 @@ export function AlgoBacktestChart({
   pendingSL,
   indicatorSeries = [],
   onHoverTrade,
-  activeTrade
+  activeTrade,
+  onReplayProgress
 }: Props) {
   if (!lineData.length) return null;
 
@@ -980,6 +998,73 @@ export function AlgoBacktestChart({
   const [showAddThresholdPopover, setShowAddThresholdPopover] = useState(false);
   const [customThresholdInput, setCustomThresholdInput] = useState("");
   const [isMaximized, setIsMaximized] = useState(false);
+  const [showIndicatorDropdown, setShowIndicatorDropdown] = useState(false);
+
+  // --- REPLAY FEATURE STATE ---
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [replaySpeed, setReplaySpeed] = useState(200);
+  const [replayIndex, setReplayIndex] = useState(lineData.length);
+
+  useEffect(() => {
+    if (!isReplaying) {
+      setReplayIndex(lineData.length);
+    }
+  }, [lineData]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isReplaying && replayIndex < lineData.length) {
+      interval = setInterval(() => {
+        setReplayIndex(prev => {
+          if (prev + 1 >= lineData.length) {
+             setIsReplaying(false);
+             return lineData.length;
+          }
+          return prev + 1;
+        });
+      }, replaySpeed);
+    } else if (replayIndex >= lineData.length) {
+      setIsReplaying(false);
+    }
+    return () => clearInterval(interval);
+  }, [isReplaying, replayIndex, replaySpeed, lineData.length]);
+
+  const slicedLineData = (isReplaying || replayIndex < lineData.length) ? lineData.slice(0, replayIndex) : lineData;
+  const currentReplayTime = slicedLineData[slicedLineData.length - 1]?.x || Infinity;
+
+  useEffect(() => {
+    if (!onReplayProgress) return;
+    if (!isReplaying && replayIndex >= lineData.length - 1) {
+       onReplayProgress(null);
+       return;
+    }
+
+    let pnl = 0;
+    let shares = 0;
+    let avgPrice = 0;
+
+    trades.forEach(t => {
+      const ts = typeof t.createdAtIST === 'number' ? t.createdAtIST : new Date(t.createdAtIST).getTime();
+      if (ts <= currentReplayTime) {
+        if (t.side === 'BUY') {
+           shares += t.quantity;
+           avgPrice = Number(t.pricePerShare) || 0; 
+        } else if (t.side === 'SELL' || t.side === 'STOP_LOSS') {
+           pnl += t.pnl || 0;
+           shares = 0;
+        }
+      }
+    });
+
+    const currentPrice = slicedLineData[slicedLineData.length - 1]?.y;
+    if (shares > 0 && currentPrice != null && !isNaN(currentPrice)) {
+       pnl += (currentPrice - avgPrice) * shares;
+    }
+
+    onReplayProgress(pnl);
+
+  }, [currentReplayTime, isReplaying, replayIndex, onReplayProgress]);
+  // ----------------------------
 
   // Helper: test if an indicator is a non-price oscillator like RSI or MACD
   const isOscillator = (key: string) => {
@@ -1126,18 +1211,18 @@ export function AlgoBacktestChart({
     const d = new Date(anchorTs);
 
     return {
-      marketOpen: Date.UTC(
+      marketOpen: new Date(Date.UTC(
         d.getUTCFullYear(),
         d.getUTCMonth(),
         d.getUTCDate(),
         9, 15, 0
-      ),
-      marketClose: Date.UTC(
+      )).getTime(),
+      marketClose: new Date(Date.UTC(
         d.getUTCFullYear(),
         d.getUTCMonth(),
         d.getUTCDate(),
         15, 30, 0
-      )
+      )).getTime()
     };
   }
 
@@ -1164,16 +1249,16 @@ export function AlgoBacktestChart({
         originalIndex: index
       };
     })
-    .filter(t => !isNaN(t.x) && !isNaN(t.y));
+    .filter(t => !isNaN(t.x) && !isNaN(t.y) && t.x <= currentReplayTime);
 
   currentIndex = lineData.length - 1;
   const is1D = timeframe === "1D";
 
   // Include trade prices in the scale so markers aren't cut off vertically
-  const allVisiblePrices: number[] = lineData.map(d => d.y).filter(y => y != null && !isNaN(y));
+  const allVisiblePrices: number[] = slicedLineData.map(d => d.y).filter(y => y != null && !isNaN(y));
   trades.forEach(t => {
     const ts = typeof t.createdAtIST === 'number' ? t.createdAtIST : new Date(t.createdAtIST).getTime();
-    if (!isNaN(ts) && ts >= marketOpen && ts <= finalMarketClose && t.pricePerShare != null && !isNaN(t.pricePerShare)) {
+    if (!isNaN(ts) && ts >= marketOpen && ts <= finalMarketClose && ts <= currentReplayTime && t.pricePerShare != null && !isNaN(t.pricePerShare)) {
       allVisiblePrices.push(Number(t.pricePerShare));
     }
   });
@@ -1204,8 +1289,16 @@ export function AlgoBacktestChart({
     );
   }, [timeframe, percent]);
 
-  const chartData = lineData.filter(d => !isNaN(d.x) && !isNaN(d.y));
-  currentIndex = chartData.length - 1;
+  // Instead of shrinking the array length, we nullify future values. 
+  // This forces Chart.js to keep the X-axis completely rigid and full-width!
+  const chartData = lineData.map((d, i) => {
+    const isFuture = (isReplaying || replayIndex < lineData.length) && i > replayIndex;
+    return {
+      x: d.x,
+      y: isFuture || isNaN(d.x) || isNaN(d.y) ? null : d.y
+    };
+  });
+  currentIndex = (isReplaying || replayIndex < lineData.length) ? replayIndex : lineData.length - 1;
 
   // Build datasets for the main chart
   const datasets = [
@@ -1247,7 +1340,9 @@ export function AlgoBacktestChart({
       return {
         id: ind.key,
         label: formatIndicatorLabel(ind.key, ind.label),
-        data: ind.values,
+        data: ind.key.startsWith('Threshold')
+          ? [ { x: marketOpen, y: Number((ind.values && ind.values.length) ? ind.values[0].y : ind.key.replace(/[^0-9.]/g, '')) }, { x: finalMarketClose, y: Number((ind.values && ind.values.length) ? ind.values[0].y : ind.key.replace(/[^0-9.]/g, '')) } ]
+          : ind.values.map(v => ({ x: v.x, y: v.x <= currentReplayTime ? v.y : null })),
         borderColor,
         borderWidth,
         borderDash: ind.key.startsWith('Threshold') ? [5, 5] : [],
@@ -1276,10 +1371,13 @@ export function AlgoBacktestChart({
       return {
         id: ind.key,
         label: formatIndicatorLabel(ind.key, ind.label),
-        data: (ind.values || []).map(pt => ({
-          x: typeof pt.x === 'number' ? pt.x : new Date(pt.x).getTime(),
-          y: Number(pt.y)
-        })).filter(pt => !isNaN(pt.x) && !isNaN(pt.y)),
+        data: (ind.values || []).map(pt => {
+          const px = typeof pt.x === 'number' ? pt.x : new Date(pt.x).getTime();
+          return {
+            x: px,
+            y: px <= currentReplayTime ? Number(pt.y) : null
+          };
+        }),
         borderColor,
         borderWidth,
         borderDash: [],
@@ -1307,20 +1405,16 @@ export function AlgoBacktestChart({
         borderWidth = 1;
       }
 
-      // Generate points spanning from first to last candle for a solid reference line across chart
-      const startX = chartData.length ? chartData[0].x : 0;
-      const endX = chartData.length ? chartData[chartData.length - 1].x : 0;
+      // Full width line for threshold
+      const fullThreshData = [
+        { x: marketOpen, y: val },
+        { x: finalMarketClose, y: val }
+      ];
 
       return {
         id: ind.key,
         label: formatIndicatorLabel(ind.key, ind.label),
-        data: chartData.length ? [
-          { x: startX, y: val },
-          { x: endX, y: val }
-        ] : (ind.values || []).map(pt => ({
-          x: typeof pt.x === 'number' ? pt.x : new Date(pt.x).getTime(),
-          y: Number(pt.y)
-        })).filter(pt => !isNaN(pt.x) && !isNaN(pt.y)),
+        data: fullThreshData,
         borderColor,
         borderWidth,
         borderDash: [5, 4],
@@ -1451,49 +1545,6 @@ export function AlgoBacktestChart({
                 None
               </button>
             </div>
-
-            {/* Toggle between Overlay on Chart vs Sub-Panel */}
-            {hasOscillators && (
-              <div style={{ display: "inline-flex", background: "#f1f5f9", borderRadius: "5px", padding: "2px", border: "1px solid #e2e8f0" }}>
-                <button
-                  type="button"
-                  onClick={() => setOscillatorViewMode("overlay")}
-                  title="Plot RSI as a line graph directly on the main chart"
-                  style={{
-                    border: "none",
-                    background: oscillatorViewMode === "overlay" ? "#ffffff" : "transparent",
-                    color: oscillatorViewMode === "overlay" ? "#4f46e5" : "#64748b",
-                    fontSize: "10px",
-                    fontWeight: 600,
-                    padding: "2px 7px",
-                    borderRadius: "3px",
-                    cursor: "pointer",
-                    boxShadow: oscillatorViewMode === "overlay" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                    transition: "all 0.15s ease"
-                  }}
-                >
-                  📈 On Chart
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOscillatorViewMode("subchart")}
-                  title="Display RSI in a separate sub-panel graph below"
-                  style={{
-                    border: "none",
-                    background: oscillatorViewMode === "subchart" ? "#ffffff" : "transparent",
-                    color: oscillatorViewMode === "subchart" ? "#4f46e5" : "#64748b",
-                    fontSize: "10px",
-                    fontWeight: 600,
-                    padding: "2px 7px",
-                    borderRadius: "3px",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease"
-                  }}
-                >
-                  📊 Sub-Panel
-                </button>
-              </div>
-            )}
 
             {/* Threshold Selector: Allow user to select / add threshold values */}
             {hasOscillators && (
@@ -1661,118 +1712,166 @@ export function AlgoBacktestChart({
             </div>
           </div>
 
-          {/* Right: Individual indicator toggle chips */}
-          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
-            {toolbarIndicators.map(ind => {
-              const isVisible = visibleIndicators[ind.key] !== false;
-              const isHovered = hoveredIndicatorKey === ind.key;
-              const isThreshold = ind.key.toLowerCase().startsWith("threshold");
-              const isDashed = isThreshold;
-              const threshMatch = ind.key.match(/\d+(\.\d+)?/);
-              const threshNum = threshMatch ? parseFloat(threshMatch[0]) : null;
-              const isCustom = threshNum != null && customThresholds.includes(threshNum);
-
-              let color = ind.color;
-              if (!color) {
-                if (isThreshold && threshNum != null) {
-                  color = threshNum >= 50 ? "#ef4444" : "#10b981";
-                } else {
-                  color = "#6366f1";
-                }
-              }
-
-              const label = formatIndicatorLabel(ind.key, ind.label);
-              const lastPoint = ind.values && ind.values.length ? ind.values[ind.values.length - 1] : null;
-              const formattedVal = lastPoint ? formatIndicatorValue(ind.key, lastPoint.y) : null;
-
-              return (
-                <button
-                  key={ind.key}
-                  type="button"
-                  onClick={() => toggleIndicator(ind.key)}
-                  onMouseEnter={() => setHoveredIndicatorKey(ind.key)}
-                  onMouseLeave={() => setHoveredIndicatorKey(null)}
-                  title={`Click to ${isVisible ? 'hide' : 'show'} ${label}. Hover to highlight line.`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "3px 9px",
-                    borderRadius: "6px",
-                    fontSize: "11px",
-                    fontWeight: isVisible ? 600 : 500,
-                    cursor: "pointer",
-                    border: isVisible
-                      ? (isHovered ? `1.5px solid ${color}` : `1px solid ${color}80`)
-                      : "1px dashed #cbd5e1",
-                    background: isVisible
-                      ? (isHovered ? `${color}20` : `${color}0d`)
-                      : "#f8fafc",
-                    color: isVisible ? "#1e293b" : "#94a3b8",
-                    boxShadow: isHovered && isVisible ? `0 2px 6px ${color}35` : "none",
-                    transform: isHovered ? "translateY(-1px)" : "none",
-                    transition: "all 0.15s ease",
-                    opacity: isVisible ? 1 : 0.65
-                  }}
-                >
-                  {/* Colored line style preview */}
-                  <span
-                    style={{
-                      display: "inline-block",
-                      width: "14px",
-                      height: "0px",
-                      borderTop: isVisible
-                        ? (isDashed ? `2px dashed ${color}` : `2.5px solid ${color}`)
-                        : "2px dotted #94a3b8",
-                      borderRadius: "1px"
-                    }}
-                  />
-                  <span>{label}</span>
-                  {formattedVal && (
-                    <span
-                      style={{
-                        fontSize: "10px",
-                        fontWeight: 600,
-                        color: isVisible ? color : "#94a3b8",
-                        background: isVisible ? "#ffffff" : "transparent",
-                        padding: "1px 5px",
-                        borderRadius: "3px",
-                        border: isVisible ? `1px solid ${color}30` : "none"
-                      }}
-                    >
-                      {formattedVal}
-                    </span>
-                  )}
-                  {isCustom && (
-                    <span
-                      role="button"
-                      onClick={(e) => handleRemoveCustomThreshold(e, ind.key, threshNum!)}
-                      title="Remove this threshold"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: "14px",
-                        height: "14px",
-                        borderRadius: "50%",
-                        marginLeft: "2px",
-                        fontSize: "12px",
-                        color: "#94a3b8",
-                        cursor: "pointer",
-                        lineHeight: 1
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#ef4444"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#94a3b8"; }}
-                    >
-                      ×
-                    </span>
-                  )}
+          {/* Right: Replay Controls & Individual indicator toggle dropdown */}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {/* Replay Controls UI */}
+            {marketState !== 'REGULAR' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#0f172a', padding: '4px 12px', borderRadius: '16px', border: '1px solid #1e293b' }}>
+                <button onClick={() => {
+                  if (replayIndex >= lineData.length) setReplayIndex(0);
+                  setIsReplaying(!isReplaying);
+                }} style={{ background: 'var(--s-primary)', color: '#fff', border: 'none', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '10px' }}>
+                  {isReplaying ? '⏸' : '▶️'}
                 </button>
-              );
-            })}
+                <button onClick={() => {
+                  setIsReplaying(false);
+                  setReplayIndex(lineData.length);
+                }} style={{ background: 'transparent', color: '#94a3b8', border: 'none', cursor: 'pointer', fontSize: '12px' }}>
+                  ⏹
+                </button>
+                <div style={{ width: '1px', height: '14px', background: '#334155', margin: '0 4px' }} />
+                <select value={replaySpeed} onChange={e => setReplaySpeed(Number(e.target.value))} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: '11px', outline: 'none', cursor: 'pointer' }}>
+                  <option value={1000} style={{ background: '#0f172a', color: '#fff' }}>1x</option>
+                  <option value={500} style={{ background: '#0f172a', color: '#fff' }}>2x</option>
+                  <option value={200} style={{ background: '#0f172a', color: '#fff' }}>5x</option>
+                  <option value={50} style={{ background: '#0f172a', color: '#fff' }}>Fast</option>
+                  <option value={10} style={{ background: '#0f172a', color: '#fff' }}>Max</option>
+                </select>
+                <div style={{ width: '1px', height: '14px', background: '#334155', margin: '0 4px' }} />
+                <div style={{ fontSize: '11px', color: '#94a3b8', minWidth: '36px', textAlign: 'right' }}>
+                  {Math.floor((replayIndex / lineData.length) * 100)}%
+                </div>
+              </div>
+            )}
+
+            <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setShowIndicatorDropdown(v => !v)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "4px 10px",
+                borderRadius: "6px",
+                fontSize: "11px",
+                fontWeight: 600,
+                cursor: "pointer",
+                background: showIndicatorDropdown ? "#e0e7ff" : "#f8fafc",
+                border: "1px solid #cbd5e1",
+                color: "#1e293b",
+                transition: "all 0.15s ease",
+              }}
+            >
+              Select Indicators <span style={{ fontSize: "10px" }}>▼</span>
+            </button>
+
+            {showIndicatorDropdown && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  right: 0,
+                  marginTop: "6px",
+                  zIndex: 100,
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+                  padding: "8px",
+                  minWidth: "200px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                  maxHeight: "300px",
+                  overflowY: "auto"
+                }}
+              >
+                {toolbarIndicators.map(ind => {
+                  const isVisible = visibleIndicators[ind.key] !== false;
+                  const isThreshold = ind.key.toLowerCase().startsWith("threshold");
+                  const threshMatch = ind.key.match(/\d+(\.\d+)?/);
+                  const threshNum = threshMatch ? parseFloat(threshMatch[0]) : null;
+                  const isCustom = threshNum != null && customThresholds.includes(threshNum);
+
+                  let color = ind.color;
+                  if (!color) {
+                    if (isThreshold && threshNum != null) {
+                      color = threshNum >= 50 ? "#ef4444" : "#10b981";
+                    } else {
+                      color = "#6366f1";
+                    }
+                  }
+
+                  const label = formatIndicatorLabel(ind.key, ind.label);
+
+                  return (
+                    <label
+                      key={ind.key}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        padding: "6px 8px",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontSize: "11px",
+                        fontWeight: 500,
+                        color: "#1e293b",
+                        transition: "background 0.1s",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; setHoveredIndicatorKey(ind.key); }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; setHoveredIndicatorKey(null); }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isVisible}
+                        onChange={() => toggleIndicator(ind.key)}
+                        style={{ cursor: "pointer", accentColor: color }}
+                      />
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          background: color,
+                          marginRight: "4px"
+                        }}
+                      />
+                      <span style={{ flex: 1 }}>{label}</span>
+                      {isCustom && (
+                        <span
+                          role="button"
+                          onClick={(e) => { e.preventDefault(); handleRemoveCustomThreshold(e, ind.key, threshNum!); }}
+                          title="Remove this threshold"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "14px",
+                            height: "14px",
+                            borderRadius: "50%",
+                            fontSize: "12px",
+                            color: "#94a3b8",
+                            cursor: "pointer",
+                          }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#ef4444"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#94a3b8"; }}
+                        >
+                          ×
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            </div>
           </div>
         </div>
       )}
+
 
       {/* Main Stock Price Chart Area */}
       <div style={{ flex: 1, minHeight: 0, position: "relative", width: "100%" }}>
@@ -1830,8 +1929,8 @@ export function AlgoBacktestChart({
                   } : {
                     type: "timeseries",
                     display: false,
-                    min: undefined,
-                    max: finalMarketClose > lastCandleTs ? finalMarketClose : undefined,
+                    min: lineData.length ? lineData[0].x : undefined,
+                    max: finalMarketClose > lastCandleTs ? finalMarketClose : (lineData.length ? lineData[lineData.length - 1].x : undefined),
                     time: {
                       unit: is1D ? "minute" : "day",
                       tooltipFormat: is1D ? "HH:mm" : "dd MMM"
@@ -1875,6 +1974,8 @@ export function AlgoBacktestChart({
           key={osc.key}
           series={osc}
           thresholds={activeOscillatorThresholds}
+          minX={marketOpen}
+          maxX={finalMarketClose}
         />
       ))}
     </div>

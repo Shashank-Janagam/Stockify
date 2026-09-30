@@ -28,6 +28,12 @@ from tools.market_tools import (
     get_movers,
 )
 
+from tools.research_tools import (
+    get_company_fundamental_data,
+    get_detailed_financial_statements,
+    get_stock_analyst_recommendations
+)
+
 # Initialize the LLM
 # You can toggle between Groq and Gemini depending on your rate limits.
 
@@ -49,6 +55,9 @@ tools = [
     get_options,
     get_indices,
     get_movers,
+    get_company_fundamental_data,
+    get_detailed_financial_statements,
+    get_stock_analyst_recommendations
 ]
 
 from datetime import datetime

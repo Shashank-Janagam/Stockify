@@ -59,15 +59,15 @@ export const RecursiveBuilder = ({ dslString, onChange, color }: { dslString: st
   const renderNode = (node: any, path: number[]): any => {
     if (node.operator && Array.isArray(node.conditions)) {
       return (
-        <div key={path.join('-')} style={{ padding: '12px', marginLeft: path.length ? '15px' : '0', borderLeft: `3px solid ${color}`, background: 'rgba(255,255,255,0.7)', borderRadius: '0 8px 8px 0', marginBottom: '8px', borderTop: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
+        <div key={path.join('-')} style={{ padding: '12px', marginLeft: path.length ? '15px' : '0', borderLeft: `3px solid ${color}`, background: 'var(--s-surface)', borderRadius: '0 8px 8px 0', marginBottom: '8px', borderTop: '1px solid var(--s-border-md)', borderRight: '1px solid var(--s-border-md)', borderBottom: '1px solid var(--s-border-md)' }}>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
             <select className="pb-select" style={{ padding: '2px 8px', fontWeight: 'bold' }} value={node.operator} onChange={e => handleChange(path, n => ({ ...n, operator: e.target.value }))}>
               <option value="AND">AND GROUP</option>
               <option value="OR">OR GROUP</option>
             </select>
-            <button className="pb-btn" style={{ padding: '2px 8px', fontSize: '11px', background: '#f8fafc' }} onClick={() => handleAdd(path, { indicator: 'EMA', params: { period: 20 }, comparison: '>', value: 0 })}>+ Condition</button>
-            <button className="pb-btn" style={{ padding: '2px 8px', fontSize: '11px', background: '#f8fafc' }} onClick={() => handleAdd(path, { operator: 'AND', conditions: [] })}>+ Group</button>
-            {path.length > 0 && <button className="pb-btn" style={{ padding: '2px 8px', fontSize: '11px', background: '#fef2f2', color: '#ef4444' }} onClick={() => handleDelete(path)}>Delete Group</button>}
+            <button className="pb-btn" style={{ padding: '2px 8px', fontSize: '11px', background: 'var(--s-card-hover)' }} onClick={() => handleAdd(path, { indicator: 'EMA', params: { period: 20 }, comparison: '>', value: 0 })}>+ Condition</button>
+            <button className="pb-btn" style={{ padding: '2px 8px', fontSize: '11px', background: 'var(--s-card-hover)' }} onClick={() => handleAdd(path, { operator: 'AND', conditions: [] })}>+ Group</button>
+            {path.length > 0 && <button className="pb-btn" style={{ padding: '2px 8px', fontSize: '11px', background: 'var(--s-red-dim)', color: 'var(--s-red)' }} onClick={() => handleDelete(path)}>Delete Group</button>}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
             {node.conditions.map((child: any, i: number) => renderNode(child, [...path, i]))}
@@ -77,7 +77,7 @@ export const RecursiveBuilder = ({ dslString, onChange, color }: { dslString: st
     } else {
       const isValNum = typeof node.value === 'number';
       return (
-        <div key={path.join('-')} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', background: '#fff', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+        <div key={path.join('-')} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', background: 'var(--s-card)', padding: '8px', borderRadius: '6px', border: '1px solid var(--s-border-md)' }}>
           <select className="pb-select" style={{ padding: '2px 6px' }} value={node.indicator} onChange={e => handleChange(path, n => ({ ...n, indicator: e.target.value }))}>
             <option value="EMA">EMA</option><option value="SMA">SMA</option><option value="RSI">RSI</option><option value="MACD">MACD</option><option value="BOLLINGER">BOLLINGER</option><option value="OBI">OBI</option><option value="Close">Close</option>
           </select>

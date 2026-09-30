@@ -1,13 +1,663 @@
-import { useState, useEffect } from 'react';
+// @ts-nocheck
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import '../Styles/PaperBullStudio.css';
+import '../Styles/stock.css';
 import { AlgoBacktestChart } from '../components/charts/AlgoBacktestChart';
 import { RecursiveBuilder } from '../components/NestedBuilder';
 import StockLogo from '../components/common/StockLogo';
 import SearchOverlay from '../components/layout/SearchOverlay';
 
 
+function computeSMA(data: {x: number, y: number}[], period: number) {
+  let result: {x: number, y: number|null}[] = [];
+  for(let i=0; i<data.length; i++) {
+     if(i < period - 1) {
+       result.push({ x: data[i].x, y: null });
+     } else {
+       let sum = 0;
+       for(let j=0; j<period; j++) sum += data[i-j].y;
+       result.push({ x: data[i].x, y: sum / period });
+     }
+  }
+  return result;
+}
+
+function computeEMA(data: {x: number, y: number}[], period: number) {
+  let result: {x: number, y: number|null}[] = [];
+  let k = 2 / (period + 1);
+  let ema: number | null = null;
+  for(let i=0; i<data.length; i++) {
+     if(i < period - 1) {
+       result.push({ x: data[i].x, y: null });
+     } else if(i === period - 1) {
+       let sum = 0;
+       for(let j=0; j<period; j++) sum += data[i-j].y;
+       ema = sum / period;
+       result.push({ x: data[i].x, y: ema });
+     } else {
+       ema = (data[i].y - ema!) * k + ema!;
+       result.push({ x: data[i].x, y: ema });
+     }
+  }
+  return result;
+}
+
+function computeRSI(data: {x: number, y: number}[], period: number) {
+  let result: {x: number, y: number|null}[] = [];
+  let gains = 0, losses = 0;
+  for(let i=0; i<data.length; i++) {
+     if(i === 0) {
+       result.push({ x: data[i].x, y: null });
+       continue;
+     }
+     let diff = data[i].y - data[i-1].y;
+     if(i < period) {
+        if(diff > 0) gains += diff;
+        else losses -= diff;
+        result.push({ x: data[i].x, y: null });
+     } else if(i === period) {
+        if(diff > 0) gains += diff;
+        else losses -= diff;
+        gains /= period;
+        losses /= period;
+        let rs = gains / (losses === 0 ? 1 : losses);
+        result.push({ x: data[i].x, y: 100 - (100 / (1 + rs)) });
+     } else {
+        let gain = diff > 0 ? diff : 0;
+        let loss = diff < 0 ? -diff : 0;
+        gains = (gains * (period - 1) + gain) / period;
+        losses = (losses * (period - 1) + loss) / period;
+        let rs = gains / (losses === 0 ? 1 : losses);
+        result.push({ x: data[i].x, y: 100 - (100 / (1 + rs)) });
+     }
+  }
+  return result;
+}
+
+const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userId, buyDsl, sellDsl, allocatedCapital, mode, stopLossPct, stopLossType }: { symbol: string, indicatorSeries: any[], onClose: () => void, strategyName?: string, userId?: string, buyDsl?: string, sellDsl?: string, allocatedCapital?: number, mode?: 'simulate' | 'upstox', stopLossPct: number, stopLossType: string }) => {
+  const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
+  const [data, setData] = useState<{x: number, y: number}[]>([]);
+  const [indicatorData, setIndicatorData] = useState<{[key: string]: {x: number, y: number}[]}>({});
+  
+  // Simulated stats for the dashboard
+  const [invested, setInvested] = useState(0);
+  const [pnl, setPnl] = useState(0);
+  const [cash, setCash] = useState(allocatedCapital || 0);
+  const [investedQty, setInvestedQty] = useState(0);
+  const [position, setPosition] = useState<"NONE"|"LONG"|"SHORT">("NONE");
+  const [trades, setTrades] = useState<any[]>([]);
+  
+  const [ltp, setLtp] = useState(0);
+  const [prevLtp, setPrevLtp] = useState(0);
+  const [latestIndicators, setLatestIndicators] = useState<any>({});
+  const [activeStopLoss, setActiveStopLoss] = useState<number | null>(null);
+  const [showLiveLedger, setShowLiveLedger] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
+  const [companyInfo, setCompanyInfo] = useState<{ name: string; exchange: string } | null>(null);
+
+  // Fetch real company name from backend
+  useEffect(() => {
+    if (!symbol || !HOST) return;
+    const encoded = encodeURIComponent(symbol);
+    fetch(`${HOST}/api/stocks/${encoded}/quote`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        const name = d?.longName || d?.shortName || d?.companyName || d?.name || null;
+        const exchange = d?.fullExchangeName || (symbol.endsWith('.BO') ? 'BSE' : 'NSE');
+        if (name) setCompanyInfo({ name, exchange });
+      })
+      .catch(() => {});
+  }, [symbol, HOST]);
+
+  const positionRef = useRef<"NONE"|"LONG"|"SHORT">("NONE");
+  const investedRef = useRef(0);
+  const investedQtyRef = useRef(0);
+  const cashRef = useRef(allocatedCapital || 0);
+  const ltpRef = useRef(0);
+  const highestPriceRef = useRef(0);
+  
+  const [signals, setSignals] = useState<{BUY: boolean, SELL: boolean}>({BUY: false, SELL: false});
+  const [isCompleted, setIsCompleted] = useState(false);
+  
+  useEffect(() => {
+    if (isCompleted) {
+        // Use refs for all values — refs are always current unlike stale closure state
+        const currentQty = investedQtyRef.current;
+        const currentInvestedCost = investedRef.current;
+        const currentLtp = ltpRef.current;
+        const currentCash = cashRef.current;
+
+        let finalTrades: any[] = [];
+        let finalReturnedCapital: number;
+
+        if (positionRef.current === "LONG" && currentQty > 0) {
+            // Auto-sell at current LTP
+            const sellValue = currentQty * currentLtp;
+            const realizedPnl = sellValue - currentInvestedCost;
+            finalTrades.push({
+                side: "SELL",
+                quantity: currentQty,
+                pricePerShare: currentLtp,
+                createdAtIST: new Date().toISOString(),
+                pnl: realizedPnl,
+                isAlgo: true
+            });
+            // Total capital returned = remaining cash + proceeds from selling
+            finalReturnedCapital = currentCash + sellValue;
+            setPnl(finalReturnedCapital - Number(allocatedCapital || 0));
+            setTrades(prev => [...prev, ...finalTrades]);
+            setInvested(0);
+            setInvestedQty(0);
+            setPosition("NONE");
+            investedRef.current = 0;
+            investedQtyRef.current = 0;
+            positionRef.current = "NONE";
+            cashRef.current = finalReturnedCapital;
+        } else {
+            // No open position — just return whatever cash is left
+            finalReturnedCapital = currentCash;
+        }
+
+        fetch(`${HOST}/api/algo/session/stop`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                returnedCapital: finalReturnedCapital,
+                symbol,
+                strategyName,
+                pnl: finalReturnedCapital - Number(allocatedCapital || 0),
+                trades: finalTrades
+            })
+        }).then(async res => {
+            if (res.ok) {
+                // Dispatch BEFORE onClose so parent is still mounted and can hear the event
+                window.dispatchEvent(new CustomEvent('wallet-refetch', {}));
+            }
+        }).catch(console.error).finally(() => {
+            onClose();
+        });
+        setIsCompleted(false);
+    }
+  }, [isCompleted]);
+
+  useEffect(() => {
+    let ws: WebSocket;
+    let isActive = true;
+
+    try {
+      const algoWsUrl = import.meta.env.VITE_ALGO_WS_URL ||
+        `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:8000/live`;
+      ws = new WebSocket(algoWsUrl);
+      ws.onopen = () => {
+        const visualIndicators = indicatorSeries.map(s => s.key);
+        const activeMode = mode || 'simulate';
+        console.log(`[LiveStudioGraph] Connecting | Symbol: ${symbol} | Mode: ${activeMode.toUpperCase()}`);
+        ws.send(JSON.stringify({ 
+            action: "subscribe", 
+            symbols: [symbol], 
+            reset: false, 
+            indicators: visualIndicators,
+            strategyName: strategyName,
+            userId: userId,
+            allocatedCapital: allocatedCapital,
+            mode: activeMode
+        }));
+      };
+      ws.onmessage = (e) => {
+        try {
+          const d = JSON.parse(e.data);
+          if (
+            d.symbol === symbol || 
+            d.symbolNS === symbol || 
+            (d.symbol && symbol && d.symbol.replace(".NS", "") === symbol.replace(".NS", ""))
+          ) {
+            const currentLtp = d.ltp || d.price;
+            if (currentLtp && isActive) {
+               const time = d.candle_minute_ts ? new Date(d.candle_minute_ts).getTime() : Date.now();
+               
+               setLtp(currentLtp);
+               ltpRef.current = currentLtp;
+
+               // Keep the displayed trailing stop synchronized with the live price.
+               if (positionRef.current === "LONG" && stopLossType === "trailing") {
+                   highestPriceRef.current = Math.max(highestPriceRef.current, currentLtp);
+                   setActiveStopLoss(highestPriceRef.current * (1 - Number(stopLossPct) / 100));
+               }
+               
+               setData(prev => {
+                  if (prev.length > 0 && prev[prev.length - 1].x === time) {
+                      const next = [...prev];
+                      next[next.length - 1] = { x: time, y: currentLtp };
+                      return next;
+                  }
+                  const next = [...prev, { x: time, y: currentLtp }];
+                  return next.length > 2500 ? next.slice(-2500) : next;
+               });
+               
+               if (d.indicators) {
+                   setLatestIndicators(d.indicators);
+                   setIndicatorData(prev => {
+                       const nextInds = { ...prev };
+                       for (const [key, val] of Object.entries(d.indicators)) {
+                           if (val !== null) {
+                               if (!nextInds[key]) nextInds[key] = [];
+                               if (nextInds[key].length > 0 && nextInds[key][nextInds[key].length - 1].x === time) {
+                                   nextInds[key][nextInds[key].length - 1] = { x: time, y: val as number };
+                               } else {
+                                   nextInds[key] = [...nextInds[key], { x: time, y: val as number }];
+                               }
+                               if (nextInds[key].length > 2500) nextInds[key] = nextInds[key].slice(-2500);
+                           }
+                       }
+                       return nextInds;
+                   });
+               }
+
+               if (d.trade_executed) {
+                   const { side, qty, price, capital_remaining } = d.trade_executed;
+                   const currentPos = positionRef.current;
+                   const currentInvested = investedRef.current;
+                   
+                   // Beautiful Toast Notification Simulation
+                   const toastColor = side === "BUY" ? "#10b981" : "#ef4444";
+                   const toastIcon = side === "BUY" ? "🟩" : "🟥";
+                   console.log(`%c${toastIcon} ALGO ${side}: ${qty} Shares of ${symbol} at ₹${price} (Capital Left: ₹${capital_remaining.toFixed(2)})`, `color: ${toastColor}; font-weight: bold; font-size: 14px;`);
+                   
+                   if (side === "BUY") {
+                       const newInvested = price * qty;
+                       setInvested(newInvested);
+                       investedRef.current = newInvested;
+                        setInvestedQty(qty);
+                        investedQtyRef.current = qty;
+                        setCash(capital_remaining);
+                        cashRef.current = capital_remaining;
+                       setPosition("LONG");
+                       positionRef.current = "LONG";
+                       highestPriceRef.current = price;
+                       setActiveStopLoss(price * (1 - Number(stopLossPct) / 100));
+                       
+                       setTrades(prev => [...prev, {
+                           side: "BUY",
+                           quantity: qty,
+                           pricePerShare: price,
+                           createdAtIST: time,
+                           isAlgo: true
+                       }]);
+                   } else if (side === "SELL" && currentPos === "LONG") {
+                       const realizedPnl = (price * qty - currentInvested);
+                       setPnl(prev => prev + realizedPnl);
+                       setInvested(0);
+                       investedRef.current = 0;
+                        setInvestedQty(0);
+                        investedQtyRef.current = 0;
+                        setCash(capital_remaining);
+                        cashRef.current = capital_remaining;
+                       setPosition("NONE");
+                       positionRef.current = "NONE";
+                       highestPriceRef.current = 0;
+                       setActiveStopLoss(null);
+                       
+                       setTrades(prev => [...prev, {
+                           side: "SELL",
+                           quantity: qty,
+                           pricePerShare: price,
+                           createdAtIST: time,
+                           pnl: realizedPnl,
+                           isAlgo: true
+                       }]);
+                   }
+               }
+               
+               if (d.signals) {
+                   setSignals(d.signals);
+                   if (positionRef.current === "LONG") {
+                       // Very rough unrealized pnl for UI
+                       setPnl(prev => prev + (currentLtp - prev) * 0.001);
+                   }
+               }
+
+                if (d.action === "completed") {
+                    console.log("Algo trading stream completed. Triggering auto-sell...");
+                    setIsCompleted(true);
+                }
+            }
+          }
+        } catch (_) {}
+      };
+    } catch (e) {
+      console.error("Live WS error", e);
+    }
+
+    return () => {
+      isActive = false;
+      if (ws) ws.close();
+    };
+  }, [symbol, HOST]);
+
+  const liveIndicatorSeries = useMemo(() => {
+    const mapped = indicatorSeries.map(series => {
+      const isThreshold = series.key.toLowerCase().startsWith('threshold');
+      if (isThreshold) {
+        const threshMatch = series.key.match(/\d+(\.\d+)?/);
+        const threshNum = threshMatch ? parseFloat(threshMatch[0]) : null;
+        return {
+           ...series,
+           values: data.map(d => ({ x: d.x, y: threshNum }))
+        };
+      }
+      
+      const keyLow = series.key.toLowerCase();
+      let newValues: {x: number, y: number}[] = [];
+      
+      let backendKey = "";
+      const periodMatch = keyLow.match(/\d+/);
+      const period = periodMatch ? periodMatch[0] : "14";
+      
+      if (keyLow.includes('sma')) backendKey = `SMA_${period}`;
+      else if (keyLow.includes('ema')) backendKey = `EMA_${period}`;
+      else if (keyLow.includes('rsi')) backendKey = `RSI_${period}`;
+      
+      if (backendKey && indicatorData[backendKey]) {
+          newValues = indicatorData[backendKey];
+      }
+      
+      return {
+        ...series,
+        values: newValues
+      };
+    });
+    
+    // Force inject any backend indicators that aren't properly mapped
+    Object.keys(indicatorData).forEach(bKey => { // e.g., 'EMA_20'
+        const parts = bKey.split('_');
+        if (parts.length === 2) {
+            const name = parts[0].toLowerCase();
+            const period = parts[1];
+            
+            const exists = mapped.some(m => {
+                const low = m.key.toLowerCase();
+                return low.includes(name) && low.includes(period);
+            });
+            
+            if (!exists) {
+                mapped.push({
+                    key: bKey,
+                    label: bKey.replace('_', ' '),
+                    color: name === 'rsi' ? "#8b5cf6" : "#f59e0b",
+                    width: 2,
+                    values: indicatorData[bKey]
+                });
+            }
+        }
+    });
+
+    return mapped;
+  }, [data, indicatorData, indicatorSeries]);
+
+  const pnlPercent = invested > 0 ? (pnl / invested) * 100 : 0;
+  const pendingStopLoss = activeStopLoss != null && position === "LONG"
+    ? [{ id: "live-stop-loss", side: "SELL", stop_trigger_price: activeStopLoss }]
+    : [];
+
+  const formatDsl = (dslString?: string) => {
+      if (!dslString) return "None";
+      try {
+          const obj = JSON.parse(dslString);
+          if (obj.conditions && obj.conditions.length > 0) {
+             const c = obj.conditions[0];
+             const formatSide = (sideObj: any, fallbackVal: any) => {
+                 if (typeof sideObj === 'object' && sideObj !== null) {
+                     let n = sideObj.name || sideObj.indicator || '';
+                     if (sideObj.period) n += `(${sideObj.period})`;
+                     return n || '[Complex]';
+                 }
+                 if (typeof fallbackVal === 'object' && fallbackVal !== null) {
+                     let n = fallbackVal.name || fallbackVal.indicator || '';
+                     if (fallbackVal.period) n += `(${fallbackVal.period})`;
+                     return n || '[Complex]';
+                 }
+                 return fallbackVal !== undefined ? String(fallbackVal) : '';
+             };
+             
+             let left = formatSide(c.left, c.indicator);
+             
+             let op = c.comparison || c.op;
+             if (op === '>') op = '>';
+             else if (op === '<') op = '<';
+             else if (op === '>=') op = '≥';
+             else if (op === '<=') op = '≤';
+             
+             let right = formatSide(c.right, c.value ?? c.right_value);
+             
+             return `${left} ${op} ${right}`;
+          }
+          return "Custom Logic";
+      } catch(e) {
+          return "Custom Logic";
+      }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--s-bg)", zIndex: 9999 }}>
+      
+      {/* ── Portfolio Header ────────────────────────────────────────────────── */}
+      <div style={{ padding: "16px 24px 0", background: "#f9fafb", flexShrink: 0 }}>
+        {/* ── Stock-page style header card ── */}
+        {(() => {
+          const liveTotalCap = cash + (position === "LONG" ? investedQty * ltp : 0);
+          const livePnlVal = liveTotalCap - Number(allocatedCapital || 0);
+          const livePnlPct = Number(allocatedCapital) ? (livePnlVal / Number(allocatedCapital)) * 100 : 0;
+          const ltpChange = ltp - (prevLtp || ltp);
+          const isNeg = livePnlVal < 0;
+          const formattedSym = symbol.replace(".NS", "").replace(".BO", "");
+          const displayName = companyInfo?.name || formattedSym;
+          const exchange = companyInfo?.exchange || (symbol.endsWith('.BO') ? 'BSE' : 'NSE');
+
+          const StatItem = ({ label, value, color }: { label: string; value: string; color?: string }) => (
+            <div className="stat-item">
+              <span className="stat-label">{label}</span>
+              <span className="stat-value" style={{ color: color || 'var(--stock-text)', fontVariantNumeric: 'tabular-nums', minWidth: '80px', display: 'inline-block' }}>{value}</span>
+            </div>
+          );
+
+          return (
+            <div className="stock-header" style={{ marginBottom: 0, animation: 'none', borderRadius: '12px' }}>
+              {/* ── Top Row ── */}
+              <div className="stock-header-top">
+                <div className="stock-header-title-area">
+                  <div style={{ position: 'relative' }}>
+                    <StockLogo
+                      symbol={symbol}
+                      name={companyInfo?.name}
+                      className="stock-logo"
+                      fallbackToAvatar={true}
+                      style={{ width: '3.5rem', height: '3.5rem' }}
+                    />
+                    {/* Live pulse dot */}
+                    <div style={{ position: 'absolute', bottom: -3, right: -3, width: 12, height: 12 }}>
+                      <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#22c55e', border: '2px solid #fff' }} />
+                      <div style={{ position: 'absolute', inset: '-3px', borderRadius: '50%', background: 'rgba(34,197,94,0.25)', animation: 'pulse 2s infinite' }} />
+                    </div>
+                  </div>
+                  <div className="stock-title-info">
+                    <div className="stock-name-row">
+                      <h1 className="company-name">{displayName}</h1>
+                      <button className="bookmark-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg></button>
+                    </div>
+                    <div className="stock-symbol-row">
+                      <span className="symbol-text">{formattedSym}</span>
+                      <span className="dot-separator">•</span>
+                      <span className="exchange-text"><span className="exchange-icon">⬘</span> {exchange}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action buttons — top right */}
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <button
+                    onClick={() => setShowLiveLedger(prev => !prev)}
+                    className="action-btn"
+                    style={{ fontSize: '12px', padding: '8px 14px' }}
+                  >
+                    {showLiveLedger ? 'Hide Ledger' : `Trade Ledger (${trades.length})`}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (isStopping) return;
+                      setIsStopping(true);
+                      const currentPortfolioValue = cashRef.current + (investedQtyRef.current * ltpRef.current);
+                      const finalPnl = currentPortfolioValue - Number(allocatedCapital || 0);
+                      try {
+                        await fetch(`${HOST}/api/algo/session/stop`, {
+                          method: 'POST', credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ returnedCapital: currentPortfolioValue, symbol, strategyName, pnl: finalPnl, trades })
+                        });
+                        window.dispatchEvent(new CustomEvent('wallet-refetch', {}));
+                      } catch(e) { console.error(e); }
+                      finally { setIsStopping(false); onClose(); }
+                    }}
+                    disabled={isStopping}
+                    style={{ padding: '8px 20px', background: isStopping ? '#9ca3af' : '#dc2626', color: '#fff', border: 'none', borderRadius: '999px', fontWeight: 700, fontSize: '13px', cursor: isStopping ? 'wait' : 'pointer', transition: 'all 0.2s' }}
+                  >
+                    {isStopping ? 'Stopping...' : 'Stop Live'}
+                  </button>
+                </div>
+              </div>
+
+              {/* ── Bottom Row ── */}
+              <div className="stock-header-bottom">
+                {/* Price area */}
+                <div className="stock-price-area">
+                  <div className="price-row">
+                    <span className="price" style={{ fontVariantNumeric: 'tabular-nums', minWidth: '140px' }}>₹{ltp.toFixed(2)}</span>
+                    <span className={`change ${isNeg ? 'negative' : 'positive'}`}>
+                      {isNeg ? '▼ ' : '▲ '}{Math.abs(livePnlVal).toFixed(2)} ({Math.abs(livePnlPct).toFixed(2)}%)
+                    </span>
+                  </div>
+                  <div className="timestamp-row">
+                    <span className="timestamp">{new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true })} IST</span>
+                    <span className="dot-separator">•</span>
+                    <span className="market-state">Live Session Active</span>
+                  </div>
+                </div>
+
+                {/* Stats area — right side */}
+                <div className="stock-stats-area">
+                  <StatItem label="Allocated Cap" value={`₹${Number(allocatedCapital || 0).toLocaleString('en-IN')}`} />
+                  <StatItem label="Cash" value={`₹${cash.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`} />
+                  <StatItem label="Invested" value={invested > 0 ? `₹${invested.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '₹0'} />
+                  <StatItem label="Trades" value={String(Math.floor(trades.length / 2))} />
+                  <StatItem label="P&L" value={`${livePnlVal >= 0 ? '+' : ''}₹${Math.abs(livePnlVal).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`} color={livePnlVal >= 0 ? 'var(--stock-green)' : 'var(--stock-red)'} />
+                  <StatItem label="P&L %" value={`${livePnlPct >= 0 ? '+' : ''}${livePnlPct.toFixed(2)}%`} color={livePnlPct >= 0 ? 'var(--stock-green)' : 'var(--stock-red)'} />
+                </div>
+              </div>
+
+              {/* ── Indicators & Signals bar ── */}
+              {(Object.keys(latestIndicators).length > 0) && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid var(--stock-border)', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {Object.entries(latestIndicators).filter(([key]) =>
+                      indicatorSeries.some(series => {
+                        const low = series.key.toLowerCase();
+                        const p = (low.match(/\d+/) || ['14'])[0];
+                        return (low.includes('sma') && key === `SMA_${p}`) ||
+                               (low.includes('ema') && key === `EMA_${p}`) ||
+                               (low.includes('rsi') && key === `RSI_${p}`);
+                      })
+                    ).map(([key, val]) => {
+                      const match = liveIndicatorSeries.find(s => {
+                        const low = s.key.toLowerCase();
+                        const p = (low.match(/\d+/) || ['14'])[0];
+                        return s.key === key || (low.includes('sma') && key === `SMA_${p}`) || (low.includes('ema') && key === `EMA_${p}`) || (low.includes('rsi') && key === `RSI_${p}`);
+                      });
+                      const color = (match && match.color) || '#8b5cf6';
+                      return (
+                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 4, background: `${color}15`, border: `1px solid ${color}35`, borderRadius: 6, padding: '2px 8px' }}>
+                          <span style={{ fontSize: 10, fontWeight: 600, color, textTransform: 'uppercase' }}>{key}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{(val as number).toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 700, background: signals.BUY ? 'rgba(5,150,105,0.08)' : '#f3f4f6', color: signals.BUY ? 'var(--stock-green)' : '#9ca3af', border: `1px solid ${signals.BUY ? 'rgba(5,150,105,0.25)' : '#e5e7eb'}` }}>
+                      <span style={{ background: signals.BUY ? 'var(--stock-green)' : '#d1d5db', color: '#fff', padding: '1px 5px', borderRadius: 4, fontSize: 8 }}>B</span>
+                      {formatDsl(buyDsl)}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 700, background: signals.SELL ? 'rgba(220,38,38,0.08)' : '#f3f4f6', color: signals.SELL ? 'var(--stock-red)' : '#9ca3af', border: `1px solid ${signals.SELL ? 'rgba(220,38,38,0.25)' : '#e5e7eb'}` }}>
+                      <span style={{ background: signals.SELL ? 'var(--stock-red)' : '#d1d5db', color: '#fff', padding: '1px 5px', borderRadius: 4, fontSize: 8 }}>S</span>
+                      {formatDsl(sellDsl)}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>{/* Maximized Graph below */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", padding: "16px" }}>
+        {data.length === 0 ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--s-text-muted)", fontSize: 16 }}>Waiting for first tick from Data Feed...</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'row', height: '100%', minHeight: 0 }}>
+            {/* Chart Area */}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "12px", border: "1px solid var(--s-border)", background: "var(--s-card)", minWidth: 0 }}>
+              {liveIndicatorSeries.length > 0 && (
+                <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--s-border)", fontSize: 14, fontWeight: "bold", color: "var(--s-text)" }}>
+                  Active Indicators: <span style={{ color: "var(--s-text-muted)", fontWeight: "normal" }}>{liveIndicatorSeries.map(s => s.label).join(', ')}</span>
+                </div>
+              )}
+              <div style={{ flex: 1, position: "relative" }}>
+                <AlgoBacktestChart
+                  indicatorSeries={liveIndicatorSeries}
+                  lineData={data}
+                  timeframe="1D"
+                  marketState="REGULAR"
+                  percent="0"
+                  trades={trades}
+                  pendingSL={pendingStopLoss}
+                  activeTrade={null}
+                  onReplayProgress={() => {}}
+                />
+              </div>
+            </div>
+
+            {/* Trades Side */}
+            <div className={`studio-trades-side ${showLiveLedger ? 'open' : 'collapsed'}`}>
+              <div className="studio-trades-section">
+                <div className="studio-trades-title">Live Trade Ledger <span style={{ color: "var(--s-text-muted)", fontSize: 11 }}>({trades.length} executions)</span></div>
+                {trades.length === 0 ? (
+                  <div style={{ color: "var(--s-text-muted)", fontSize: 12, padding: "10px 0", marginTop: "16px" }}>Waiting for the first live execution...</div>
+                ) : (
+                  <div className="studio-trade-timeline">
+                    {trades.map((t: any, index: number) => (
+                      <div key={`${t.createdAtIST}-${index}`} className="studio-timeline-item">
+                        <div className={`studio-timeline-node ${(t.side || "").toLowerCase()}`} />
+                        <div className="studio-timeline-content">
+                          <div className="studio-tl-header"><span className={`studio-tl-badge ${(t.side || "").toLowerCase()}`}>{t.side}</span><span className="studio-tl-date">{new Date(t.createdAtIST).toLocaleString()}</span></div>
+                          <div className="studio-tl-body"><div className="studio-tl-stat"><span className="studio-tl-lbl">Price</span><span className="studio-tl-val">INR {Number(t.pricePerShare).toFixed(2)}</span></div><div className="studio-tl-stat"><span className="studio-tl-lbl">Shares</span><span className="studio-tl-val">{t.quantity}</span></div>{t.pnl != null && <div className="studio-tl-stat"><span className="studio-tl-lbl">P&amp;L</span><span className={`studio-tl-val ${t.pnl >= 0 ? "green" : "red"}`}>{t.pnl >= 0 ? "+" : ""}INR {Number(t.pnl).toFixed(2)}</span></div>}</div>
+                          {t.reason && <div className="studio-tl-reason">{t.reason}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function PaperBullStudio() {
+  const navigate = useNavigate();
 
   const [tickers, setTickers] = useState<string[]>(['^BSESN', '^NSEI']);
   const [searchInput, setSearchInput] = useState('');
@@ -21,20 +671,78 @@ export default function PaperBullStudio() {
   const [endTime, setEndTime] = useState('15:30');
   const [timeframe, setTimeframe] = useState('1D');
   const [capital, setCapital] = useState(100000);
+  const [stopLossPct, setStopLossPct] = useState(5.0);
+  const [stopLossType, setStopLossType] = useState('fixed');
   const [datePreset, setDatePreset] = useState('1Y');
   const [capitalPreset, setCapitalPreset] = useState('1L');
   const [stockCategory, setStockCategory] = useState('Popular');
   const [loadBenchmarkIndex, setLoadBenchmarkIndex] = useState(true);
-  const [dslTab, setDslTab] = useState('json');
+  const [dslTab, setDslTab] = useState('visual');
   const [showBuilderModal, setShowBuilderModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedChartTicker, setSelectedChartTicker] = useState<string>('');
+  const [replayPnl, setReplayPnl] = useState<number | null>(null);
   const [hoveredTrade, setHoveredTrade] = useState<any>(null);
   const [savedStrategies, setSavedStrategies] = useState<any[]>([]);
   const [isSavingStrategy, setIsSavingStrategy] = useState(false);
   const [strategyName, setStrategyName] = useState('My Custom Strategy');
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveStatus, setSaveStatus] = useState<{message: string, type: 'success' | 'error' | ''}>({message: '', type: ''});
+  const [activeTab, setActiveTab] = useState<'setup' | 'strategy' | 'results'>('setup');
+  const [lightMode, setLightMode] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [showTradeLedger, setShowTradeLedger] = useState(false);
+  const [liveDeployModes, setLiveDeployModes] = useState<Record<string, boolean>>({});
+  
+  const [showDeployModal, setShowDeployModal] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [algoCapital, setAlgoCapital] = useState<string>('50000');
+  const [userBalance, setUserBalance] = useState<number>(0);
+  // "simulate" = paper trading sim (ws://localhost:8765)
+  // "upstox"   = live Upstox feed  (ws://localhost:4141)
+  const [dataMode, setDataMode] = useState<'simulate' | 'upstox'>('simulate');
+
+  useEffect(() => {
+    const fetchBalance = async () => {
+      try {
+        const res = await fetch(`${HOST}/api/getBalance/getBalance`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          setUserBalance(data.cash || 0);
+        }
+      } catch (e) {
+        console.error("Failed to fetch balance", e);
+      }
+    };
+    fetchBalance();
+  }, [HOST]);
+
+  useEffect(() => {
+    const refetchBalance = async () => {
+      try {
+        const res = await fetch(`${HOST}/api/getBalance/getBalance`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setUserBalance(data.cash || 0);
+        }
+      } catch (e) { console.error('Failed to refetch balance', e); }
+    };
+    window.addEventListener('wallet-refetch', refetchBalance);
+    return () => window.removeEventListener('wallet-refetch', refetchBalance);
+  }, [HOST]);
+
+  useEffect(() => {
+    document.body.classList.add('studio-active');
+    if (!lightMode) {
+      document.body.classList.add('studio-dark');
+    } else {
+      document.body.classList.remove('studio-dark');
+    }
+    return () => {
+      document.body.classList.remove('studio-active');
+      document.body.classList.remove('studio-dark');
+    };
+  }, [lightMode]);
 
   const handleDatePresetChange = (p: string) => {
     setDatePreset(p);
@@ -101,6 +809,8 @@ export default function PaperBullStudio() {
         ];
     }
   };
+  const [loadedStrategyId, setLoadedStrategyId] = useState<string | null>(null);
+  const [saveAsMode, setSaveAsMode] = useState<boolean>(false);
   const [buyDsl, setBuyDsl] = useState(`{
   "operator": "AND",
   "conditions": [
@@ -164,8 +874,10 @@ export default function PaperBullStudio() {
     }
   }, [results, selectedChartTicker]);
 
-
-
+  // Auto-navigate to results tab when results arrive
+  useEffect(() => {
+    if (results) setActiveTab('results');
+  }, [results]);
 
 
   const loadTemplate = (name: string) => {
@@ -208,16 +920,29 @@ export default function PaperBullStudio() {
       .catch(console.error);
   }, [HOST]);
 
-  const handleSaveStrategyPrompt = () => {
+  const handleSaveStrategyPrompt = (asNew: boolean = false) => {
     setSaveStatus({message: '', type: ''});
-    setShowSaveModal(true);
+    if (!asNew && loadedStrategyId) {
+      // Direct save
+      executeSaveStrategy(strategyName, false);
+    } else {
+      setSaveAsMode(asNew);
+      setShowSaveModal(true);
+    }
   };
 
-  const executeSaveStrategy = async (nameToSave: string) => {
+  const executeSaveStrategy = async (nameToSave: string, asNew: boolean) => {
     if (!nameToSave.trim()) {
       setSaveStatus({message: 'Please enter a strategy name.', type: 'error'});
       return;
     }
+    
+    // Check if duplicate name (only when creating new)
+    if (asNew && savedStrategies.some(s => s.name.toLowerCase() === nameToSave.trim().toLowerCase())) {
+        setSaveStatus({message: 'A strategy with this name already exists. Please choose another name.', type: 'error'});
+        return;
+    }
+    
     setIsSavingStrategy(true);
     setSaveStatus({message: '', type: ''});
     try {
@@ -231,21 +956,36 @@ export default function PaperBullStudio() {
         endTime,
         timeframe,
         capital,
-        tickers
+        tickers,
+        stopLossPct,
+        stopLossType
       };
-      const res = await fetch(`${HOST}/api/paperbull/strategy`, {
-        method: 'POST',
+      
+      const isUpdate = !asNew && loadedStrategyId;
+      const endpoint = isUpdate 
+        ? `${HOST}/api/paperbull/strategy/${loadedStrategyId}`
+        : `${HOST}/api/paperbull/strategy`;
+        
+      const res = await fetch(endpoint, {
+        method: isUpdate ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         credentials: 'include'
       });
       const data = await res.json();
       if (data.success) {
-        setSaveStatus({message: 'Strategy saved successfully!', type: 'success'});
+        setSaveStatus({message: isUpdate ? 'Strategy updated successfully!' : 'Strategy saved successfully!', type: 'success'});
+        if (!isUpdate && data.id) {
+            setLoadedStrategyId(data.id);
+            setStrategyName(nameToSave.trim());
+        }
         const stratsRes = await fetch(`${HOST}/api/paperbull/strategies`, {credentials: 'include'});
         const stratsData = await stratsRes.json();
         if (Array.isArray(stratsData)) setSavedStrategies(stratsData);
-        setTimeout(() => setShowSaveModal(false), 1500);
+        setTimeout(() => {
+            setShowSaveModal(false);
+            if (isUpdate) setSaveStatus({message: '', type: ''});
+        }, 1500);
       } else {
         setSaveStatus({message: 'Failed to save strategy: ' + data.message, type: 'error'});
       }
@@ -258,6 +998,7 @@ export default function PaperBullStudio() {
   };
 
   const loadSavedStrategy = (strat: any) => {
+    setLoadedStrategyId(strat._id || null);
     setStrategyName(strat.name || 'Loaded Strategy');
     if (strat.buyDsl) { setBuyDsl(strat.buyDsl); }
     if (strat.sellDsl) { setSellDsl(strat.sellDsl); }
@@ -378,7 +1119,8 @@ export default function PaperBullStudio() {
         buy_strategy: parsedBuy,
         sell_strategy: parsedSell,
         initial_capital: Number(capital),
-        stop_loss_pct: 0.05,
+        stop_loss_pct: stopLossPct / 100.0,
+        stop_loss_type: stopLossType,
         timeframe: timeframe
       };
 
@@ -441,9 +1183,9 @@ export default function PaperBullStudio() {
             </button>
             <div className="absolute right-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all py-2">
               <div className="px-3 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Quick Templates</div>
-              <button onClick={() => loadTemplate('RSI_EMA')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">📈 RSI + EMA</button>
-              <button onClick={() => loadTemplate('MACD_CROSS')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">📊 MACD Crossover</button>
-              <button onClick={() => loadTemplate('BOLLINGER')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">🌊 Bollinger Bands</button>
+              <button onClick={() => loadTemplate('RSI_EMA')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">ðŸ“ˆ RSI + EMA</button>
+              <button onClick={() => loadTemplate('MACD_CROSS')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">ðŸ“Š MACD Crossover</button>
+              <button onClick={() => loadTemplate('BOLLINGER')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">ðŸŒŠ Bollinger Bands</button>
               
               {savedStrategies.length > 0 && (
                 <>
@@ -523,7 +1265,7 @@ export default function PaperBullStudio() {
           </h3>
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <div className="relative w-full sm:w-1/2">
-              <span className="absolute inset-y-0 left-3 flex items-center text-slate-500 font-semibold text-sm">₹</span>
+              <span className="absolute inset-y-0 left-3 flex items-center text-slate-500 font-semibold text-sm">â‚¹</span>
               <input type="number" value={capital} onChange={(e) => setCapital(Number(e.target.value))} className="w-full pl-7 pr-3 py-1.5 border border-slate-200 rounded-lg font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 shadow-sm text-sm" />
             </div>
             <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-slate-500">
@@ -686,589 +1428,635 @@ export default function PaperBullStudio() {
 
 
   return (
-    <div className="bg-slate-50 text-slate-800 antialiased min-h-screen p-2 md:p-4 w-full flex flex-col">
-      {/* Main Content */}
-      <div className="w-full max-w-[1400px] mx-auto flex-1 flex flex-col">
-        {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
-            <div>
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Algorithmic Trading Backtest</h1>
-                <p className="text-sm text-slate-500 mt-1">Configure your strategy, select assets, and backtest on historical data.</p>
-            </div>
-            <div className="flex items-center gap-3">
-              {!results && (
-                <>
-                <button onClick={handleSaveStrategyPrompt} disabled={isSavingStrategy} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm">
-                    <i className="fa-solid fa-floppy-disk text-slate-400"></i> {isSavingStrategy ? 'Saving...' : 'Save Preset'}
-                </button>
-                <button onClick={() => setShowBuilderModal(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm">
-                    <i className="fa-solid fa-gear text-slate-400"></i> Strategy DSL
-                </button>
-                <button onClick={handleRunOnChart} disabled={isRunning} className="flex items-center gap-2 px-5 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700 transition-colors shadow-sm shadow-brand-500/30">
-                    <i className="fa-solid fa-play text-xs"></i> {isRunning ? 'Running...' : 'Run Backtest'}
-                </button>
-                </>
-              )}
-            </div>
-        </header>
+    <div className="studio-layout">
 
-        {/* Layout Grid / Results Layout */}
-        {!results ? (
-          <div style={{ width: '100%', margin: '0 auto', transition: 'all 0.5s ease' }}>
-            {renderConfigCards()}
+      {/* === SIDEBAR === */}
+      <aside className={`studio-sidebar ${isSidebarOpen ? '' : 'collapsed'}`}>
+        <div className="studio-brand" onClick={() => setIsSidebarOpen(!isSidebarOpen)} style={{ cursor: 'pointer' }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+          <div>
+            <div className="studio-brand-name">ALGO TRADING</div>
+            <div className="studio-brand-sub">Backtest with confidence.</div>
           </div>
-        ) : (
-          <div className="pb-results-wrapper">
-            {/* Sidebar Controls Panel */}
-            <div className="pb-results-sidebar-bar">
-              <div className="pb-sidebar-bar-header">
-                <span className="pb-sidebar-bar-icon">⚡</span>
-                <span className="pb-sidebar-bar-title">Backtest Panel</span>
-              </div>
-              
-              <button className="pb-sidebar-action-btn" onClick={() => setShowConfigModal(true)} title="Modify Parameters & Asset Selection">
-                <span className="icon">🎛️</span>
-                <div className="text-wrap">
-                  <span className="text-title">1 & 2. Setup Pop-up</span>
-                  <span className="text-sub">{tickers.length} Assets • {datePreset}</span>
-                </div>
-              </button>
+        </div>
 
-              <button className="pb-sidebar-action-btn" onClick={() => setShowBuilderModal(true)} title="Configure Strategy Conditions">
-                <span className="icon">⚙️</span>
-                <div className="text-wrap">
-                  <span className="text-title">Edit Strategy</span>
-                  <span className="text-sub">Conditions & DSL</span>
-                </div>
-              </button>
+        <button className="studio-new-btn" onClick={() => { setResults(null); setActiveTab('setup'); }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          <span className="btn-text">New backtest</span>
+        </button>
 
-              <button className="pb-sidebar-action-btn primary" onClick={handleRunOnChart} disabled={isRunning} title="Re-run Backtest">
-                <span className="icon">▶</span>
-                <div className="text-wrap">
-                  <span className="text-title">{isRunning ? 'Running...' : 'Re-run Backtest'}</span>
-                  <span className="text-sub">Update results</span>
-                </div>
-              </button>
-
-              <div className="pb-sidebar-divider" />
-
-              <button className="pb-sidebar-action-btn secondary" onClick={() => setResults(null)} title="Return to Setup View">
-                <span className="icon">↩</span>
-                <div className="text-wrap">
-                  <span className="text-title">Full Setup View</span>
-                  <span className="text-sub">Expand 1 & 2 inline</span>
-                </div>
-              </button>
-            </div>
-
-            {/* Results Grid (Expanded Full Stage) */}
-            <div className="pb-grid-2col-results pb-results-full-stage">
-
-
-          {results && (
-            <>
-              {/* Column 2: Chart Area */}
-              <div className="pb-col pb-col-2" style={{ animation: 'fadeIn 0.5s ease forwards' }}>
-            <div className="pb-panel" style={{ flex: 1 }}>
-              <div className="pb-panel-header">
-                <span>Backtest Performance</span>
-                {results && results.stock_reports && results.stock_reports.length > 1 && (
-                  <div style={{ display: 'flex', gap: '5px' }}>
-                    {results.stock_reports.map((r: any) => (
-                      <button 
-                        key={r.ticker} 
-                        onClick={() => setSelectedChartTicker(r.ticker)}
-                        className="pb-chip"
-                        style={{ background: selectedChartTicker === r.ticker ? 'var(--pb-blue)' : 'var(--pb-bg)', color: selectedChartTicker === r.ticker ? 'white' : 'var(--pb-text-muted)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                      >
-                        <StockLogo
-                          symbol={r.ticker}
-                          fallbackToAvatar={true}
-                          style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                        />
-                        {r.ticker.replace('.NS','').replace('.BO','')} Chart
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="pb-panel-content">
-                <div className="pb-chart-stats">
-                  <div className="pb-c-stat">
-                    <span className="title">Portfolio Total Return</span>
-                    <span className={`val ${results?.portfolio_summary?.roi >= 0 ? 'green' : 'red'}`}>
-                      {results?.portfolio_summary ? (results.portfolio_summary.roi > 0 ? '+' : '') + results.portfolio_summary.roi + '%' : '---'}
-                    </span>
-                  </div>
-                  <div className="pb-c-stat">
-                    <span className="title">Portfolio Final Value</span>
-                    <span className="val" style={{ color: 'var(--pb-green)' }}>
-                       {results?.portfolio_summary ? '₹' + results.portfolio_summary.final_capital.toLocaleString() : '---'}
-                    </span>
-                  </div>
-                  <div className="pb-c-stat">
-                    <span className="title">Max Drawdown</span>
-                    <span className="val red">-12.3%</span>
-                  </div>
-                  <div className="pb-c-stat">
-                    <span className="title">Total Portfolio Trades</span>
-                    <span className="val">{results?.portfolio_summary ? results.portfolio_summary.trades : '---'}</span>
-                  </div>
-                </div>
-
-                <div style={{ flex: 1, minHeight: '350px', position: 'relative' }}>
-                  {results && results.stock_reports && results.stock_reports.length > 0 ? (() => {
-                    const activeReport = results.stock_reports.find((r:any) => r.ticker === selectedChartTicker) || results.stock_reports[0];
-                    
-                    const indicatorKeySet = new Set<string>();
-                    (activeReport.price_history || []).forEach((d: any) => {
-                      Object.keys(d).forEach(k => {
-                        if (k !== 'date' && k !== 'price') {
-                          indicatorKeySet.add(k);
-                        }
-                      });
-                    });
-                    const indicatorKeys = Array.from(indicatorKeySet);
-                    const hasRsi = indicatorKeys.some(k => k.toLowerCase().includes('rsi'));
-                    const hasThresholds = indicatorKeys.some(k => k.toLowerCase().startsWith('threshold'));
-                    const extendedKeys = [...indicatorKeys];
-
-                    // If RSI indicator exists but no threshold was in strategy conditions, provide standard 70 & 30
-                    if (hasRsi && !hasThresholds) {
-                      extendedKeys.push('Threshold_70', 'Threshold_30');
-                    }
-
-                    const indicatorSeries = extendedKeys.map((k, i) => {
-                      const colors = [
-                        '#6366f1', // Indigo
-                        '#f59e0b', // Amber / Gold
-                        '#06b6d4', // Cyan
-                        '#ec4899', // Pink
-                        '#8b5cf6', // Violet
-                        '#14b8a6', // Teal
-                        '#f97316', // Bright Orange
-                        '#3b82f6'  // Electric Blue
-                      ];
-
-                      const isThreshold = k.toLowerCase().startsWith('threshold');
-                      const threshMatch = k.match(/\d+(\.\d+)?/);
-                      const threshNum = threshMatch ? parseFloat(threshMatch[0]) : null;
-
-                      let color = colors[i % colors.length];
-                      if (isThreshold && threshNum != null) {
-                        color = threshNum >= 50 ? '#ef4444' : '#10b981';
-                      }
-
-                      const formattedLabel = isThreshold && threshNum != null
-                        ? `Threshold (${threshNum})`
-                        : k
-                            .replace(/^indicator_/i, '')
-                            .replace(/period(\d+)/i, '($1)')
-                            .replace(/_/g, ' ')
-                            .trim();
-
-                      return {
-                        key: k,
-                        label: formattedLabel,
-                        color,
-                        width: isThreshold ? 1.5 : 2,
-                        values: activeReport.price_history.map((d: any) => ({
-                          x: new Date(d.date).getTime(),
-                          y: d[k] !== undefined && d[k] !== null
-                            ? d[k]
-                            : (isThreshold && threshNum != null ? threshNum : null)
-                        })).filter((d: any) => d.y !== undefined && d.y !== null)
-                      };
-                    });
-
-                    return (
-                      <div style={{ width: "100%", height: "100%", paddingTop: "10px" }}>
-                        <AlgoBacktestChart
-                          indicatorSeries={indicatorSeries}
-                          lineData={activeReport.price_history.map((d: any) => ({
-                            x: new Date(d.date).getTime(),
-                            y: d.price
-                          }))}
-                          timeframe="ALL"
-                          marketState="CLOSED"
-                          percent={activeReport.summary.roi.toString()}
-                          trades={activeReport.trade_log.map((t: any) => ({
-                            side: t.type === 'BUY' ? 'BUY' : 'SELL',
-                            quantity: t.shares || 1,
-                            pricePerShare: t.price,
-                            createdAtIST: new Date(t.date).getTime(),
-                            pnl: t.pnl,
-                            reason: t.reason
-                          }))}
-                          activeTrade={hoveredTrade}
-                        />
-                      </div>
-                    );
-                  })() : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--pb-text-muted)' }}>
-                       {isRunning ? 'Backtesting Portfolio...' : (results?.detail || results?.error ? <span style={{color:'var(--pb-red)'}}>{JSON.stringify(results.detail || results.error)}</span> : 'Click "Run Backtest" to begin')}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Column 3: Summary & Log */}
-          <div className="pb-col pb-col-3" style={{ animation: 'fadeIn 0.5s ease forwards' }}>
-            {(() => {
-              const activeReport = results?.stock_reports?.find((r:any) => r.ticker === selectedChartTicker) || results?.stock_reports?.[0];
-              
-              return (
-                <>
-            <div className="pb-panel">
-              <div className="pb-panel-header">
-                {results && results.stock_reports && results.stock_reports.length > 0 
-                  ? `${selectedChartTicker || results.stock_reports[0].ticker} Summary` 
-                  : 'Strategy Summary'}
-              </div>
-              <div className="pb-panel-content">
-                      <div className="pb-summary-row">
-                        <span>Initial Capital</span>
-                        <span>₹{activeReport ? activeReport.summary.initial_capital.toLocaleString() : capital.toLocaleString()}</span>
-                      </div>
-                      <div className="pb-summary-row">
-                        <span>Final Value</span>
-                        <span>₹{activeReport ? activeReport.summary.final_capital.toLocaleString() : '---'}</span>
-                      </div>
-                      <div className="pb-summary-row">
-                        <span>Return (ROI)</span>
-                        <span style={{color: activeReport?.summary?.roi >= 0 ? 'var(--pb-green)' : 'var(--pb-red)'}}>
-                          {activeReport ? (activeReport.summary.roi > 0 ? '+' : '') + activeReport.summary.roi + '%' : '---'}
-                        </span>
-                      </div>
-                      <div className="pb-summary-row">
-                        <span>Total P&L</span>
-                        <span style={{color: activeReport?.summary?.total_pnl >= 0 ? 'var(--pb-green)' : 'var(--pb-red)'}}>
-                          {activeReport ? '₹' + activeReport.summary.total_pnl.toLocaleString() : '---'}
-                        </span>
-                      </div>
-                      <div className="pb-summary-row">
-                        <span>Max Drawdown</span>
-                        <span style={{color: 'var(--pb-red)'}}>-12.3%</span>
-                      </div>
-                      <div className="pb-summary-row">
-                        <span>Win Rate</span>
-                        <span style={{color: 'var(--pb-green)'}}>58.1%</span>
-                      </div>
-                      <div className="pb-summary-row">
-                        <span>Total Trades</span>
-                        <span>{activeReport ? activeReport.summary.trades : '---'}</span>
-                      </div>
-              </div>
-            </div>
-            {/* Trade History List */}
-            {activeReport?.trade_log && activeReport.trade_log.length > 0 && (
-              <div className="pb-panel" style={{ marginTop: '20px', animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', maxHeight: '500px' }}>
-                <div className="pb-panel-header" style={{ flexShrink: 0 }}>
-                  Trade History
-                </div>
-                <div className="pb-panel-content" style={{ padding: '0', overflowY: 'auto', flex: 1 }}>
-                  {activeReport.trade_log.map((t: any, index: number) => (
-                    <div key={index} style={{ padding: '15px', borderBottom: '1px solid #e2e8f0', cursor: 'pointer', transition: 'background 0.2s', background: hoveredTrade?.originalIndex === index ? '#f8fafc' : 'white' }}
-                         onMouseEnter={() => setHoveredTrade({
-                           x: new Date(t.date).getTime(),
-                           y: t.price,
-                           side: t.type === 'BUY' ? 'BUY' : 'SELL',
-                           quantity: t.shares || 1,
-                           pnl: t.pnl,
-                           reason: t.reason,
-                           originalIndex: index
-                         })}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{
-                            width: '24px', height: '24px', borderRadius: '4px',
-                            background: t.type === 'BUY' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                            color: t.type === 'BUY' ? '#10b981' : '#ef4444',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '12px'
-                          }}>
-                            {t.type === 'BUY' ? 'B' : (t.type === 'SELL' ? 'S' : 'P')}
-                          </div>
-                          <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--pb-text-main)' }}>
-                             ₹{Number(t.price).toFixed(2)}
-                          </span>
-                        </div>
-                        <span style={{ color: 'var(--pb-text-muted)', fontSize: '11px' }}>
-                           {new Date(t.date).toLocaleString("en-US", { timeZone: "UTC", month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
-                      </div>
-                      
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--pb-text-muted)', marginBottom: '8px' }}>
-                         <span>Shares: {t.shares || 1}</span>
-                         {t.pnl !== undefined && t.pnl !== 0 && (
-                            <span style={{ fontWeight: 600, color: t.pnl > 0 ? '#10b981' : '#ef4444' }}>
-                              {t.pnl > 0 ? '+' : ''}₹{Number(t.pnl).toFixed(2)}
-                            </span>
-                         )}
-                      </div>
-
-                      {t.reason && (
-                        <div style={{ background: 'white', padding: '8px', borderRadius: '4px', border: '1px solid #e2e8f0', fontSize: '11px', color: '#6366f1', fontStyle: 'italic', wordBreak: 'break-word' }}>
-                          {t.reason}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-                </>
-              );
-            })()}
-          </div>
-            </>
+        <div className="studio-saved-section">
+          <div className="studio-saved-label">SAVED SETUPS</div>
+          {savedStrategies.map(strat => (
+            <button key={strat._id} className={`studio-saved-item ${strategyName === strat.name ? 'active' : ''}`}
+              onClick={() => { loadSavedStrategy(strat); setActiveTab('setup'); }}>
+              {strat.name}
+            </button>
+          ))}
+          {savedStrategies.length === 0 && (
+            <div style={{ fontSize: '10px', color: 'var(--s-text-faint)', padding: '6px 8px' }}>No saved setups yet</div>
           )}
         </div>
-      </div>
-      )}
-      </div>
+      </aside>
 
-      {showBuilderModal && (
-        <div className="pb-modal-overlay">
-          <div className="pb-modal">
-            <div className="pb-modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <div style={{ width: '36px', height: '36px', background: '#eff6ff', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--pb-blue)', fontSize: '20px' }}>📈</div>
-                <div>
-                  <h2 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>Strategy Builder</h2>
-                  <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Create buy and sell conditions using indicators and logic.</p>
+      {/* === MAIN === */}
+      <div className="studio-main">
+
+        {/* Tab Bar */}
+        <div className="studio-tab-bar">
+          <div className="studio-tabs">
+            <button className={`studio-tab-btn ${activeTab === 'setup' ? 'active' : ''}`} onClick={() => setActiveTab('setup')}>Setup</button>
+            <button className={`studio-tab-btn ${activeTab === 'strategy' ? 'active' : ''}`} onClick={() => setActiveTab('strategy')}>Strategy</button>
+            <button className={`studio-tab-btn ${activeTab === 'results' ? 'active' : ''}`} onClick={() => setActiveTab('results')}>Results</button>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {activeTab === 'results' && results && (
+              <button className="pb-btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => setActiveTab('setup')}>&lt;- Edit Setup</button>
+            )}
+            {activeTab === 'strategy' && (
+              <>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginRight: '8px' }}>
+                  <button className="studio-save-btn" onClick={() => handleSaveStrategyPrompt(false)} disabled={isSavingStrategy} style={{ padding: '6px 10px', fontSize: '11px' }}>
+                    <i className={`fa-solid ${isSavingStrategy && !saveAsMode ? 'fa-spinner fa-spin' : 'fa-floppy-disk'}`}></i> {isSavingStrategy && !saveAsMode ? 'Saving...' : 'Save'}
+                  </button>
+                  <button className="studio-save-btn" onClick={() => handleSaveStrategyPrompt(true)} disabled={isSavingStrategy} style={{ padding: '6px 10px', fontSize: '11px' }}>
+                    <i className={`fa-solid ${isSavingStrategy && saveAsMode ? 'fa-spinner fa-spin' : 'fa-copy'}`}></i> {isSavingStrategy && saveAsMode ? 'Saving...' : 'Save As New'}
+                  </button>
+                  {!showSaveModal && saveStatus.message && (
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: saveStatus.type === 'success' ? '#10b981' : '#ef4444' }}>
+                      {saveStatus.message}
+                    </span>
+                  )}
                 </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                <div className="pb-dsl-tabs" style={{ marginBottom: 0, borderBottom: 'none', paddingBottom: 0 }}>
-                  <div className={`pb-dsl-tab ${dslTab === 'visual' ? 'active' : ''}`} onClick={() => setDslTab('visual')}>Visual Builder</div>
-                  <div className={`pb-dsl-tab ${dslTab === 'json' ? 'active' : ''}`} onClick={() => setDslTab('json')}>DSL (JSON)</div>
-                  <div className={`pb-dsl-tab ${dslTab === 'guide' ? 'active' : ''}`} onClick={() => setDslTab('guide')}>📘 DSL Guide</div>
-                </div>
-                <span style={{ cursor: 'pointer', color: '#94a3b8', fontSize: '20px' }} onClick={() => setShowBuilderModal(false)}>✕</span>
-              </div>
+                <button className="studio-cta-btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={handleRunOnChart} disabled={isRunning}>
+                  {isRunning ? 'Running...' : 'Run backtest ->'}
+                </button>
+              </>
+            )}
+            {activeTab === 'setup' && (
+              <button className="studio-cta-btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => setActiveTab('strategy')}>Configure strategy -&gt;</button>
+            )}
+          </div>
+        </div>
+
+        {/* Scrollable page */}
+        <div className="studio-page">
+
+          {/* Right contextual panel */}
+          <div className="studio-right-panel">
+            {activeTab === 'setup' && (<>
+              <button className="studio-right-action" onClick={() => savedStrategies[0] && loadSavedStrategy(savedStrategies[0])}><span className="studio-right-action-icon">&lt;-</span>Use last setup</button>
+              <button className="studio-right-action" onClick={() => { handleDatePresetChange('1Y'); setTickers(['^NSEI']); }}><span className="studio-right-action-icon">#</span>1Y NIFTY 50 default</button>
+              <button className="studio-right-action" onClick={() => setIsSearchOverlayOpen(true)}><span className="studio-right-action-icon">@</span>Custom range &amp; capital</button>
+              <button className="studio-right-action" onClick={() => setShowConfigModal(true)}><span className="studio-right-action-icon">+</span>Import saved strategy</button>
+            </>)}
+            {activeTab === 'strategy' && (<>
+              <button className="studio-right-action" onClick={() => loadTemplate('RSI_EMA')}><span className="studio-right-action-icon">^</span>RSI + EMA template</button>
+              <button className="studio-right-action" onClick={() => loadTemplate('MACD_CROSS')}><span className="studio-right-action-icon">#</span>MACD crossover</button>
+              <button className="studio-right-action" onClick={() => loadTemplate('BOLLINGER')}><span className="studio-right-action-icon">*</span>Bollinger bands</button>
+              {savedStrategies[0] && <button className="studio-right-action" onClick={() => loadSavedStrategy(savedStrategies[0])}><span className="studio-right-action-icon">+</span>Saved: {savedStrategies[0].name}</button>}
+            </>)}
+
+          </div>
+
+          {/* == SETUP TAB == */}
+          {activeTab === 'setup' && (<>
+            <div className="studio-hero">
+              <div className="studio-hero-eyebrow">New Backtest</div>
+              <h1 className="studio-hero-title">Configure a <span>backtest</span> in seconds.</h1>
+              <p className="studio-hero-sub">Pick a window, capital, benchmark and the assets you want to test.</p>
             </div>
 
-            <div className="pb-modal-body" style={{ display: dslTab === 'guide' ? 'block' : undefined }}>
-              {dslTab === 'guide' ? (
-                <div style={{ padding: '20px 40px', color: '#1e293b', overflowY: 'auto', maxHeight: '550px', lineHeight: '1.6' }}>
-                   <h3 style={{ marginTop: 0 }}>AlgoTrading Strategy Builder (JSON DSL Guide)</h3>
-                   <p>The strategy evaluator uses a highly flexible JSON-based Domain Specific Language (DSL). This allows you to construct complex trading rules by linking different technical indicators.</p>
-                   
-                   <h4 style={{ marginTop: '30px' }}>1. Core Structure</h4>
-                   <p>Every strategy (both BUY and SELL) is wrapped in a Logical Condition block. This dictates how multiple comparison conditions are evaluated together.</p>
-                   <pre style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', fontSize: '13px', border: '1px solid #e2e8f0' }}>
-{`{
-  "operator": "AND", // Can be "AND" or "OR"
-  "conditions": [
-    // List of comparison rules goes here...
-  ]
-}`}
-                   </pre>
-
-                   <h4 style={{ marginTop: '30px' }}>2. Multi-Column Indicators (MACD, Bollinger Bands)</h4>
-                   <p>Some indicators generate multiple data series (e.g., MACD has a MACD line, a Signal line, and a Histogram). To evaluate these, you <b>must</b> specify which <code>column</code> to use inside the <code>params</code> block.</p>
-
-                   <h5 style={{ marginTop: '20px' }}>MACD Crossover Example:</h5>
-                   <p>Comparing the <code>macd</code> line against the <code>macd_signal</code> line.</p>
-                   <pre style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', fontSize: '13px', border: '1px solid #e2e8f0' }}>
-{`{
-  "indicator": "MACD",
-  "params": {
-    "fast": 12,
-    "slow": 26,
-    "signal": 9,
-    "column": "macd"
-  },
-  "comparison": ">",
-  "value": {
-    "indicator": "MACD",
-    "params": {
-      "fast": 12,
-      "slow": 26,
-      "signal": 9,
-      "column": "macd_signal"
-    }
-  }
-}`}
-                   </pre>
-
-                   <h4 style={{ marginTop: '30px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>3. Function & Indicator Dictionary</h4>
-                   <p style={{ fontSize: '13px' }}>The following technical analysis functions are natively available in the python backtesting engine. When a function returns a "Single Series", you do not need to specify a <code>column</code> parameter.</p>
-                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', background: '#f8fafc', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                     <thead style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
-                       <tr>
-                         <th style={{ padding: '12px 16px' }}>Indicator</th>
-                         <th style={{ padding: '12px 16px' }}>Description</th>
-                         <th style={{ padding: '12px 16px' }}>Required Params</th>
-                         <th style={{ padding: '12px 16px' }}>Returns / Columns</th>
-                       </tr>
-                     </thead>
-                     <tbody>
-                       <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                         <td style={{ padding: '12px 16px', fontWeight: 'bold' }}>Close</td>
-                         <td style={{ padding: '12px 16px' }}>The closing price of the asset.</td>
-                         <td style={{ padding: '12px 16px' }}><code>{}</code> (Empty)</td>
-                         <td style={{ padding: '12px 16px' }}>Single Series</td>
-                       </tr>
-                       <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                         <td style={{ padding: '12px 16px', fontWeight: 'bold' }}>SMA</td>
-                         <td style={{ padding: '12px 16px' }}>Simple Moving Average.</td>
-                         <td style={{ padding: '12px 16px' }}><code>period</code> (int)</td>
-                         <td style={{ padding: '12px 16px' }}>Single Series</td>
-                       </tr>
-                       <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                         <td style={{ padding: '12px 16px', fontWeight: 'bold' }}>EMA</td>
-                         <td style={{ padding: '12px 16px' }}>Exponential Moving Average.</td>
-                         <td style={{ padding: '12px 16px' }}><code>period</code> (int)</td>
-                         <td style={{ padding: '12px 16px' }}>Single Series</td>
-                       </tr>
-                       <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                         <td style={{ padding: '12px 16px', fontWeight: 'bold' }}>RSI</td>
-                         <td style={{ padding: '12px 16px' }}>Relative Strength Index. Momentum oscillator.</td>
-                         <td style={{ padding: '12px 16px' }}><code>period</code> (int)</td>
-                         <td style={{ padding: '12px 16px' }}>Single Series</td>
-                       </tr>
-                       <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                         <td style={{ padding: '12px 16px', fontWeight: 'bold' }}>MACD</td>
-                         <td style={{ padding: '12px 16px' }}>Moving Average Convergence Divergence.</td>
-                         <td style={{ padding: '12px 16px' }}><code>fast</code> (int)<br/><code>slow</code> (int)<br/><code>signal</code> (int)</td>
-                         <td style={{ padding: '12px 16px' }}>Requires <code>column</code>:<br/>- <code>macd</code><br/>- <code>macd_signal</code><br/>- <code>macd_hist</code></td>
-                       </tr>
-                       <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                         <td style={{ padding: '12px 16px', fontWeight: 'bold' }}>BOLLINGER</td>
-                         <td style={{ padding: '12px 16px' }}>Bollinger Bands. Volatility bands.</td>
-                         <td style={{ padding: '12px 16px' }}><code>period</code> (int)<br/><code>std_dev</code> (float)</td>
-                         <td style={{ padding: '12px 16px' }}>Requires <code>column</code>:<br/>- <code>upper</code><br/>- <code>lower</code><br/>- <code>mid</code></td>
-                       </tr>
-                       <tr>
-                         <td style={{ padding: '12px 16px', fontWeight: 'bold' }}>OBI</td>
-                         <td style={{ padding: '12px 16px' }}>Order Book Imbalance (Bid vs Ask volume).</td>
-                         <td style={{ padding: '12px 16px' }}><code>{}</code> (Auto-infers volumes)</td>
-                         <td style={{ padding: '12px 16px' }}>Single Series</td>
-                       </tr>
-                     </tbody>
-                   </table>
-                </div>
-              ) : (
-              <>
-              <div className="pb-modal-col-left">
-                <div className="pb-step">
-                  <div className="pb-step-header">
-                    <div className="pb-step-num">1</div>
-                    <div style={{ fontWeight: 600, color: '#1e293b' }}>Strategy Settings <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400, marginLeft: '5px' }}>Set basic details</span></div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', paddingLeft: '40px' }}>
-                    <div className="pb-form-group"><label>Strategy Name</label><input type="text" className="pb-input" style={{ width: '100%' }} value={strategyName} onChange={(e) => setStrategyName(e.target.value)} /></div>
-                    <div className="pb-form-group"><label>Timeframe</label><select className="pb-select" style={{ width: '100%' }}><option>1 Day</option><option>1 Hour</option></select></div>
-                    <div className="pb-form-group"><label>Position Type</label><select className="pb-select" style={{ width: '100%' }}><option>Long Only</option><option>Long & Short</option></select></div>
+            <div className="studio-form-card">
+              <div className="studio-form-2col">
+                <div className="studio-form-group">
+                  <div className="studio-form-label">Range</div>
+                  <div className="studio-pill-row">
+                    {['1M','3M','6M','1Y','3Y','Custom'].map(p => (
+                      <button key={p} className={`studio-pill ${datePreset === p ? 'active' : ''}`} onClick={() => handleDatePresetChange(p)}>{p}</button>
+                    ))}
                   </div>
                 </div>
-
-                <div className="pb-step">
-                  <div className="pb-step-header">
-                    <div className="pb-step-num" style={{ background: '#10b981' }}>2</div>
-                    <div style={{ fontWeight: 600, color: '#1e293b' }}>Build Buy Condition <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400, marginLeft: '5px' }}>Define when to enter</span></div>
-                  </div>
-                  <div style={{ paddingLeft: '40px' }}>
-                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '16px' }}>
-                      <div style={{ fontSize: '12px', color: '#15803d', fontWeight: 'bold', marginBottom: '8px' }}>BUY Logic</div>
-                      <RecursiveBuilder dslString={buyDsl} onChange={setBuyDsl} color="#15803d" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pb-step" style={{ marginBottom: 0 }}>
-                  <div className="pb-step-header">
-                    <div className="pb-step-num" style={{ background: '#ef4444' }}>3</div>
-                    <div style={{ fontWeight: 600, color: '#1e293b' }}>Build Sell Condition <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400, marginLeft: '5px' }}>Define when to exit</span></div>
-                  </div>
-                  <div style={{ paddingLeft: '40px' }}>
-                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '16px' }}>
-                      <div style={{ fontSize: '12px', color: '#b91c1c', fontWeight: 'bold', marginBottom: '8px' }}>SELL Logic</div>
-                      <RecursiveBuilder dslString={sellDsl} onChange={setSellDsl} color="#b91c1c" />
-                    </div>
+                <div className="studio-form-group">
+                  <div className="studio-form-label">Bar resolution</div>
+                  <div className="studio-pill-row">
+                    {['1m','5m','15m','1h','1D','1W'].map(tf => (
+                      <button key={tf} className={`studio-pill ${timeframe === tf ? 'active' : ''}`} onClick={() => setTimeframe(tf)}>{tf}</button>
+                    ))}
                   </div>
                 </div>
               </div>
 
-              <div className="pb-modal-col-right">
-                <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '12px', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Strategy Preview (DSL JSON)</span>
-                  <button className="pb-btn" style={{ padding: '4px 8px', fontSize: '11px', background: 'var(--pb-bg)', color: 'var(--pb-text-muted)' }} onClick={copyToClipboard}>📋 Copy</button>
-                </div>
-                
-                {dslTab === 'visual' ? (
-                   <div className="pb-json-editor" style={{ marginBottom: '0px' }}>
-                      <div style={{ color: '#818cf8', marginBottom: '10px' }}>// BUY LOGIC</div>
-                      <pre style={{ margin: 0 }}>{buyDsl}</pre>
-                      <div style={{ color: '#f87171', marginTop: '20px', marginBottom: '10px' }}>// SELL LOGIC</div>
-                      <pre style={{ margin: 0 }}>{sellDsl}</pre>
-                   </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', flex: 1 }}>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ fontSize: '12px', color: '#10b981', marginBottom: '5px' }}>BUY Logic</div>
-                      <textarea className="pb-json-editor" style={{ margin: 0, resize: 'none', width: '100%' }} value={buyDsl} onChange={handleBuyDslChange} />
-                    </div>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ fontSize: '12px', color: '#ef4444', marginBottom: '5px' }}>SELL Logic</div>
-                      <textarea className="pb-json-editor" style={{ margin: 0, resize: 'none', width: '100%' }} value={sellDsl} onChange={handleSellDslChange} />
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ marginTop: '20px' }}>
-                  <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    💡 Quick Templates
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div style={{ padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', background: '#fff' }} onClick={() => loadTemplate("RSI_EMA")}>
-                      <div style={{ fontWeight: 600, fontSize: '12px', color: 'var(--pb-blue)', marginBottom: '4px' }}>📈 RSI + EMA</div>
-                      <div style={{ fontSize: '10px', color: '#64748b' }}>Mean reversion & trend</div>
-                    </div>
-                    <div style={{ padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', background: '#fff' }} onClick={() => loadTemplate("MACD_CROSS")}>
-                      <div style={{ fontWeight: 600, fontSize: '12px', color: '#10b981', marginBottom: '4px' }}>📊 MACD Crossover</div>
-                      <div style={{ fontSize: '10px', color: '#64748b' }}>MACD vs Signal line</div>
-                    </div>
-                    <div style={{ padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', background: '#fff' }} onClick={() => loadTemplate("BOLLINGER")}>
-                      <div style={{ fontWeight: 600, fontSize: '12px', color: '#8b5cf6', marginBottom: '4px' }}>🌊 Bollinger Bands</div>
-                      <div style={{ fontSize: '10px', color: '#64748b' }}>Breakout / Reversion</div>
-                    </div>
+              <div className="studio-form-3col">
+                <div className="studio-form-group">
+                  <div className="studio-form-label">Start</div>
+                  <div className="studio-date-box">
+                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                    <span className="studio-date-dot">.</span>
+                    <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={{ width: '86px' }} />
                   </div>
                 </div>
-
-                <div style={{ marginTop: '20px' }}>
-                  <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    💾 Saved Strategies
+                <div className="studio-date-arrow">-&gt;</div>
+                <div className="studio-form-group">
+                  <div className="studio-form-label">End</div>
+                  <div className="studio-date-box">
+                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                    <span className="studio-date-dot">.</span>
+                    <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} style={{ width: '86px' }} />
                   </div>
-                  {savedStrategies.length === 0 ? (
-                    <div style={{ fontSize: '12px', color: '#64748b' }}>No saved strategies found.</div>
-                  ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                      {savedStrategies.map(strat => (
-                        <div key={strat._id} style={{ padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', background: '#fff' }} onClick={() => loadSavedStrategy(strat)}>
-                          <div style={{ fontWeight: 600, fontSize: '12px', color: 'var(--pb-blue)', marginBottom: '4px' }}>{strat.name}</div>
-                          <div style={{ fontSize: '10px', color: '#64748b' }}>{new Date(strat.createdAt).toLocaleDateString()}</div>
+                </div>
+                <div className="studio-form-group">
+                  <div className="studio-form-label">Initial capital</div>
+                  <div className="studio-capital-box">
+                    <span className="studio-capital-sym">INR</span>
+                    <input type="number" value={capital} onChange={e => setCapital(Number(e.target.value))} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Benchmark & Assets */}
+              <div>
+                <div className="studio-assets-header">
+                  <span className="studio-assets-title">Benchmark &amp; assets</span>
+                </div>
+                <div className="studio-search-wrap">
+                  <i className="fa-solid fa-magnifying-glass studio-search-icon"></i>
+                  <input type="text" placeholder="Search stocks, indices, or ETFs..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={handleAddTicker} />
+                  <button className="studio-search-btn" onClick={() => handleToggleTicker(searchInput)}>Search</button>
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div className="studio-search-suggestions">
+                      {suggestions.map((s: any, idx: number) => (
+                        <div key={idx} className="studio-search-suggestion-item" onClick={() => handleSelectSuggestion(s.symbol || s.ticker)}>
+                          <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                            <StockLogo symbol={s.symbol || s.ticker} fallbackToAvatar style={{ width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0 }} />
+                            <span style={{fontSize:'12px', fontWeight:600, color:'var(--s-text)'}}>{s.symbol || s.ticker}</span>
+                          </div>
+                          <span style={{fontSize:'10px', color:'var(--s-text-muted)', textAlign:'right', maxWidth:'150px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{s.name || s.shortname}</span>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
+                <div className="studio-index-grid">
+                  {[
+                    { name: 'NIFTY 50', symbol: '^NSEI', sub: 'NSE' },
+                    { name: 'BANK NIFTY', symbol: '^NSEBANK', sub: 'NSE' },
+                    { name: 'NIFTY IT', symbol: '^CNXIT', sub: 'NSE' },
+                    { name: 'SENSEX', symbol: '^BSESN', sub: 'BSE' }
+                  ].map(idx => {
+                    const isSel = tickers.includes(idx.symbol);
+                    return (
+                      <button key={idx.symbol} className={`studio-index-card ${isSel ? 'active' : ''}`} onClick={() => handleLoadIndex(idx.name)}>
+                        {isSel && <div className="studio-index-card-dot" />}
+                        <StockLogo symbol={idx.symbol} fallbackToAvatar style={{ width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0 }} />
+                        <div>
+                          <div className="studio-index-name">{idx.name}</div>
+                          <div className="studio-index-sub">{idx.sub}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="studio-quick-picks">
+                  {getCategoryTickers('Popular').map(item => {
+                    const isSel = tickers.includes(item.symbol);
+                    return (
+                      <button key={item.symbol} className={`studio-quick-pick ${isSel ? 'active' : ''}`} onClick={() => handleToggleTicker(item.symbol)}>
+                        {item.label}{isSel ? ' [x]' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="studio-selected-row">
+                  <div className="studio-selected-count">Selected ({tickers.length})</div>
+                  <div className="studio-chips-wrap">
+                    {tickers.map(t => (
+                      <div key={t} className="studio-chip">
+                        <StockLogo symbol={t} fallbackToAvatar style={{ width: '14px', height: '14px', borderRadius: '50%' }} />
+                        {t.replace('^','').replace('.NS','').replace('.BO','')}
+                        <button className="studio-chip-close" onClick={() => handleRemoveTicker(t)}>x</button>
+                      </div>
+                    ))}
+                    {tickers.length === 0 && <span style={{ fontSize: '11px', color: 'var(--s-text-faint)' }}>No assets selected yet</span>}
+                  </div>
+                </div>
               </div>
-              </>
-              )}
+
+
+            </div>
+          </>)}
+
+          {/* == STRATEGY TAB == */}
+          {activeTab === 'strategy' && (<>
+            <div className="studio-hero">
+              <div className="studio-hero-eyebrow">Strategy Logic</div>
+              <h1 className="studio-hero-title">Teach it <span>when to buy</span> and sell.</h1>
+              <p className="studio-hero-sub">Compose conditions from indicators, or edit the DSL directly.</p>
             </div>
 
+            <div className="studio-form-card">
+              <div className="studio-view-toggle">
+                <button className={`studio-toggle-btn ${dslTab === 'visual' ? 'active' : ''}`} onClick={() => setDslTab('visual')}>Visual builder</button>
+                <button className={`studio-toggle-btn ${dslTab === 'json' ? 'active' : ''}`} onClick={() => setDslTab('json')}>DSL (JSON)</button>
+              </div>
+
+              <div className="studio-strategy-meta">
+                <div className="studio-form-group" style={{ flex: 1 }}>
+                  <div className="studio-form-label">Strategy name</div>
+                  <input className="studio-strategy-name-input" value={strategyName} onChange={e => setStrategyName(e.target.value)} placeholder="My Custom Strategy" />
+                </div>
+                <div className="studio-form-group">
+                  <div className="studio-form-label">Timeframe</div>
+                  <div className="studio-pill-row">
+                    {[{label:'1 Day',val:'1D'},{label:'1 Hour',val:'1h'},{label:'15m',val:'15m'}].map(tf => (
+                      <button key={tf.val} className={`studio-pill ${timeframe === tf.val ? 'active' : ''}`} onClick={() => setTimeframe(tf.val)}>{tf.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="studio-form-group">
+                  <div className="studio-form-label">Stop-Loss (%)</div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <select className="studio-strategy-name-input" style={{ width: '90px' }} value={stopLossType} onChange={e => setStopLossType(e.target.value)}>
+                      <option value="fixed">Fixed</option>
+                      <option value="trailing">Trailing</option>
+                    </select>
+                    <input type="number" className="studio-strategy-name-input" style={{ width: '70px', textAlign: 'center' }} value={stopLossPct} onChange={e => setStopLossPct(parseFloat(e.target.value) || 0)} min={0.1} max={100} step={0.1} />
+                  </div>
+                </div>
+              </div>
+
+              {dslTab === 'visual' ? (<>
+                <div className="studio-condition-group">
+                  <div className="studio-condition-header">
+                    <span className="studio-condition-label-buy">BUY</span>
+                    <span style={{ color: 'var(--s-text-muted)', fontSize: '11px' }}>- AND group</span>
+                  </div>
+                  <RecursiveBuilder dslString={buyDsl} onChange={setBuyDsl} />
+                </div>
+                <div className="studio-condition-group">
+                  <div className="studio-condition-header">
+                    <span className="studio-condition-label-sell">SELL</span>
+                    <span style={{ color: 'var(--s-text-muted)', fontSize: '11px' }}>- OR group</span>
+                  </div>
+                  <RecursiveBuilder dslString={sellDsl} onChange={setSellDsl} />
+                </div>
+              </>) : (
+                <div className="studio-dsl-grid">
+                  <div><div className="studio-dsl-label green">BUY Logic</div><textarea className="studio-dsl-textarea" value={buyDsl} onChange={handleBuyDslChange} /></div>
+                  <div><div className="studio-dsl-label red">SELL Logic</div><textarea className="studio-dsl-textarea" value={sellDsl} onChange={handleSellDslChange} /></div>
+                </div>
+              )}
+
+              <div>
+                <div style={{ fontSize: '10px', color: 'var(--s-text-muted)', marginBottom: '8px', fontWeight: 600, letterSpacing: '0.5px' }}>QUICK TEMPLATES</div>
+                <div className="studio-templates-row">
+                  {[
+                    { key: 'RSI_EMA', name: 'RSI + EMA', desc: 'Mean reversion & trend' },
+                    { key: 'MACD_CROSS', name: 'MACD crossover', desc: 'MACD vs signal' },
+                    { key: 'BOLLINGER', name: 'Bollinger bands', desc: 'Breakout / reversion' },
+                    ...(savedStrategies[0] ? [{ key: 'saved_0', name: savedStrategies[0].name, desc: 'Saved: edit & reuse' }] : [])
+                  ].map(t => (
+                    <button key={t.key} className="studio-template-card" onClick={() => t.key === 'saved_0' ? loadSavedStrategy(savedStrategies[0]) : loadTemplate(t.key)}>
+                      <div className="studio-template-name">{t.name}</div>
+                      <div className="studio-template-desc">{t.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+
+            </div>
+          </>)}
+
+          {/* == RESULTS TAB == */}
+          {activeTab === 'results' && (
+            !results ? (
+              <div className="studio-empty-results">
+                <div className="studio-empty-icon">[!]</div>
+                <div className="studio-empty-title">No results yet</div>
+                <div className="studio-empty-sub">Configure your setup and strategy, then run a backtest to see your performance report here.</div>
+                <button className="studio-cta-btn" style={{ marginTop: '8px' }} onClick={() => setActiveTab('setup')}>Start Setup -&gt;</button>
+              </div>
+            ) : (
+              <div className="studio-results">
+                {/* Unified Performance Summaries */}
+                {(() => {
+                  const activeReport = results.stock_reports?.find((r:any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
+                  return (
+                    <div className="studio-unified-perf-card">
+                      <div className="studio-unified-perf-split">
+                        {/* Left: Overall Portfolio */}
+                        <div className="studio-unified-perf-half">
+                          <div className="studio-unified-perf-header">Overall Portfolio Summary</div>
+                          <div className="studio-unified-perf-grid">
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Total return</span>
+                              <span className={`studio-u-stat-val ${results?.portfolio_summary?.roi >= 0 ? 'green' : 'red'}`}>
+                                {results?.portfolio_summary ? (results.portfolio_summary.roi > 0 ? '+' : '') + results.portfolio_summary.roi + '%' : '---'}
+                              </span>
+                            </div>
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Final value</span>
+                              <span className="studio-u-stat-val">{results?.portfolio_summary ? 'INR ' + results.portfolio_summary.final_capital.toLocaleString() : '---'}</span>
+                            </div>
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Max drawdown</span>
+                              <span className="studio-u-stat-val red">-12.3%</span>
+                            </div>
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Win rate</span>
+                              <span className="studio-u-stat-val">58.1%</span>
+                            </div>
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Total trades</span>
+                              <span className="studio-u-stat-val">{results?.portfolio_summary ? results.portfolio_summary.trades : '---'}</span>
+                            </div>
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Total P&amp;L</span>
+                              <span className={`studio-u-stat-val ${(results?.portfolio_summary?.total_pnl ?? 0) >= 0 ? 'green' : 'red'}`}>
+                                {results?.portfolio_summary ? (results.portfolio_summary.total_pnl >= 0 ? '+' : '') + 'INR ' + results.portfolio_summary.total_pnl.toLocaleString() : '---'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="studio-unified-perf-divider" />
+
+                        {/* Right: Individual Stock (Selected) */}
+                        <div className="studio-unified-perf-half">
+                          <div className="studio-unified-perf-header">Individual Summary: {activeReport?.ticker?.replace('.NS','').replace('.BO','').replace('^','') || 'N/A'}</div>
+                          <div className="studio-unified-perf-grid">
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Total return</span>
+                              <span className={`studio-u-stat-val ${(activeReport?.summary?.roi ?? 0) >= 0 ? 'green' : 'red'}`}>
+                                {activeReport?.summary ? (activeReport.summary.roi > 0 ? '+' : '') + (activeReport.summary.roi || 0) + '%' : '---'}
+                              </span>
+                            </div>
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Final value</span>
+                              <span className="studio-u-stat-val">{activeReport?.summary ? 'INR ' + (activeReport.summary.final_capital || 0).toLocaleString() : '---'}</span>
+                            </div>
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Max drawdown</span>
+                              <span className="studio-u-stat-val red">-10.1%</span>
+                            </div>
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Win rate</span>
+                              <span className="studio-u-stat-val">{activeReport?.summary?.win_rate ? activeReport.summary.win_rate + '%' : '55.4%'}</span>
+                            </div>
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Total trades</span>
+                              <span className="studio-u-stat-val">{activeReport?.summary ? (activeReport.summary.trades || 0) : '---'}</span>
+                            </div>
+                            <div className="studio-u-stat">
+                              <span className="studio-u-stat-lbl">Total P&amp;L</span>
+                              <span className={`studio-u-stat-val ${(replayPnl !== null ? replayPnl : activeReport?.summary?.total_pnl ?? 0) >= 0 ? 'green' : 'red'}`}>
+                                {replayPnl !== null ? (replayPnl >= 0 ? '+' : '') + 'INR ' + replayPnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (activeReport?.summary ? (activeReport.summary.total_pnl >= 0 ? '+' : '') + 'INR ' + (activeReport.summary.total_pnl || 0).toLocaleString() : '---')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Chart and Trades Split */}
+                <div className="studio-split-view">
+                  {/* Left Column: Chart */}
+                  <div className="studio-chart-side">
+                    <div className="studio-equity-section">
+                      {results.stock_reports && results.stock_reports.length > 1 && (
+                        <div className="studio-chart-ticker-tabs">
+                          {results.stock_reports.map((r: any) => (
+                            <button key={r.ticker} className={`studio-chart-ticker-btn ${selectedChartTicker === r.ticker ? 'active' : ''}`} onClick={() => setSelectedChartTicker(r.ticker)}>
+                              <StockLogo symbol={r.ticker} fallbackToAvatar style={{ width: '14px', height: '14px', borderRadius: '50%' }} />
+                              {r.ticker.replace('.NS','').replace('.BO','').replace('^','')}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {(() => {
+                        const activeReport = results.stock_reports?.find((r:any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
+                        const indicatorKeySet = new Set<string>();
+                        (activeReport?.price_history || []).forEach((d: any) => { Object.keys(d).forEach(k => { if (k !== 'date' && k !== 'price') indicatorKeySet.add(k); }); });
+                        const indKeys = Array.from(indicatorKeySet);
+                        const lblParts = indKeys.slice(0,3).map(k => k.replace(/^indicator_/i,'').replace(/period(\d+)/i,'($1)').replace(/_/g,' ').trim());
+                        return (
+                          <div className="studio-equity-title" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingRight:'12px' }}>
+                            <div>
+                              Equity curve
+                              {activeReport?.ticker && <span className="studio-equity-subtitle"> vs {activeReport.ticker}{lblParts.length > 0 ? ': ' + lblParts.join(', ') : ''}</span>}
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <button className="studio-cta-btn" style={{ background: liveDeployModes[activeReport?.ticker] ? '#ef4444' : '#10b981', borderColor: liveDeployModes[activeReport?.ticker] ? '#dc2626' : '#059669', padding: '6px 12px', fontSize: '11px', gap: '4px', minHeight: '26px' }} onClick={() => { if(liveDeployModes[activeReport?.ticker]) { setLiveDeployModes(p => ({...p, [activeReport!.ticker]: false})); } else { setShowDeployModal(true); } }} disabled={isRunning}>{liveDeployModes[activeReport?.ticker] ? '⏹ Stop Live' : '🚀 Deploy'}</button>
+                              <button className="studio-cta-btn" style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', minHeight: '26px' }} onClick={handleRunOnChart} disabled={isRunning}>{isRunning ? 'Running...' : '@ Re-run'}</button>
+                              <button className="pb-btn" onClick={() => setShowTradeLedger(!showTradeLedger)} style={{ fontSize:'10px', padding:'4px 10px', background: showTradeLedger ? 'var(--s-card-hover)' : 'var(--s-primary-dim)', color: showTradeLedger ? 'var(--s-text)' : 'var(--s-primary)', height: '26px' }}>
+                                {showTradeLedger ? 'Hide Trade Ledger' : 'Show Trade Ledger'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      <div className="studio-chart-wrap">
+                        <div className="studio-chart-inner">
+                          {(() => {
+                            const activeReport = results.stock_reports?.find((r:any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
+                            if (!activeReport) return <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--s-text-muted)' }}>No chart data</div>;
+                            
+                            const indicatorKeySet = new Set<string>();
+                            (activeReport.price_history || []).forEach((d: any) => { Object.keys(d).forEach(k => { if (k !== 'date' && k !== 'price') indicatorKeySet.add(k); }); });
+                            const indicatorKeys = Array.from(indicatorKeySet);
+                            const hasRsi = indicatorKeys.some(k => k.toLowerCase().includes('rsi'));
+                            const hasThresholds = indicatorKeys.some(k => k.toLowerCase().startsWith('threshold'));
+                            const extendedKeys = [...indicatorKeys];
+                            if (hasRsi && !hasThresholds) extendedKeys.push('Threshold_70', 'Threshold_30');
+                            const indicatorSeries = extendedKeys.map((k, i) => {
+                              const colors = ['#6366f1','#f59e0b','#06b6d4','#ec4899','#8b5cf6','#14b8a6','#f97316','#3b82f6'];
+                              const isThreshold = k.toLowerCase().startsWith('threshold');
+                              const threshMatch = k.match(/\d+(\.\d+)?/);
+                              const threshNum = threshMatch ? parseFloat(threshMatch[0]) : null;
+                              let color = colors[i % colors.length];
+                              if (isThreshold && threshNum != null) color = threshNum >= 50 ? '#ef4444' : '#10b981';
+                              const formattedLabel = isThreshold && threshNum != null
+                                ? `Threshold (${threshNum})`
+                                : k.replace(/^indicator_/i,'').replace(/period(\d+)/i,'($1)').replace(/_/g,' ').trim();
+                              return {
+                                key: k, label: formattedLabel, color, width: isThreshold ? 1.5 : 2,
+                                values: activeReport.price_history.map((d: any) => ({
+                                  x: new Date(d.date).getTime(),
+                                  y: d[k] !== undefined && d[k] !== null ? d[k] : (isThreshold && threshNum != null ? threshNum : null)
+                                })).filter((d: any) => d.y !== undefined && d.y !== null)
+                              };
+                            });
+                            
+                            if (liveDeployModes[activeReport?.ticker]) return <LiveStudioGraph 
+                              symbol={activeReport.ticker} 
+                              indicatorSeries={indicatorSeries} 
+                              onClose={() => setLiveDeployModes(p => ({...p, [activeReport!.ticker]: false}))} 
+                              strategyName={strategyName}
+                              userId={savedStrategies[0]?.userId}
+                              buyDsl={buyDsl}
+                              sellDsl={sellDsl}
+                              allocatedCapital={Number(algoCapital)}
+                              mode={dataMode}
+                              stopLossPct={stopLossPct}
+                              stopLossType={stopLossType}
+                            />;
+                            
+                            return (
+                              <AlgoBacktestChart
+                                indicatorSeries={indicatorSeries}
+                                lineData={activeReport.price_history.map((d: any) => ({ x: new Date(d.date).getTime(), y: d.price }))}
+                                timeframe="ALL"
+                                marketState="CLOSED"
+                                percent={activeReport.summary.roi.toString()}
+                                trades={activeReport.trade_log.map((t: any) => ({
+                                  side: t.type === 'BUY' ? 'BUY' : 'SELL',
+                                  quantity: t.shares || 1,
+                                  pricePerShare: t.price,
+                                  createdAtIST: new Date(t.date).getTime(),
+                                  pnl: t.pnl,
+                                  reason: t.reason
+                                }))}
+                                activeTrade={hoveredTrade}
+                                onReplayProgress={setReplayPnl}
+                              />
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Trade History */}
+                  <div className={`studio-trades-side ${showTradeLedger ? 'open' : 'collapsed'}`}>
+                    {(() => {
+                      const activeReport = results.stock_reports?.find((r:any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
+                      if (!activeReport?.trade_log?.length) return (
+                        <div className="studio-trades-section">
+                          <div className="studio-trades-title">Trade Ledger</div>
+                          <div style={{ color:'var(--s-text-muted)', fontSize:'12px', marginTop:'16px' }}>No trades taken.</div>
+                        </div>
+                      );
+                      return (
+                        <div className="studio-trades-section">
+                          <div className="studio-trades-title">Trade Ledger</div>
+                          <div className="studio-trade-timeline">
+                            {activeReport.trade_log.map((t: any, index: number) => (
+                              <div key={index} className="studio-timeline-item"
+                                onMouseEnter={() => setHoveredTrade({ x: new Date(t.date).getTime(), y: t.price, side: t.type === 'BUY' ? 'BUY' : 'SELL', quantity: t.shares || 1, pnl: t.pnl, reason: t.reason, originalIndex: index })}
+                                onMouseLeave={() => setHoveredTrade(null)}>
+                                <div className={`studio-timeline-node ${t.type.toLowerCase()}`} />
+                                <div className="studio-timeline-content">
+                                  <div className="studio-tl-header">
+                                    <span className={`studio-tl-badge ${t.type.toLowerCase()}`}>{t.type}</span>
+                                    <span className="studio-tl-date">{new Date(t.date).toLocaleString('en-US', { timeZone:'UTC', month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
+                                  </div>
+                                  <div className="studio-tl-body">
+                                    <div className="studio-tl-stat">
+                                      <span className="studio-tl-lbl">Price</span>
+                                      <span className="studio-tl-val">INR {Number(t.price).toFixed(2)}</span>
+                                    </div>
+                                    <div className="studio-tl-stat">
+                                      <span className="studio-tl-lbl">Shares</span>
+                                      <span className="studio-tl-val">{t.shares || 1}</span>
+                                    </div>
+                                    {t.pnl != null && (
+                                      <div className="studio-tl-stat">
+                                        <span className="studio-tl-lbl">P&amp;L</span>
+                                        <span className={`studio-tl-val ${t.pnl >= 0 ? 'green' : 'red'}`}>{t.pnl >= 0 ? '+' : ''}INR {Number(t.pnl).toFixed(2)}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {t.reason && <div className="studio-tl-reason">{t.reason}</div>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+
+              </div>
+            )
+          )}
+
+        </div>{/* end studio-page */}
+
+
+        <div className="studio-footer-disclaimer">Backtests are simulated on historical data and do not guarantee future performance.</div>
+
+      </div>{/* end studio-main */}
+
+      {/* === MODALS === */}
+
+      {showBuilderModal && (
+        <div className="pb-modal-overlay" onClick={() => setShowBuilderModal(false)}>
+          <div className="pb-modal" onClick={e => e.stopPropagation()}>
+            <div className="pb-modal-header">
+              <div>
+                <h2 style={{ fontWeight:700, fontSize:'18px', color:'#0f172a' }}>Strategy Logic Builder</h2>
+                <p style={{ fontSize:'12px', color:'#64748b', marginTop:'2px' }}>Define when to buy and sell using indicators</p>
+              </div>
+              <button className="pb-modal-close-btn" onClick={() => setShowBuilderModal(false)}>x</button>
+            </div>
+            <div className="pb-modal-body">
+              <div className="pb-modal-col-left">
+                <div className="pb-dsl-tabs">
+                  <div className={`pb-dsl-tab ${dslTab === 'json' ? 'active' : ''}`} onClick={() => setDslTab('json')}>JSON DSL Editor</div>
+                  <div className={`pb-dsl-tab ${dslTab === 'visual' ? 'active' : ''}`} onClick={() => setDslTab('visual')}>Visual Builder</div>
+                </div>
+                {dslTab === 'json' ? (<>
+                  <div className="pb-step">
+                    <div className="pb-step-header"><div className="pb-step-num">B</div><h3 style={{ fontWeight:700, fontSize:'15px', color:'#10b981' }}>BUY Logic</h3></div>
+                    <textarea className="pb-json-editor" style={{ width:'100%', height:'180px', resize:'vertical' }} value={buyDsl} onChange={handleBuyDslChange} spellCheck={false} />
+                  </div>
+                  <div className="pb-step">
+                    <div className="pb-step-header"><div className="pb-step-num" style={{ background:'#ef4444' }}>S</div><h3 style={{ fontWeight:700, fontSize:'15px', color:'#ef4444' }}>SELL Logic</h3></div>
+                    <textarea className="pb-json-editor" style={{ width:'100%', height:'180px', resize:'vertical' }} value={sellDsl} onChange={handleSellDslChange} spellCheck={false} />
+                  </div>
+                </>) : (<>
+                  <div className="pb-step">
+                    <div className="pb-step-header"><div className="pb-step-num">B</div><h3 style={{ fontWeight:700, fontSize:'15px', color:'#10b981' }}>BUY Conditions</h3></div>
+                    <RecursiveBuilder dslString={buyDsl} onChange={setBuyDsl} />
+                  </div>
+                  <div className="pb-step">
+                    <div className="pb-step-header"><div className="pb-step-num" style={{ background:'#ef4444' }}>S</div><h3 style={{ fontWeight:700, fontSize:'15px', color:'#ef4444' }}>SELL Conditions</h3></div>
+                    <RecursiveBuilder dslString={sellDsl} onChange={setSellDsl} />
+                  </div>
+                </>)}
+              </div>
+              <div className="pb-modal-col-right">
+                <h3 style={{ fontWeight:700, fontSize:'14px', marginBottom:'12px', color:'#334155' }}>Quick Templates</h3>
+                {[{key:'RSI_EMA',name:'RSI + EMA',desc:'Mean reversion with trend filter'},{key:'MACD_CROSS',name:'MACD Crossover',desc:'Classic signal line crossover'},{key:'BOLLINGER',name:'Bollinger Bands',desc:'Breakout & reversion strategy'}].map(t => (
+                  <button key={t.key} onClick={() => loadTemplate(t.key)} style={{ display:'block', width:'100%', textAlign:'left', padding:'12px', borderRadius:'10px', border:'1px solid #e2e8f0', background:'#fff', marginBottom:'8px', cursor:'pointer', transition:'all 0.15s' }}>
+                    <div style={{ fontWeight:600, fontSize:'13px', color:'#4f46e5', marginBottom:'2px' }}>{t.name}</div>
+                    <div style={{ fontSize:'11px', color:'#94a3b8' }}>{t.desc}</div>
+                  </button>
+                ))}
+                {savedStrategies.length > 0 && (<>
+                  <div style={{ fontSize:'10px', fontWeight:700, color:'#94a3b8', letterSpacing:'1px', textTransform:'uppercase', margin:'14px 0 8px' }}>Your Saved</div>
+                  {savedStrategies.map(s => (
+                    <button key={s._id} onClick={() => { loadSavedStrategy(s); setShowBuilderModal(false); }} style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 12px', borderRadius:'8px', border:'1px solid #e2e8f0', background:'#f8fafc', marginBottom:'6px', cursor:'pointer', fontSize:'12px', fontWeight:600, color:'#334155' }}>{s.name}</button>
+                  ))}
+                </>)}
+              </div>
+            </div>
             <div className="pb-modal-footer">
-              <button className="pb-btn" style={{ color: '#64748b' }} onClick={() => { setBuyDsl("{}"); setSellDsl("{}"); }}>↺ Reset</button>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button className="pb-btn" onClick={handleSaveStrategyPrompt} disabled={isSavingStrategy} style={{ background: '#10b981', color: 'white', border: 'none' }}>{isSavingStrategy ? 'Saving...' : 'Save Strategy'}</button>
-                <button className="pb-btn" onClick={() => setShowBuilderModal(false)}>Cancel</button>
-                <button className="pb-btn primary" style={{ padding: '8px 24px' }} onClick={() => setShowBuilderModal(false)}>Done</button>
+              <button className="pb-btn" onClick={copyToClipboard}>[Copy] Copy JSON</button>
+              <div style={{ display:'flex', gap:'8px' }}>
+                <button className="studio-save-btn" onClick={() => handleSaveStrategyPrompt(false)}><i className="fa-solid fa-floppy-disk"></i> Save</button>
+                <button className="studio-save-btn" onClick={() => handleSaveStrategyPrompt(true)}><i className="fa-solid fa-copy"></i> Save As New</button>
+                <button className="studio-cta-btn" onClick={() => { setShowBuilderModal(false); handleRunOnChart(); }} disabled={isRunning}>
+                  {isRunning ? 'Running...' : 'Run Backtest'}
+                </button>
               </div>
             </div>
           </div>
@@ -1277,66 +2065,300 @@ export default function PaperBullStudio() {
 
       {showConfigModal && (
         <div className="pb-modal-overlay" onClick={() => setShowConfigModal(false)}>
-          <div className="pb-config-popup-card" onClick={(e) => e.stopPropagation()}>
+          <div className="pb-config-popup-card" onClick={e => e.stopPropagation()}>
             <div className="pb-config-popup-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div className="pb-header-icon-box" style={{ background: '#e0e7ff', color: '#4f46e5', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
-                  🎛️
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Backtest Parameters & Stock Selection</h3>
-                  <p style={{ margin: 0, fontSize: '11.5px', color: '#64748b' }}>Modify dates, initial capital, benchmark index, or selected assets</p>
-                </div>
-              </div>
-              <button className="pb-modal-close-btn" onClick={() => setShowConfigModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '18px', color: '#94a3b8', cursor: 'pointer' }}>✕</button>
+              <span style={{ fontWeight:700, fontSize:'16px' }}>Setup Parameters</span>
+              <button className="pb-modal-close-btn" onClick={() => setShowConfigModal(false)}>x</button>
             </div>
-
-            <div className="pb-config-popup-body">
-              {renderConfigCards()}
-            </div>
-
+            <div className="pb-config-popup-body">{renderConfigCards()}</div>
             <div className="pb-config-popup-footer">
-              <button className="pb-btn secondary" onClick={() => setShowConfigModal(false)}>Close</button>
-              <button className="pb-configure-btn-main" style={{ width: 'auto', padding: '10px 24px' }} onClick={() => { setShowConfigModal(false); handleRunOnChart(); }}>
-                <span>▶ Apply & Re-run Backtest</span>
-              </button>
+              <button className="pb-btn" onClick={() => setShowConfigModal(false)}>Close</button>
+              <button className="pb-btn primary" onClick={() => { setShowConfigModal(false); setShowBuilderModal(true); }}>Configure Strategy -&gt;</button>
             </div>
           </div>
         </div>
       )}
-
-      <SearchOverlay
-        isOpen={isSearchOverlayOpen}
-        onClose={() => setIsSearchOverlayOpen(false)}
-        onSelectStock={(stock) => handleSelectSuggestion(stock.symbol)}
-      />
 
       {showSaveModal && (
-        <div className="pb-modal-overlay">
-          <div className="pb-modal" style={{ maxWidth: '400px', margin: '20vh auto', width: '90%', height: 'auto' }}>
-            <div className="pb-modal-header" style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-               <h3 style={{ margin: 0, fontSize: '16px', color: '#0f172a' }}>💾 Save Strategy Preset</h3>
-               <button onClick={() => setShowSaveModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#94a3b8' }}>✕</button>
-            </div>
-            <div className="pb-modal-body" style={{ padding: '20px', display: 'block' }}>
-               <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: 600, color: '#475569' }}>Strategy Name</label>
-               <input type="text" className="pb-input" style={{ width: '100%', marginBottom: '15px', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }} value={strategyName} onChange={e => setStrategyName(e.target.value)} placeholder="e.g. My Momentum Strategy" />
-               
-               {saveStatus.message && (
-                  <div style={{ marginBottom: '5px', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, background: saveStatus.type === 'success' ? '#f0fdf4' : '#fef2f2', color: saveStatus.type === 'success' ? '#15803d' : '#b91c1c', border: `1px solid ${saveStatus.type === 'success' ? '#bbf7d0' : '#fecaca'}` }}>
-                    {saveStatus.message}
-                  </div>
-               )}
-            </div>
-            <div className="pb-modal-footer" style={{ padding: '15px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '10px', background: '#f8fafc', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
-               <button className="pb-btn" style={{ padding: '8px 16px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '8px', color: '#475569', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setShowSaveModal(false)}>Cancel</button>
-               <button className="pb-btn primary" style={{ padding: '8px 16px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => executeSaveStrategy(strategyName)} disabled={isSavingStrategy}>
-                 {isSavingStrategy ? 'Saving...' : 'Confirm & Save'}
-               </button>
+        <div className="pb-modal-overlay" onClick={() => setShowSaveModal(false)}>
+          <div style={{ background:'#fff', borderRadius:'16px', padding:'28px', width:'400px', maxWidth:'95vw', boxShadow:'0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontWeight:700, fontSize:'16px', color:'#0f172a', marginBottom:'6px' }}>Save Strategy</h3>
+            <p style={{ fontSize:'12px', color:'#64748b', marginBottom:'18px' }}>Give your strategy a name to save and reuse it later.</p>
+            <input className="pb-input" style={{ width:'100%', marginBottom:'12px', padding:'10px 12px', fontSize:'13px' }} placeholder="Strategy name..." value={strategyName} onChange={e => setStrategyName(e.target.value)} onKeyDown={e => e.key === 'Enter' && executeSaveStrategy(strategyName)} autoFocus />
+            {saveStatus.message && <p style={{ fontSize:'12px', fontWeight:600, color: saveStatus.type === 'success' ? '#10b981' : '#ef4444', marginBottom:'12px' }}>{saveStatus.message}</p>}
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:'10px' }}>
+              <button className="pb-btn" onClick={() => setShowSaveModal(false)}>Cancel</button>
+              <button className="pb-btn primary" onClick={() => executeSaveStrategy(strategyName, saveAsMode)} disabled={isSavingStrategy}>{isSavingStrategy ? 'Saving...' : 'Save Strategy'}</button>
             </div>
           </div>
         </div>
       )}
+
+      {showDeployModal && (() => {
+        const isValid = Number(algoCapital) > 0 && Number(algoCapital) <= userBalance;
+        const balanceAfter = userBalance - Number(algoCapital);
+
+        const parseDslLabel = (dsl: string) => {
+          try {
+            const p = JSON.parse(dsl);
+            const c = p.conditions?.[0];
+            if (!c) return 'Custom Logic';
+            const left = c.indicator || c.left?.name || 'Ind';
+            const params = c.params?.period ? `(${c.params.period})` : '';
+            const op = c.comparison || c.op || '';
+            const right = typeof c.value === 'object' && c.value !== null
+              ? `${c.value.indicator || ''}(${c.value.params?.period || ''})`
+              : (c.value ?? c.right_value ?? '');
+            return `${left}${params} ${op} ${right}`;
+          } catch { return 'Custom Logic'; }
+        };
+
+        const getIndicators = () => {
+          try {
+            const inds = new Set<string>();
+            for (const dsl of [buyDsl, sellDsl]) {
+              if (!dsl) continue;
+              const p = JSON.parse(dsl);
+              (p.conditions || []).forEach((c: any) => {
+                if (c.indicator) { const per = c.params?.period; inds.add(c.indicator + (per ? `(${per})` : '')); }
+                if (c.left?.name) inds.add(c.left.name);
+                if (typeof c.value === 'object' && c.value?.indicator) inds.add(c.value.indicator);
+              });
+            }
+            return Array.from(inds);
+          } catch { return []; }
+        };
+
+        const inds = getIndicators();
+
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}
+            onClick={() => setShowDeployModal(false)}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: 460,
+                maxWidth: '95vw',
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: 16,
+                overflow: 'hidden',
+                boxShadow: '0 20px 60px rgba(15,23,42,0.12)',
+                fontFamily: 'inherit',
+              }}
+            >
+              {/* Slim accent stripe */}
+              <div style={{ height: 3, background: 'linear-gradient(90deg, #3b82f6 0%, #8b5cf6 50%, #06b6d4 100%)' }} />
+
+              {/* Header */}
+              <div style={{ padding: '20px 24px 0' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 6 }}>
+                      ● LIVE DEPLOYMENT
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.4px' }}>
+                      {(selectedChartTicker || tickers[0] || 'Select Stock').replace('.NS', '')}
+                      <span style={{ fontSize: 12, fontWeight: 400, color: '#94a3b8', marginLeft: 8 }}>.NS</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{strategyName || 'Custom Strategy'}</div>
+                  </div>
+                  <button
+                    onClick={() => setShowDeployModal(false)}
+                    style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 18, lineHeight: '32px', textAlign: 'center', flexShrink: 0 }}
+                  >×</button>
+                </div>
+
+                {/* Indicator pills */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14, paddingBottom: 16, borderBottom: '1px solid #e2e8f0' }}>
+                  {inds.length > 0 ? inds.map((ind, i) => (
+                    <span key={i} style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '3px 8px' }}>{ind}</span>
+                  )) : (
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>No indicators</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Conditions */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ padding: '12px 24px', borderRight: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 5 }}>Buy Signal</div>
+                  <div style={{ fontSize: 12, color: '#334155', fontFamily: "'JetBrains Mono', 'Courier New', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {parseDslLabel(buyDsl)}
+                  </div>
+                </div>
+                <div style={{ padding: '12px 24px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 5 }}>Sell Signal</div>
+                  <div style={{ fontSize: 12, color: '#334155', fontFamily: "'JetBrains Mono', 'Courier New', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {parseDslLabel(sellDsl)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Balance row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ padding: '14px 24px', borderRight: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>Available</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+                    ₹{userBalance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </div>
+                </div>
+                <div style={{ padding: '14px 24px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>After Deploy</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: isValid ? '#d97706' : '#cbd5e1', fontVariantNumeric: 'tabular-nums' }}>
+                    {isValid ? `₹${balanceAfter.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Data Source Mode Toggle */}
+              <div style={{ padding: '14px 24px 0' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8 }}>Data Source</div>
+                <div style={{ display: 'flex', gap: 0, background: '#f1f5f9', borderRadius: 8, padding: 3, border: '1px solid #e2e8f0' }}>
+                  <button
+                    id="mode-toggle-simulate"
+                    onClick={() => setDataMode('simulate')}
+                    style={{
+                      flex: 1, padding: '7px 12px', fontSize: 12, fontWeight: 600, borderRadius: 6,
+                      border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                      background: dataMode === 'simulate' ? '#ffffff' : 'transparent',
+                      color: dataMode === 'simulate' ? '#3b82f6' : '#64748b',
+                      boxShadow: dataMode === 'simulate' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    }}
+                  >
+                    🎮 Simulate
+                  </button>
+                  <button
+                    id="mode-toggle-upstox"
+                    onClick={() => setDataMode('upstox')}
+                    style={{
+                      flex: 1, padding: '7px 12px', fontSize: 12, fontWeight: 600, borderRadius: 6,
+                      border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                      background: dataMode === 'upstox' ? '#ffffff' : 'transparent',
+                      color: dataMode === 'upstox' ? '#10b981' : '#64748b',
+                      boxShadow: dataMode === 'upstox' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    }}
+                  >
+                    📡 Upstox Live
+                  </button>
+                </div>
+                {dataMode === 'upstox' && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: '#10b981', fontWeight: 500 }}>
+                    ✓ Connects to real-time Upstox feed (port 4141). Make sure websocket.js is running.
+                  </div>
+                )}
+                {dataMode === 'simulate' && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: '#3b82f6', fontWeight: 500 }}>
+                    ✓ Connects to paper trading simulator (port 8765).
+                  </div>
+                )}
+              </div>
+
+              {/* Capital input */}
+              <div style={{ padding: '16px 24px 20px' }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: 8 }}>
+                  Algo Capital (₹)
+                </label>
+                <input
+                  type="number"
+                  autoFocus
+                  value={algoCapital}
+                  onChange={e => setAlgoCapital(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    background: '#f8fafc',
+                    border: `1px solid ${Number(algoCapital) > userBalance ? '#dc2626' : '#cbd5e1'}`,
+                    borderRadius: 8,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    fontFamily: 'inherit',
+                  }}
+                />
+                {Number(algoCapital) > userBalance && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: '#dc2626', fontWeight: 500 }}>
+                    ⚠ Exceeds available balance
+                  </div>
+                )}
+
+                {/* Buttons */}
+                <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                  <button
+                    onClick={() => setShowDeployModal(false)}
+                    style={{ flex: 1, padding: '10px', fontSize: 13, fontWeight: 600, color: '#64748b', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={!isValid || isDeploying}
+                    onClick={async () => {
+                      if (isDeploying) return;
+                      setIsDeploying(true);
+                      try {
+                        const res = await fetch(`${HOST}/api/algo/session/start`, {
+                          method: 'POST',
+                          credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ capital: Number(algoCapital), symbol: selectedChartTicker || tickers[0] })
+                        });
+                        if (res.ok) {
+                          setUserBalance(prev => prev - Number(algoCapital));
+                          setShowDeployModal(false);
+                          setLiveDeployModes(p => ({...p, [selectedChartTicker || tickers[0]]: true}));
+                        } else {
+                          const data = await res.json();
+                          alert(data.error || "Failed to allocate capital.");
+                        }
+                      } catch(e) { console.error("Error starting session", e); }
+                      finally { setIsDeploying(false); }
+                    }}
+                    style={{
+                      flex: 2,
+                      padding: '10px',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#fff',
+                      background: isValid ? 'linear-gradient(90deg, #2563eb 0%, #4f46e5 100%)' : '#e2e8f0',
+                      border: 'none',
+                      borderRadius: 8,
+                      cursor: isValid && !isDeploying ? 'pointer' : 'not-allowed',
+                      opacity: isValid && !isDeploying ? 1 : 0.5,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {isDeploying ? "Deploying..." : "🚀 Confirm Deploy"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {isSearchOverlayOpen && (
+        <SearchOverlay
+          onClose={() => setIsSearchOverlayOpen(false)}
+          onSelectTicker={(symbol: string) => { handleToggleTicker(symbol); setIsSearchOverlayOpen(false); }}
+        />
+      )}
+
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+

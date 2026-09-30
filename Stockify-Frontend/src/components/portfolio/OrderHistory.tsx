@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext, useRef, useCallback } from "react";
+import React, { useEffect, useState, useContext, useRef, useCallback } from "react";
 import { AuthContext } from "../../auth/AuthProvider";
 import "../../Styles/OrderHistory.css";
 
@@ -20,6 +20,8 @@ type Order = {
   updated_at_ist: string | null;
   executed_at_ist: string | null;
   realized_pnl?: string | number | null;
+  reason?: string;
+  inner_trades?: Order[];
 };
 
 type StoplossOrder = {
@@ -37,7 +39,7 @@ type StoplossOrder = {
   updated_at: string;
 };
 
-type Tab = "orders" | "stoploss";
+type Tab = "orders" | "stoploss" | "algo_orders";
 
 const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
 
@@ -92,7 +94,7 @@ function OrdersTab() {
     let mounted = true;
     setLoading(true);
 
-    fetch(`${HOST}/api/holdings/orders?page=${page}&limit=20`, { credentials: "include" })
+    fetch(`${HOST}/api/holdings/orders?page=${page}&limit=20&is_algo=false`, { credentials: "include" })
       .then(r => r.json())
       .then((data: Order[]) => {
         if (!mounted) return;
@@ -203,6 +205,165 @@ function OrdersTab() {
           })}
           {loading && Array.from({ length: orders.length === 0 ? 6 : 2 }).map((_, i) => (
             <SkeletonRow key={`sk-${i}`} cols={11} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+
+/* ═══════════════════════════════════════════
+   ALGO ORDERS TAB
+═══════════════════════════════════════════ */
+function AlgoOrdersTab() {
+  const { user } = useContext(AuthContext);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const observer = useRef<IntersectionObserver | null>(null);
+
+  const lastRef = useCallback((node: HTMLTableRowElement | null) => {
+    if (loading) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) setPage(p => p + 1);
+    });
+    if (node) observer.current.observe(node);
+  }, [loading, hasMore]);
+
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+    setLoading(true);
+
+    fetch(`${HOST}/api/holdings/orders?page=${page}&limit=20&is_algo=true`, { credentials: "include" })
+      .then(r => r.json())
+      .then((data: Order[]) => {
+        if (!mounted) return;
+        const deduped = Array.from(new Map(data.map(o => [o.id, o])).values());
+        setOrders(prev => page === 1 ? deduped : [...prev, ...deduped.filter(o => !prev.some(p => p.id === o.id))]);
+        setHasMore(deduped.length === 20);
+        setLoading(false);
+      })
+      .catch(() => { if (mounted) { setError("Failed to load algo orders"); setLoading(false); } });
+
+    return () => { mounted = false; };
+  }, [user, page]);
+
+  if (error) return <p className="oh-empty">{error}</p>;
+  if (!loading && orders.length === 0) return (
+    <div className="oh-empty-state">
+      <div className="oh-empty-icon">🤖</div>
+      <p className="oh-empty-title">No algo orders yet</p>
+      <p className="oh-empty-sub">Your automated trading sessions will appear here.</p>
+    </div>
+  );
+
+  return (
+    <div className="oh-table-wrap">
+      <table className="oh-table">
+        <thead>
+          <tr>
+            <th>Session</th>
+            <th>Stock</th>
+            <th>Condition</th>
+            <th>Trades</th>
+            <th>Capital Allocation</th>
+            <th>P&amp;L</th>
+            <th>Status</th>
+            <th>Date &amp; Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((order, i) => {
+            const isLast = i === orders.length - 1;
+            const pnl = order.realized_pnl != null ? Number(order.realized_pnl) : null;
+            return (
+              <React.Fragment key={order.id}>
+              <tr ref={isLast ? lastRef : null} className="oh-row">
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {order.inner_trades && order.inner_trades.length > 0 && (
+                      <button 
+                        onClick={() => setExpanded(p => ({ ...p, [order.id]: !p[order.id] }))}
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontSize: '14px', width: '16px', color: '#64748b' }}
+                      >
+                        {expanded[order.id] ? '▼' : '▶'}
+                      </button>
+                    )}
+                    <span className="oh-type-pill" style={{ background: '#f3e8ff', color: '#8b5cf6' }}>ALGO SESSION</span>
+                  </div>
+                </td>
+                <td>
+                  <div className="oh-stock-cell">
+                    <span className="oh-stock-name">{order.name || order.symbol}</span>
+                    <span className="oh-stock-symbol">{order.symbol}</span>
+                  </div>
+                </td>
+                <td style={{ color: '#64748b', fontSize: '12px' }}>{order.reason?.replace('Algo Session: ', '') || '—'}</td>
+                <td className="oh-num">{order.inner_trades?.length || order.quantity || 0} Trades</td>
+                <td className="oh-num">{order.total_price ? (order.total_price.toFixed ? order.total_price.toFixed(2) : order.total_price) : '—'}</td>
+                <td className="oh-num">
+                  {pnl != null ? (
+                    <span className={`oh-pnl ${pnl >= 0 ? 'oh-profit' : 'oh-loss'}`}>
+                      {pnl >= 0 ? '+' : ''}{(pnl.toFixed ? pnl.toFixed(2) : pnl)}
+                    </span>
+                  ) : <span className="oh-null">—</span>}
+                </td>
+                <td>
+                  <span className={`oh-status oh-status-${order.status?.toLowerCase()}`}>
+                    {order.status}
+                  </span>
+                </td>
+                <td>
+                  <div className="oh-date-cell">
+                    <span className="oh-date-exec">{(order.updated_at_ist || order.executed_at_ist || order.created_at_ist)?.replace(/Z$/, "").replace(/[+-]\d{2}:\d{2}$/, "") || '—'}</span>
+                  </div>
+                </td>
+              </tr>
+              {expanded[order.id] && order.inner_trades && order.inner_trades.length > 0 && (
+                <tr className="oh-row oh-inner-trades-row">
+                  <td colSpan={8} style={{ padding: '0', background: '#f8fafc' }}>
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
+                      <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ color: '#94a3b8', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                            <th style={{ padding: '6px 8px', fontWeight: 500 }}>Time</th>
+                            <th style={{ padding: '6px 8px', fontWeight: 500 }}>Side</th>
+                            <th style={{ padding: '6px 8px', fontWeight: 500, textAlign: 'right' }}>Qty</th>
+                            <th style={{ padding: '6px 8px', fontWeight: 500, textAlign: 'right' }}>Price</th>
+                            <th style={{ padding: '6px 8px', fontWeight: 500 }}>Condition</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {order.inner_trades.map(inner => (
+                            <tr key={inner.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '6px 8px', color: '#64748b' }}>{(inner.executed_at_ist || inner.created_at_ist)?.replace(/Z$/, "").replace(/[+-]\d{2}:\d{2}$/, "")}</td>
+                              <td style={{ padding: '6px 8px' }}>
+                                <span className={`oh-side ${inner.side === 'BUY' ? 'oh-buy' : 'oh-sell'}`} style={{ padding: '2px 6px', fontSize: '10px' }}>
+                                  {inner.side}
+                                </span>
+                              </td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 500 }}>{inner.quantity}</td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right' }}>{inner.price != null ? inner.price : '—'}</td>
+                              <td style={{ padding: '6px 8px', color: '#64748b' }}>{inner.reason || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
+            );
+          })}
+          {loading && Array.from({ length: orders.length === 0 ? 6 : 2 }).map((_, i) => (
+            <SkeletonRow key={`sk-${i}`} cols={8} />
           ))}
         </tbody>
       </table>
@@ -407,8 +568,8 @@ function StoplossTab() {
 /* ═══════════════════════════════════════════
    MAIN EXPORT
 ═══════════════════════════════════════════ */
-export default function OrderHistory() {
-  const [tab, setTab] = useState<Tab>("orders");
+export default function OrderHistory({ isAlgoOnly }: { isAlgoOnly?: boolean }) {
+  const [tab, setTab] = useState<Tab>(isAlgoOnly ? "algo_orders" : "orders");
 
   return (
     <div className="oh-wrapper">
@@ -430,12 +591,20 @@ export default function OrderHistory() {
           >
             ⚡ Stoploss Orders
           </button>
+          <button
+            id="algo-tab-btn"
+            className={`oh-tab-btn ${tab === "algo_orders" ? "oh-tab-active oh-tab-algo" : ""}`}
+            onClick={() => setTab("algo_orders")}
+          >
+            🤖 Algo Orders
+          </button>
         </div>
       </div>
 
       {/* Content */}
       <div className="oh-card">
         {tab === "orders" && <OrdersTab />}
+        {tab === "algo_orders" && <AlgoOrdersTab />}
         {tab === "stoploss" && <StoplossTab />}
       </div>
     </div>
