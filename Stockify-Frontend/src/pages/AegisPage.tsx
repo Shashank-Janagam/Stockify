@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useContext, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AuthContext } from "../auth/AuthProvider";
 import { StockChartIndia } from "../components/charts/StocksChartIndia";
-import IndicatorCard, { parseIndicators } from "../components/aegis/IndicatorCard";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import "../Styles/Aegis.css";
 import aegisLogo from "../assets/logos/aegis.png";
@@ -154,7 +153,7 @@ function inlineMd(text: string): string {
   return text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:11px">$1</code>');
+    .replace(/`(.+?)`/g, '<code class="aegis-inline-code">$1</code>');
 }
 
 /* ─── Beautiful Table Component ─── */
@@ -919,23 +918,7 @@ function NewsCarouselCard({ payload, onAction }: { payload: any, onAction: (msg:
 }
 
 /* ─── Smart Message Renderer ─── */
-function SmartMessage({ content, indicators, onAction }: { content: string; indicators: ReturnType<typeof parseIndicators>, onAction: (msg: string) => void }) {
-  // If we have indicator data, show the card with properly rendered surrounding text
-  if (indicators) {
-    return (
-      <>
-        {indicators.textBefore && (
-          <div className="aegis-msg-ai-text"
-            dangerouslySetInnerHTML={{ __html: renderMarkdownText(indicators.textBefore) }} />
-        )}
-        <IndicatorCard data={indicators} />
-        {indicators.textAfter && (
-          <div className="aegis-msg-ai-text"
-            dangerouslySetInnerHTML={{ __html: renderMarkdownText(indicators.textAfter) }} />
-        )}
-      </>
-    );
-  }
+function SmartMessage({ content, onAction }: { content: string; onAction: (msg: string) => void }) {
 
   // Intercept structured JSON payloads
   let cleanContent = content;
@@ -1231,8 +1214,11 @@ export default function AegisPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlChatId = searchParams.get('chat');
+
   const [activeConvId, setActiveConvId] = useState<string | null>(() => {
-    return localStorage.getItem('aegis-active-conv') || null;
+    return urlChatId || localStorage.getItem('aegis-active-conv') || crypto.randomUUID();
   });
   const [serverConvs, setServerConvs] = useState<ConvMeta[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -1255,10 +1241,16 @@ export default function AegisPage() {
   useEffect(() => {
     if (activeConvId) {
       localStorage.setItem('aegis-active-conv', activeConvId);
+      if (searchParams.get('chat') !== activeConvId) {
+        setSearchParams({ chat: activeConvId }, { replace: true });
+      }
     } else {
       localStorage.removeItem('aegis-active-conv');
+      if (searchParams.has('chat')) {
+        setSearchParams({}, { replace: true });
+      }
     }
-  }, [activeConvId]);
+  }, [activeConvId, searchParams, setSearchParams]);
 
   useEffect(() => {
     localStorage.setItem('aegis_risk_profile', riskProfile);
@@ -1342,7 +1334,8 @@ export default function AegisPage() {
 
   /* Load a single conversation */
   const loadConversation = async (id: string) => {
-    if (streaming || id === activeConvId) return;
+    if (streaming) return;
+    if (id === activeConvId && messages.length > 0) return;
     
     // Immediate UI feedback
     setActiveConvId(id);
@@ -1369,6 +1362,8 @@ export default function AegisPage() {
 
   /* New chat */
   const newChat = () => {
+    if (messages.length === 0) return; // Already in a new/empty chat
+    
     if (abortRef.current) abortRef.current.abort();
     setMessages([]);
     setActiveConvId(crypto.randomUUID());
@@ -1381,21 +1376,20 @@ export default function AegisPage() {
     const text = (forcedText || input).trim();
     if (!text || streaming) return;
 
-    // Create conv id if needed
     const convId = activeConvId || crypto.randomUUID();
     if (!activeConvId) {
       setActiveConvId(convId);
-      // Eagerly add to sidebar so it reflects immediately
-      setServerConvs(prev => {
-        // Only add if not already there
-        if (prev.some(c => c.id === convId)) return prev;
-        return [{ 
-          id: convId, 
-          title: text.length > 30 ? text.slice(0, 30) + "..." : text, 
-          updatedAt: new Date().toISOString() 
-        }, ...prev];
-      });
     }
+    
+    // Eagerly add to sidebar so it reflects immediately for new chats
+    setServerConvs(prev => {
+      if (prev.some(c => c.id === convId)) return prev;
+      return [{ 
+        id: convId, 
+        title: text.length > 30 ? text.slice(0, 30) + "..." : text, 
+        updatedAt: new Date().toISOString() 
+      }, ...prev];
+    });
 
     const now = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
@@ -1703,7 +1697,6 @@ export default function AegisPage() {
                     {msg.content ? (
                       <SmartMessage
                         content={msg.content}
-                        indicators={!msg.isStreaming ? parseIndicators(msg.content) : null}
                         onAction={onQuickAction}
                       />
                     ) : (

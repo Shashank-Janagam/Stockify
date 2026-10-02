@@ -79,8 +79,6 @@ def start_algo_session(config: RunnableConfig, strategy: str, symbol: str = None
                 if strat:
                     if not symbol and strat.get('tickers') and len(strat['tickers']) > 0:
                         symbol = strat['tickers'][0]
-                    if not capital and strat.get('capital'):
-                        capital = float(strat['capital'])
         except Exception:
             pass
             
@@ -88,6 +86,16 @@ def start_algo_session(config: RunnableConfig, strategy: str, symbol: str = None
         return json.dumps({"error": "Could not determine symbol to trade. Please provide one."})
     if not capital:
         return json.dumps({"error": "Could not determine capital to allocate. Please provide one."})
+
+    # Clamp capital to available balance to prevent "Insufficient balance" errors
+    try:
+        bal_res = requests.get(f"{NODE_BACKEND_URL}/api/portfolio/balance", headers=headers, timeout=10)
+        if bal_res.status_code == 200:
+            available = bal_res.json().get("available_balance", 0)
+            if capital > available and available > 0:
+                capital = available
+    except Exception:
+        pass
 
     try:
         # 1. Deduct capital from wallet via Node backend
@@ -152,7 +160,7 @@ def stop_algo_session(config: RunnableConfig, session_id: str) -> str:
                 "symbol": stats.get("symbol", ""),
                 "strategyName": stats.get("strategy_name", ""),
                 "pnl": stats.get("live_pnl", 0),
-                "trades": [],  # Background tasks don't maintain trade lists yet
+                "trades": stats.get("trades", []),
                 "sessionId": session_id
             },
             headers=headers,
@@ -187,6 +195,23 @@ def save_strategy(config: RunnableConfig, strategy_json: str) -> str:
         
     if "name" not in strategy:
         return json.dumps({"error": "Strategy JSON must include a 'name' field."})
+
+    # Map schema from AI generator format to frontend UI format
+    if "buy_strategy" in strategy and "buyDsl" not in strategy:
+        strategy["buyDsl"] = strategy.pop("buy_strategy")
+    elif "entry_conditions" in strategy and "buyDsl" not in strategy:
+        strategy["buyDsl"] = {"operator": "AND", "conditions": strategy.pop("entry_conditions")}
+
+    if "sell_strategy" in strategy and "sellDsl" not in strategy:
+        strategy["sellDsl"] = strategy.pop("sell_strategy")
+    elif "exit_conditions" in strategy and "sellDsl" not in strategy:
+        strategy["sellDsl"] = {"operator": "AND", "conditions": strategy.pop("exit_conditions")}
+
+    if "symbol" in strategy and "tickers" not in strategy:
+        strategy["tickers"] = [strategy.pop("symbol")]
+        
+    if "stopLossPct" not in strategy and "stop_loss_pct" in strategy:
+        strategy["stopLossPct"] = strategy.pop("stop_loss_pct")
 
     # Ensure buyDsl and sellDsl are JSON strings as required by the frontend
     if "buyDsl" in strategy and not isinstance(strategy["buyDsl"], str):

@@ -1,0 +1,9 @@
+data: {"type": "status", "text": "Running get_user_balance..."}
+data: {"type": "status", "text": "Finished get_user_balance..."}
+data: {"type": "token", "text": "Your available"}
+data: {"type": "token", "text": " cash is ₹50,000, and your total account balance is ₹5"}
+data: {"type": "token", "text": "0,000 with no blocked margin.\n\n- **Available Cash:** ₹50,000\n- **Blocked Margin"}
+data: {"type": "token", "text": ":** ₹0\n- **Total Account Balance:** ₹50,000"}
+data: {"type": "token", "text": ""}
+data: {"type": "trace", "agents": ["parse_intent", "portfolio", "agent", "tools", "evaluate", "respond"], "tools": ["get_user_balance"]}
+data: {"type": "done"}

@@ -102,8 +102,8 @@ async def _stream_graph(messages: List[ChatMessage], thread_id: str, uid: Option
 
         config = {"configurable": {"thread_id": thread_id, "uid": uid}}
         
-        # Inject uid and displayName into the root state directly if needed, but it's passed via config
-        state_input = {"messages": lc_messages, "uid": uid, "displayName": displayName, "preferences": preferences}
+        # Inject user_id and displayName into the root state directly if needed, but it's passed via config
+        state_input = {"messages": lc_messages, "user_id": uid, "displayName": displayName, "preferences": preferences}
 
         # Keep track of debug traces
         agents_used = []
@@ -200,13 +200,8 @@ async def _stream_graph(messages: List[ChatMessage], thread_id: str, uid: Option
             
             # --- Text Token Streaming ---
             elif kind == "on_chat_model_stream":
-                # Do NOT stream internal thoughts/routing JSON from the router/planner nodes
-                if node_name in ("router", "planner", "planner_update"):
-                    continue
-                    
-                # If multiple agents are running, mute their individual token streams
-                # and ONLY stream the final Synthesizer output
-                if will_synthesize and node_name != "synthesizer":
+                # Only stream tokens from the final synthesis node
+                if node_name != "respond":
                     continue
 
                 chunk = event["data"]["chunk"]
@@ -219,6 +214,16 @@ async def _stream_graph(messages: List[ChatMessage], thread_id: str, uid: Option
                                 yield sse({"type": "token", "text": p["text"]})
                             elif isinstance(p, str):
                                 yield sse({"type": "token", "text": p})
+            
+            # --- Static Message Nodes ---
+            elif kind == "on_chain_end" and node_name in ("clarify", "propose", "execute", "discard", "no_pending"):
+                output = event.get("data", {}).get("output", {})
+                if output and isinstance(output, dict) and "messages" in output:
+                    msgs = output["messages"]
+                    if msgs:
+                        last_msg = msgs[-1]
+                        text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                        yield sse({"type": "token", "text": text})
             
             # (Optional) Tool end for completion feedback
             elif kind == "on_tool_end":
@@ -238,7 +243,14 @@ async def _stream_graph(messages: List[ChatMessage], thread_id: str, uid: Option
 
     except Exception as e:
         print(f"[AEGIS Server Error] {e}")
-        yield sse({"type": "error", "text": str(e)})
+        error_str = str(e)
+        if "403" in error_str or "PERMISSION_DENIED" in error_str or "leaked" in error_str:
+            friendly_msg = "It looks like my internal systems encountered an authentication issue. Please ask my developers to check the LLM API configuration."
+        elif "429" in error_str or "quota" in error_str.lower():
+            friendly_msg = "I'm currently receiving too many requests. Please try again in a moment."
+        else:
+            friendly_msg = "I encountered an unexpected internal error while processing your request. Please try again or rephrase."
+        yield sse({"type": "error", "text": friendly_msg})
         yield sse({"type": "done"})
 
 

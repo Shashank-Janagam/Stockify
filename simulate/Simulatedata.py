@@ -6,7 +6,7 @@ import pandas as pd
 
 data_cache = {}
 
-def get_historical_data(symbol="RELIANCE.NS", period="1d", interval="1m"):
+def get_historical_data(symbol="RELIANCE.NS", period="5d", interval="1m"):
     """
     Fetch historical data from Yahoo Finance.
     We cache it to avoid hitting rate limits on reconnects.
@@ -33,11 +33,14 @@ def get_historical_data(symbol="RELIANCE.NS", period="1d", interval="1m"):
     hist = ticker.history(period=period, interval=interval)
     hist.reset_index(inplace=True)
     
-    # Filter to start from 9:15 AM local time
     if not hist.empty:
         time_col = 'Datetime' if 'Datetime' in hist.columns else 'Date'
-        # Extract time and filter >= 09:15
         if pd.api.types.is_datetime64_any_dtype(hist[time_col]):
+            # Get the very last trading day available in the 5d window
+            last_date = hist[time_col].dt.date.max()
+            hist = hist[hist[time_col].dt.date == last_date]
+            
+            # Filter to start from 9:15 AM local time
             hist = hist[hist[time_col].dt.time >= pd.to_datetime('09:15').time()]
             
     data_cache[symbol] = hist

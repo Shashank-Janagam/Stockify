@@ -1,0 +1,190 @@
+[
+  {
+    "id": "proj_1786818685491_kl7op7",
+    "name": "Strategy Project - SBIN(8/15/2026)",
+    "description": "3.21 profit",
+    "created_at": "2026-08-15T18:31:25.491Z",
+    "updated_at": "2026-08-15T19:06:16.862194+00:00",
+    "symbol": "SBIN",
+    "timeframe": {
+      "period": "1y",
+      "interval": "1h"
+    },
+    "initial_capital": 100000.0,
+    "strategy_config": {
+      "strategy_name": "Strategy Project - SBIN(8/15/2026)",
+      "indicators": [
+        {
+          "name": "EMA",
+          "key": "ema_5",
+          "params": {
+            "period": 5
+          }
+        },
+        {
+          "name": "EMA",
+          "key": "ema_10",
+          "params": {
+            "period": 10
+          }
+        },
+        {
+          "name": "EMA",
+          "key": "ema_20",
+          "params": {
+            "period": 20
+          }
+        },
+        {
+          "name": "EMA",
+          "key": "ema_50",
+          "params": {
+            "period": 50
+          }
+        }
+      ],
+      "trend_filter": {
+        "enabled": false,
+        "type": "GreaterThan",
+        "args": [
+          "close",
+          "close"
+        ]
+      },
+      "entry_rules": {
+        "type": "OR",
+        "conditions": [
+          {
+            "type": "CrossAbove",
+            "args": [
+              "ema_5",
+              "ema_10"
+            ]
+          },
+          {
+            "type": "CrossAbove",
+            "args": [
+              "ema_20",
+              "ema_50"
+            ]
+          },
+          {
+            "type": "CrossAbove",
+            "args": [
+              "ema_5",
+              "ema_20"
+            ]
+          },
+          {
+            "type": "CrossAbove",
+            "args": [
+              "close",
+              "ema_50"
+            ]
+          },
+          {
+            "type": "CrossAbove",
+            "args": [
+              "close",
+              "ema_20"
+            ]
+          },
+          {
+            "type": "CrossAbove",
+            "args": [
+              "close",
+              "ema_5"
+            ]
+          },
+          {
+            "type": "CrossAbove",
+            "args": [
+              "close",
+              "ema_10"
+            ]
+          }
+        ]
+      },
+      "exit_rules": {
+        "type": "OR",
+        "conditions": [
+          {
+            "type": "CrossAbove",
+            "args": [
+              "close",
+              "ema_5"
+            ]
+          },
+          {
+            "type": "CrossBelow",
+            "args": [
+              "close",
+              "ema_5"
+            ]
+          },
+          {
+            "type": "CrossBelow",
+            "args": [
+              "close",
+              "ema_20"
+            ]
+          },
+          {
+            "type": "CrossBelow",
+            "args": [
+              "ema_5",
+              "ema_10"
+            ]
+          },
+          {
+            "type": "CrossBelow",
+            "args": [
+              "close",
+              "ema_50"
+            ]
+          },
+          {
+            "type": "CrossBelow",
+            "args": [
+              "close",
+              "ema_10"
+            ]
+          }
+        ]
+      },
+      "position_sizing": {
+        "mode": "ATR_BASED",
+        "percent_equity": 15,
+        "fixed_qty": 25,
+        "risk_per_trade_pct": 1
+      },
+      "risk_management": {
+        "stop_loss": {
+          "type": "TRAILING_PCT",
+          "value": 0.6,
+          "multiplier": 1.5
+        },
+        "take_profit": {
+          "type": "RISK_REWARD",
+          "value": 3.5,
+          "ratio": 2
+        },
+        "breakeven_trigger_pct": 1.5
+      },
+      "portfolio_guardrails": {
+        "max_open_positions": 5,
+        "reentry_cooldown_bars": 3,
+        "trade_window_start": "09:30",
+        "trade_window_end": "15:00",
+        "intraday_square_off": ""
+      }
+    },
+    "last_report": {
+      "totalReturnPct": 3.36,
+      "winRatePct": 55.83,
+      "totalTrades": 120,
+      "finalEquity": 103357.75,
+      "backtestedAt": "2026-08-15T19:06:16.845Z"
+    }
+  }
+]
