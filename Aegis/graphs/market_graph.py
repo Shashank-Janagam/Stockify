@@ -32,7 +32,8 @@ from agents.research_agent import research_agent_executor, RESEARCH_SYSTEM_PROMP
 from agents.risk_agent import risk_agent_executor, RISK_SYSTEM_PROMPT
 from agents.strategy_agent import strategy_agent_executor, STRATEGY_SYSTEM_PROMPT
 from agents.portfolio_agent import portfolio_agent_executor, PORTFOLIO_SYSTEM_PROMPT
-from agents.casual_agent import casual_chain
+from agents.algo_agent import algo_agent_executor, ALGO_SYSTEM_PROMPT
+from agents.casual_agent import casual_agent
 
 
 # ── Agent Registry ──────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ AGENT_REGISTRY = {
     "risk_agent":      (risk_agent_executor,       RISK_SYSTEM_PROMPT,      False),
     "strategy_agent":  (strategy_agent_executor,   STRATEGY_SYSTEM_PROMPT,  False),
     "portfolio_agent": (portfolio_agent_executor,  PORTFOLIO_SYSTEM_PROMPT, True),
+    "algo_agent":      (algo_agent_executor,       ALGO_SYSTEM_PROMPT,      True),
 }
 
 
@@ -57,13 +59,19 @@ async def _run_single_agent(agent_name: str, instruction: str, state: MarketStat
     
     # Keep last 6 messages for context, plus inject the specific instruction
     recent = messages[-6:] if len(messages) > 6 else messages
+    preferences = state.get("preferences", {})
+    prefs_text = ""
+    if preferences:
+        prefs_text = f"\nUser's Trading Preferences:\n- Risk Profile: {preferences.get('riskProfile', 'N/A')}\n- Preferred Timeframe: {preferences.get('timeframePref', 'N/A')}\n(Tailor your analysis and strategy recommendations to these preferences.)"
+
     recent_with_instruction = recent + [
-        SystemMessage(content=f"TASK FOR THIS STEP: {instruction}")
+        SystemMessage(content=f"TASK FOR THIS STEP: {instruction}{prefs_text}")
     ]
 
     if agent_name == "casual_agent":
         try:
-            response = await casual_chain.ainvoke({"messages": recent_with_instruction})
+            res = await casual_agent(state)
+            response = res["messages"][0]
             content = response.content if hasattr(response, "content") else str(response)
             if isinstance(content, list):
                 content = "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in content)

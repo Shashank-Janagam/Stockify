@@ -191,7 +191,7 @@ const AEGIS_PYTHON_URL = process.env.AEGIS_PYTHON_URL || 'http://127.0.0.1:5050'
 
 /* POST /api/ai/aegis/chat */
 router.post('/aegis/chat', requireAuth, async (req, res) => {
-  const { messages, thread_id, mode } = req.body;
+  const { messages, thread_id, mode, displayName, preferences } = req.body;
   const uid = req.user?.uid || req.user?.id || null; // injected by requireAuth middleware
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'messages array is required' });
@@ -218,6 +218,8 @@ router.post('/aegis/chat', requireAuth, async (req, res) => {
         })),
         thread_id: thread_id || undefined,
         uid: uid, // ← forward authenticated user UID for portfolio/trading tools
+        displayName: displayName, // ← forward user's display name
+        preferences: preferences, // ← forward user's trading preferences
         mode: mode || "deep", // default to deep research mode
 
       }),

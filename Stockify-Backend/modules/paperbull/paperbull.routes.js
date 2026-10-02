@@ -84,4 +84,38 @@ router.get('/strategies', requireAuth, async (req, res) => {
     }
 });
 
+// Delete a Single Strategy by ID
+router.delete('/strategy/:id', requireAuth, async (req, res) => {
+    try {
+        const db = getDb();
+        const collection = db.collection('paperbull_strategies');
+
+        const result = await collection.deleteOne({ _id: new ObjectId(req.params.id), userId: req.user.uid });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ success: false, message: "Strategy not found or unauthorized" });
+        }
+
+        res.status(200).json({ success: true, message: "Strategy deleted successfully" });
+    } catch (error) {
+        console.error("Error deleting strategy:", error);
+        res.status(500).json({ success: false, message: "Failed to delete strategy" });
+    }
+});
+
+// Delete All Strategies for User
+router.delete('/strategies/all', requireAuth, async (req, res) => {
+    try {
+        const db = getDb();
+        const collection = db.collection('paperbull_strategies');
+
+        const result = await collection.deleteMany({ userId: req.user.uid });
+
+        res.status(200).json({ success: true, message: `Deleted ${result.deletedCount} strategy(ies).`, count: result.deletedCount });
+    } catch (error) {
+        console.error("Error deleting all strategies:", error);
+        res.status(500).json({ success: false, message: "Failed to delete strategies" });
+    }
+});
+
 export default router;

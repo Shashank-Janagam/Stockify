@@ -9,8 +9,8 @@ from models.llm_factory import get_llm
 
 class RouteDecision(BaseModel):
     """Route the user query to the appropriate agent."""
-    routes: list[Literal["market", "research", "risk", "strategy", "portfolio", "casual"]] = Field(
-        description="The agents required to answer the user's query. Return 'portfolio' for trading/portfolio/holdings, 'market' for price/technical/fundamentals, 'research' for news/macro, 'risk' for downside/volatility/beta, 'strategy' for trading strategy design/creation, 'casual' for simple conversational greetings, or a combination."
+    routes: list[Literal["market", "research", "risk", "strategy", "portfolio", "casual", "algo"]] = Field(
+        description="The agents required to answer the user's query. Return 'portfolio' for trading/portfolio/holdings, 'market' for price/technical/fundamentals, 'research' for news/macro, 'risk' for downside/volatility/beta, 'strategy' for trading strategy design/creation, 'algo' for active algorithmic trading sessions, 'casual' for simple conversational greetings, or a combination."
     )
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
@@ -27,13 +27,15 @@ Agents:
 3. "risk": Specialized in institutional risk analysis, calculating downside potential, standard deviation, beta against benchmark, and max drawdowns.
 4. "strategy": Specialized in DESIGNING trading strategies AND running backtests. Route here when the user wants to CREATE, BUILD, or DESIGN a trading strategy or backtest plan.
 5. "portfolio": Specialized in user accounts, PnL, open positions, and executing trades (buy/sell orders). Route here when the user says "buy X", "sell Y", or asks "what's in my portfolio?".
-6. "casual": Use ONLY for basic conversational greetings (e.g. "Hi", "Hello", "How are you") or simple chat that requires no financial data.
+6. "algo": Specialized in ALGORITHMIC TRADING. Route here when the user asks to start/stop an algo, check active live algo sessions, or asks about their saved trading bots/strategies.
+7. "casual": Use ONLY for basic conversational greetings (e.g. "Hi", "Hello", "How are you") or simple chat that requires no financial data.
 
 IMPORTANT ROUTING RULES:
 - If a query asks to BUY or SELL a stock -> include "portfolio".
 - If the user is responding to a previous question about buying, selling, or trading (e.g., answering "which stocks to buy?") -> include "portfolio".
 - If a query asks about user holdings/balance/PnL -> include "portfolio".
 - If a query asks to CREATE or DESIGN a strategy/plan/backtest -> always include "strategy".
+- If a query asks to START, STOP, or CHECK ACTIVE algo trading bots -> include "algo".
 - If a query asks to list, find, or search for stocks in a sector -> include "market".
 - If a query asks about risk AND also wants a strategy -> return ["strategy", "risk"].
 - If a query requires both price data AND a strategy -> return ["market", "strategy"].

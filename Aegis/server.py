@@ -49,6 +49,8 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     thread_id: Optional[str] = None  # for conversation memory
     uid: Optional[str] = None        # Firebase UID for trading auth
+    displayName: Optional[str] = None # User's display name
+    preferences: Optional[dict] = None # User's trading preferences
     mode: Optional[str] = "deep"     # "fast" or "deep"
 
 # ── Health ────────────────────────────────────────────────────────────────────
@@ -74,7 +76,7 @@ def _extract_text(content) -> str:
     return str(content)
 
 
-async def _stream_graph(messages: List[ChatMessage], thread_id: str, uid: Optional[str] = None, mode: str = "deep"):
+async def _stream_graph(messages: List[ChatMessage], thread_id: str, uid: Optional[str] = None, displayName: Optional[str] = None, preferences: Optional[dict] = None, mode: str = "deep"):
     """
     Run the LangGraph market_graph and yield SSE events.
 
@@ -100,8 +102,8 @@ async def _stream_graph(messages: List[ChatMessage], thread_id: str, uid: Option
 
         config = {"configurable": {"thread_id": thread_id, "uid": uid}}
         
-        # Inject uid into the root state directly if needed, but it's passed via config
-        state_input = {"messages": lc_messages, "uid": uid}
+        # Inject uid and displayName into the root state directly if needed, but it's passed via config
+        state_input = {"messages": lc_messages, "uid": uid, "displayName": displayName, "preferences": preferences}
 
         # Keep track of debug traces
         agents_used = []
@@ -253,7 +255,7 @@ async def chat_stream(req: ChatRequest):
     thread_id = req.thread_id or str(uuid.uuid4())
 
     return StreamingResponse(
-        _stream_graph(req.messages, thread_id, req.uid, req.mode),
+        _stream_graph(req.messages, thread_id, req.uid, req.displayName, req.preferences, req.mode),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

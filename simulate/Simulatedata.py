@@ -15,7 +15,21 @@ def get_historical_data(symbol="RELIANCE.NS", period="1d", interval="1m"):
         return data_cache[symbol]
         
     print(f"Fetching historical data for {symbol}...")
-    ticker = yf.Ticker(symbol)
+    s_up = symbol.upper().replace(".NS", "").replace(".BO", "").strip()
+    if symbol.startswith("^"):
+        fetch_sym = symbol.replace(".NS", "").replace(".BO", "")
+    elif s_up in ["NIFTY 50", "NIFTY50", "NIFTY", "NIFTY_50"]:
+        fetch_sym = "^NSEI"
+    elif s_up in ["BANKNIFTY", "NIFTY BANK", "NIFTYBANK"]:
+        fetch_sym = "^NSEBANK"
+    elif s_up in ["SENSEX", "BSE SENSEX", "BSESN"]:
+        fetch_sym = "^BSESN"
+    elif s_up in ["FINNIFTY", "NIFTY FIN SERVICE"]:
+        fetch_sym = "^CNXFIN"
+    else:
+        fetch_sym = f"{symbol}.NS" if not symbol.endswith(".NS") and not symbol.endswith(".BO") else symbol
+        
+    ticker = yf.Ticker(fetch_sym)
     hist = ticker.history(period=period, interval=interval)
     hist.reset_index(inplace=True)
     
@@ -65,7 +79,7 @@ async def send_ticks(websocket, symbol):
             await websocket.send(json.dumps(tick))
             
             # Simulate a 1-second delay between ticks
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.2)
             
     except websockets.exceptions.ConnectionClosed:
         pass

@@ -13,50 +13,77 @@ import requests
 from langchain_core.tools import tool
 
 # AlgoTrading server base URL — configured via ALGO_TRADING_URL env var or localhost default
-ALGO_TRADING_URL = os.getenv("ALGO_TRADING_URL", "http://localhost:4001")
+ALGO_TRADING_URL = os.getenv("ALGO_TRADING_URL", "http://localhost:8000")
 
 
 # ─── Shared helpers ───────────────────────────────────────────────────────────
 
 def _format_report(report: dict, strategy_name: str) -> str:
     """Format a BacktestReport dict into a clean, readable string for the LLM."""
-    final_eq = report.get('final_equity')
+    final_eq = report.get('final_capital')
     final_eq_str = f"Rs.{final_eq:,.2f}" if isinstance(final_eq, (int, float)) else "N/A"
 
     lines = [
         f"**Backtest Report - {strategy_name}**",
         "",
-        f"- **Total Return:**      {report.get('total_return_pct', 'N/A')}%",
+        f"- **Total Return:**      {report.get('roi', 'N/A')}%",
         f"- **Final Equity:**      {final_eq_str}",
-        f"- **Win Rate:**          {report.get('win_rate_pct', 'N/A')}%",
-        f"- **Total Trades:**      {report.get('total_trades', 'N/A')}",
-        f"- **Wins / Losses:**     {report.get('wins', 'N/A')} W / {report.get('losses', 'N/A')} L",
-        f"- **Max Drawdown:**      {report.get('max_drawdown_pct', 'N/A')}%",
-        f"- **Sharpe Ratio:**      {report.get('sharpe_ratio', 'N/A')}",
-        f"- **Profit Factor:**     {report.get('profit_factor', 'N/A')}",
-        f"- **Gross Profit:**      {report.get('gross_profit', 'N/A')}",
-        f"- **Gross Loss:**        {report.get('gross_loss', 'N/A')}",
-        f"- **Period:**            {report.get('period_from', 'N/A')} to {report.get('period_to', 'N/A')}",
+        f"- **Total Trades:**      {report.get('trades', 'N/A')}",
+        f"- **Total PnL:**         {report.get('total_pnl', 'N/A')}",
+        f"- **Initial Capital:**   {report.get('initial_capital', 'N/A')}",
     ]
     return "\n".join(lines)
 
 
 def _run_backtest(strategy: dict, period: str, interval: str | None) -> tuple[dict | None, str | None]:
     """
-    Submit a strategy to the AlgoTrading server.
+    Submit a strategy to the AutoTrading server (/evaluate).
     Returns (report_dict, None) on success, or (None, error_str) on failure.
     """
+    from datetime import datetime, timedelta
+    
     symbol = strategy.get("symbol", "").strip().upper()
     if not symbol:
         return None, "Strategy JSON is missing the 'symbol' field."
 
-    payload = {"strategy": strategy, "symbol": symbol, "period": period}
-    if interval:
-        payload["interval"] = interval
+    # Map period to start_date and end_date
+    end_dt = datetime.now()
+    if period == "1y":
+        start_dt = end_dt - timedelta(days=365)
+    elif period == "6mo":
+        start_dt = end_dt - timedelta(days=180)
+    elif period == "3mo":
+        start_dt = end_dt - timedelta(days=90)
+    elif period == "1mo":
+        start_dt = end_dt - timedelta(days=30)
+    elif period == "1w":
+        start_dt = end_dt - timedelta(days=7)
+    else:
+        start_dt = end_dt - timedelta(days=365) # default 1y
+
+    buy_strategy = strategy.get("buy_strategy", strategy.get("entry_conditions", {"logic": "AND", "conditions": []}))
+    if isinstance(buy_strategy, list):
+        buy_strategy = {"logic": "AND", "conditions": buy_strategy}
+        
+    sell_strategy = strategy.get("sell_strategy", strategy.get("exit_conditions", {"logic": "AND", "conditions": []}))
+    if isinstance(sell_strategy, list):
+        sell_strategy = {"logic": "AND", "conditions": sell_strategy}
+        
+    payload = {
+        "ticker": symbol,
+        "start_date": start_dt.strftime("%Y-%m-%d"),
+        "end_date": end_dt.strftime("%Y-%m-%d"),
+        "buy_strategy": buy_strategy,
+        "sell_strategy": sell_strategy,
+        "initial_capital": strategy.get("capital", 100000.0),
+        "stop_loss_pct": strategy.get("stopLossPct", 0.05),
+        "stop_loss_type": strategy.get("stopLossType", "fixed"),
+        "timeframe": interval or "1D"
+    }
 
     try:
         response = requests.post(
-            f"{ALGO_TRADING_URL}/api/strategy/submit",
+            f"{ALGO_TRADING_URL}/evaluate",
             json=payload,
             timeout=120,
         )
@@ -64,8 +91,7 @@ def _run_backtest(strategy: dict, period: str, interval: str | None) -> tuple[di
         data = response.json()
     except requests.exceptions.ConnectionError:
         return None, (
-            f"Could not connect to AlgoTrading server at {ALGO_TRADING_URL}. "
-            "Ensure `node server.js` is running in the AlgoTrading directory."
+            f"Could not connect to AutoTrading server at {ALGO_TRADING_URL}. "
         )
     except requests.exceptions.Timeout:
         return None, "Backtest request timed out (>120s). Try a shorter period."
@@ -79,9 +105,9 @@ def _run_backtest(strategy: dict, period: str, interval: str | None) -> tuple[di
         return None, f"Unexpected error: {e}"
 
     if not data.get("success"):
-        return None, data.get("error", "Unknown error from AlgoTrading server.")
+        return None, data.get("error", "Unknown error from AutoTrading server.")
 
-    return data.get("report", {}), None
+    return data.get("portfolio_summary", {}), None
 
 
 def _criteria_met(

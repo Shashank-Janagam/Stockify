@@ -13,6 +13,8 @@ class MarketState(TypedDict):
     # Auth context — Firebase uid + backend bearer token for trading tools
     uid: Optional[str]
     user_token: Optional[str]
+    displayName: Optional[str]
+    preferences: Optional[dict]
 
     # Pending trade awaiting user confirmation from the frontend
     pending_trade: Optional[dict]

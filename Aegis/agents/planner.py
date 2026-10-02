@@ -31,7 +31,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 class PlanStep(BaseModel):
     agent: Literal[
         "market_agent", "research_agent", "risk_agent",
-        "strategy_agent", "portfolio_agent", "casual_agent"
+        "strategy_agent", "portfolio_agent", "casual_agent", "algo_agent"
     ] = Field(description="The specialized agent for this step.")
     instruction: str = Field(
         description="Detailed, self-contained instruction for this agent. Must include all relevant tickers, timeframes, or context the agent needs — it cannot see any other agent's instruction."
@@ -52,17 +52,19 @@ class Plan(BaseModel):
 # ─── Prompt ───────────────────────────────────────────────────────────────────
 
 PLANNER_PROMPT = """You are the Aegis Orchestrator. Break down the user's query into an optimal parallel execution plan.
+{name_context}
 
 ## AGENT CAPABILITIES (strictly enforced — do NOT mix these up)
 
-| Agent | Handles | CANNOT handle |
-|---|---|---|
-| market_agent | Stock prices, quotes, technicals, financials, fundamentals, P/E, EPS, sector search, stock comparison | News, trades, strategies, risk metrics |
-| research_agent | Financial news, company announcements (filings), macroeconomic data (RBI/MOSPI), web search | Prices, trades, risk metrics, strategies |
-| risk_agent | Beta, Sharpe ratio, 30-day volatility, drawdown, VaR, correlation | Prices, news, trades, strategies |
-| strategy_agent | Designing trading strategies, backtesting, optimizing strategies | Prices, news, trades, risk metrics |
-| portfolio_agent | Execute BUY or SELL orders, check portfolio balance, check holdings, check transaction history | Searching stocks, fetching prices, news |
-| casual_agent | Greetings, thank-you, general chat ONLY (NOT finance-related questions) | Anything finance-related |
+| Agent | Tools Contained | Handles | CANNOT handle |
+|---|---|---|---|
+| market_agent | `get_stock_quote`, `get_stock_history`, `search_stocks`, `get_stock_profile`, `get_sector_peers`, `get_stocks_in_sector`, `get_financials`, `get_metrics`, `get_analyst_recs`, `get_technicals`, `get_options`, `get_indices`, `get_movers` | Stock prices, quotes, technicals, financials, fundamentals, P/E, EPS, sector search, stock comparison | News, trades, strategies, risk metrics |
+| research_agent | `get_financial_news`, `get_company_announcements`, `get_macro_data`, `search_web`, `get_company_fundamental_data`, `get_detailed_financial_statements`, `get_stock_analyst_recommendations` | Financial news, company announcements (filings), macroeconomic data (RBI/MOSPI), web search | Prices, trades, risk metrics, strategies |
+| risk_agent | `get_risk` | Beta, Sharpe ratio, 30-day volatility, drawdown, VaR, correlation | Prices, news, trades, strategies |
+| strategy_agent | `submit_strategy_for_backtest`, `backtest_and_refine`, `save_strategy`, `delete_strategy`, `delete_all_strategies` | Designing trading strategies, backtesting, optimizing strategies, deleting strategies, managing saved strategies | Prices, news, trades, risk metrics |
+| portfolio_agent | `check_portfolio`, `get_user_balance`, `get_portfolio_allocation`, `get_user_orders`, `get_pending_stoploss_orders`, `cancel_stoploss_order`, `get_user_transactions`, `buy_stock`, `sell_stock` | Execute BUY or SELL orders, check portfolio balance, check holdings, check transaction history | Searching stocks, fetching prices, news |
+| algo_agent | `get_active_algo_sessions`, `get_saved_strategies`, `start_algo_session`, `stop_algo_session` | Fetching running algorithmic trading bots/sessions, fetching saved PaperBull strategies, and starting/stopping live algos | Executing manual trades, designing strategies |
+| casual_agent | *(No tools)* | Greetings, thank-you, general chat ONLY (NOT finance-related questions) | Anything finance-related |
 
 ## PLANNING RULES
 
@@ -79,8 +81,9 @@ PLANNER_PROMPT = """You are the Aegis Orchestrator. Break down the user's query 
 - Does it ONLY need prices/data? → market_agent alone
 - Does it ONLY need news/macro/filings? → research_agent alone
 - Does it ONLY need risk metrics? → risk_agent alone
-- Does it ONLY need a strategy/backtest? → strategy_agent alone
+- Does it ONLY need a strategy/backtest or strategy deletion? → strategy_agent alone
 - Does it ONLY need a trade/portfolio action? → portfolio_agent alone
+- Does it ONLY need to check or start/stop algorithmic trading sessions? → algo_agent alone
 - Does it need data THEN trade? → group 1: [market_agent] → group 2: [portfolio_agent]
 - Does it need parallel data (prices + news)? → group 1: [market_agent, research_agent]
 - Complex (compare 2 stocks for risk, then buy)? → group 1: [market_agent, risk_agent] → group 2: [portfolio_agent]
@@ -88,14 +91,7 @@ PLANNER_PROMPT = """You are the Aegis Orchestrator. Break down the user's query 
 Generate the plan now based on the LATEST user message. Do NOT re-plan for previous turns.
 """
 
-prompt = ChatPromptTemplate.from_messages([
-    ("system", PLANNER_PROMPT),
-    ("placeholder", "{messages}")
-])
 
-llm = get_llm(temperature=0.0)
-structured_llm = llm.with_structured_output(Plan)
-planner_chain = prompt | structured_llm
 
 
 # ─── Node ─────────────────────────────────────────────────────────────────────
@@ -112,6 +108,18 @@ async def planner_node(state: MarketState):
     # Only pass the last 6 messages to keep the planner call fast and cheap
     # (we don't want it to be confused by old conversation turns)
     recent = messages[-6:]
+
+    display_name = state.get("displayName")
+    name_context = f"The user's name is {display_name}." if display_name else ""
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", PLANNER_PROMPT.format(name_context=name_context)),
+        ("placeholder", "{messages}")
+    ])
+    
+    llm = get_llm(temperature=0.0)
+    structured_llm = llm.with_structured_output(Plan)
+    planner_chain = prompt | structured_llm
 
     try:
         result = await planner_chain.ainvoke({"messages": recent})

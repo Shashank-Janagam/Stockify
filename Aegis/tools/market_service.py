@@ -662,14 +662,13 @@ def get_specific_indicator(symbol: str, indicator_type: str, period: int = 14) -
     clean_sym = _normalize_symbol(symbol)
     yf_sym = _get_yf_symbol(clean_sym)
     
-    # Import AlgoTrading engine dynamically to avoid circular/path issues
+    # Import AutoTrading's registry dynamically to avoid circular/path issues
     import sys
     base_proj_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     if base_proj_dir not in sys.path:
         sys.path.append(base_proj_dir)
         
-    from AlgoTrading.Algos.indicators.indicator_engine import indicator_engine
-    from AlgoTrading.Algos.core.base_strategy import Candle
+    from AutoTrading.indicator_engine.registry import registry
     
     try:
         ticker = yf.Ticker(yf_sym)
@@ -681,19 +680,10 @@ def get_specific_indicator(symbol: str, indicator_type: str, period: int = 14) -
         if df.empty:
             return {"error": "No historical data available"}
             
-        # Convert DataFrame to Candle objects
-        candles = []
-        for idx, row in df.iterrows():
-            candles.append(Candle(
-                timestamp=str(idx),
-                open=float(row["Open"]),
-                high=float(row["High"]),
-                low=float(row["Low"]),
-                close=float(row["Close"]),
-                volume=float(row["Volume"])
-            ))
+        # Convert columns to lowercase for the registry
+        df.columns = [c.lower() for c in df.columns]
             
-        current_price = float(df["Close"].iloc[-1])
+        current_price = float(df["close"].iloc[-1])
         ind = indicator_type.upper().strip()
         
         def safe_float(val):
@@ -708,26 +698,34 @@ def get_specific_indicator(symbol: str, indicator_type: str, period: int = 14) -
             "current_price": safe_float(current_price)
         }
         
-        if ind in ["SMA", "EMA", "RSI", "ATR"]:
-            res = indicator_engine.calculate(ind, candles, period=period)[-1]
-            result["value"] = safe_float(res)
-        elif ind == "MACD":
-            res = indicator_engine.calculate("MACD", candles)
-            result["macd"] = safe_float(res.macd[-1])
-            result["signal"] = safe_float(res.signal[-1])
-        elif ind in ["BB", "BOLLINGERBANDS", "BOLLINGER BANDS"]:
-            res = indicator_engine.calculate("BollingerBands", candles, period=period, multiplier=2.0)
-            result["upper"] = safe_float(res.upper[-1])
-            result["lower"] = safe_float(res.lower[-1])
-        elif ind == "VWAP":
-            res = indicator_engine.calculate("VWAP", candles, reset_daily=True)
-            result["value"] = safe_float(res[-1] if res else None)
-        elif ind == "SUPERTREND":
-            res = indicator_engine.calculate("SuperTrend", candles, period=period, multiplier=3.0)
-            result["value"] = safe_float(res.supertrend[-1])
-            result["direction"] = int(res.trend[-1]) if res.trend else 0
-        else:
-            return {"error": f"Unsupported indicator type: {indicator_type}"}
+        # We need to map Aegis indicator names to paperbull/autotrading names
+        if ind == "BB":
+            ind = "BOLLINGER"
+            
+        try:
+            # calculate returns a pandas Series for single value indicators or DataFrame for multiple
+            res = registry.calculate(ind, df, params={"period": period})
+        except ValueError as e:
+            return {"error": str(e)}
+            
+        if isinstance(res, pd.Series):
+            result["value"] = safe_float(res.iloc[-1])
+        elif isinstance(res, pd.DataFrame):
+            if ind == "MACD":
+                result["macd"] = safe_float(res['macd'].iloc[-1])
+                result["signal"] = safe_float(res['signal'].iloc[-1])
+            elif ind == "BOLLINGER":
+                result["upper"] = safe_float(res['upper'].iloc[-1])
+                result["lower"] = safe_float(res['lower'].iloc[-1])
+            else:
+                result["value"] = safe_float(res.iloc[-1].to_dict())
+        elif isinstance(res, tuple):
+            if ind == "MACD":
+                result["macd"] = safe_float(res[0].iloc[-1])
+                result["signal"] = safe_float(res[1].iloc[-1])
+            elif ind == "BOLLINGER":
+                result["upper"] = safe_float(res[0].iloc[-1])
+                result["lower"] = safe_float(res[1].iloc[-1])
             
         return result
     except Exception as e:

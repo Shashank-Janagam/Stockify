@@ -29,6 +29,9 @@ from tools.research_tools import (
 from tools.strategy_tools import (
     submit_strategy_for_backtest, backtest_and_refine
 )
+from tools.algo_tools import (
+    get_active_algo_sessions, get_saved_strategies, start_algo_session, stop_algo_session
+)
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
@@ -40,7 +43,8 @@ ALL_TOOLS = [
     check_portfolio, get_user_balance, get_portfolio_allocation, get_user_orders, get_pending_stoploss_orders, cancel_stoploss_order, get_user_transactions, buy_stock, sell_stock,
     get_financial_news, get_company_announcements, get_macro_data, search_web, search_web_duckduckgo,
     get_company_fundamental_data, get_detailed_financial_statements, get_stock_analyst_recommendations,
-    submit_strategy_for_backtest, backtest_and_refine
+    submit_strategy_for_backtest, backtest_and_refine,
+    get_active_algo_sessions, get_saved_strategies, start_algo_session, stop_algo_session
 ]
 
 FAST_SYSTEM_PROMPT = """You are Aegis (Fast Mode), a premier AI financial analyst for the Indian Stock Market.
