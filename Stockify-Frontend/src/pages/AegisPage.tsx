@@ -73,7 +73,7 @@ const I = {
 
 /* ─── Inline markdown-lite renderer (text only, no tables) ─── */
 function renderMarkdownText(text: string): string {
-  let parsed = text;
+  let parsed = text.trim();
   
   // Group consecutive bullet points (even with empty lines between) into a card grid
   const bulletBlockRegex = /(?:^[*-]\s+.*(?:\n\s*)*)+/gm;
@@ -108,11 +108,15 @@ function renderMarkdownText(text: string): string {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`(.+?)`/g, '<code class="aegis-md-code">$1</code>')
     .replace(/^---+$/gm, '<hr class="aegis-md-hr"/>')
+    .replace(/\n{3,}/g, '\n\n')
     .replace(/\n/g, '<br/>')
-    // Clean up unwanted <br/> tags inside and around our grid container
-    .replace(/<br\/>\s*<div class="aegis-md-cards-grid">/g, '<div class="aegis-md-cards-grid">')
-    .replace(/<\/div>\s*<br\/>/g, '</div>')
-    .replace(/<div class="aegis-md-cards-grid"><br\/>/g, '<div class="aegis-md-cards-grid">');
+    // Clean up unwanted <br/> tags inside and around our grid container and block elements
+    .replace(/(?:<br\/>\s*)+<div class="aegis-md-cards-grid">/g, '<div class="aegis-md-cards-grid">')
+    .replace(/<\/div>\s*(?:<br\/>\s*)+/g, '</div>')
+    .replace(/<div class="aegis-md-cards-grid">(?:<br\/>\s*)+/g, '<div class="aegis-md-cards-grid">')
+    .replace(/(<\/h[1-4]>)\s*(?:<br\/>\s*)+/g, '$1')
+    .replace(/(?:<br\/>\s*)+(<h[1-4])/g, '$1')
+    .replace(/(<hr[^>]*>)\s*(?:<br\/>\s*)+/g, '$1');
 }
 
 

@@ -58,8 +58,22 @@ class IndicatorRegistry:
             kwargs['close'] = data['close']
         
         clean_params = {k: v for k, v in params.items() if k != 'column'}
-        kwargs.update(clean_params)
-        return func(**kwargs)
+        
+        import inspect
+        sig = inspect.signature(func)
+        valid_params = set(sig.parameters.keys())
+        has_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        
+        final_kwargs = {}
+        for k, v in kwargs.items():
+            if k in valid_params or has_kwargs:
+                final_kwargs[k] = v
+        
+        for k, v in clean_params.items():
+            if k in valid_params or has_kwargs:
+                final_kwargs[k] = v
+                
+        return func(**final_kwargs)
 
 # Global registry instance
 registry = IndicatorRegistry()

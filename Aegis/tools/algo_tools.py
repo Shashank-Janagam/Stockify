@@ -221,11 +221,27 @@ def save_strategy(config: RunnableConfig, strategy_json: str) -> str:
 
     headers = _get_headers(uid)
     try:
-        res = requests.post(f"{NODE_BACKEND_URL}/api/paperbull/strategy", json=strategy, headers=headers, timeout=10)
-        if res.status_code == 201:
-            return json.dumps({"success": True, "message": f"Strategy '{strategy['name']}' saved successfully!"})
+        check_res = requests.get(f"{NODE_BACKEND_URL}/api/paperbull/strategies", headers=headers, timeout=10)
+        existing_id = None
+        if check_res.status_code == 200:
+            strats = check_res.json()
+            for s in strats:
+                if s.get("name") == strategy["name"]:
+                    existing_id = s.get("_id")
+                    break
+
+        if existing_id:
+            res = requests.put(f"{NODE_BACKEND_URL}/api/paperbull/strategy/{existing_id}", json=strategy, headers=headers, timeout=10)
+            if res.status_code == 200:
+                return json.dumps({"success": True, "message": f"Strategy '{strategy['name']}' updated successfully!"})
+            else:
+                return json.dumps({"error": f"Failed to update strategy: {res.text}"})
         else:
-            return json.dumps({"error": f"Failed to save strategy: {res.text}"})
+            res = requests.post(f"{NODE_BACKEND_URL}/api/paperbull/strategy", json=strategy, headers=headers, timeout=10)
+            if res.status_code == 201:
+                return json.dumps({"success": True, "message": f"Strategy '{strategy['name']}' saved successfully!"})
+            else:
+                return json.dumps({"error": f"Failed to save strategy: {res.text}"})
     except Exception as e:
         return json.dumps({"error": str(e)})
 

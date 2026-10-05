@@ -54,7 +54,10 @@ class DSLEvaluator:
         # If DataFrame, we might need a way to select the column. Let's add a quick hack to pick a column if specified in params, else error if DataFrame.
         if isinstance(lhs_series, pd.DataFrame):
             if 'column' in condition.params:
-                lhs_series = lhs_series[condition.params['column']]
+                col_name = condition.params['column']
+                if col_name == 'signal' and 'macd_signal' in lhs_series.columns:
+                    col_name = 'macd_signal'
+                lhs_series = lhs_series[col_name]
             else:
                 # default to the first column if not specified, though it's risky
                 lhs_series = lhs_series.iloc[:, 0]
@@ -64,7 +67,10 @@ class DSLEvaluator:
             rhs_value = self.registry.calculate(condition.value.indicator, market_data, condition.value.params)
             if isinstance(rhs_value, pd.DataFrame):
                 if 'column' in condition.value.params:
-                    rhs_value = rhs_value[condition.value.params['column']]
+                    col_name = condition.value.params['column']
+                    if col_name == 'signal' and 'macd_signal' in rhs_value.columns:
+                        col_name = 'macd_signal'
+                    rhs_value = rhs_value[col_name]
                 else:
                     rhs_value = rhs_value.iloc[:, 0]
         else:

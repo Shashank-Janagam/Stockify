@@ -704,7 +704,13 @@ def get_specific_indicator(symbol: str, indicator_type: str, period: int = 14) -
             
         try:
             # calculate returns a pandas Series for single value indicators or DataFrame for multiple
-            res = registry.calculate(ind, df, params={"period": period})
+            params = {} if ind == "MACD" else {"period": period}
+            res = registry.calculate(ind, df, params=params)
+        except TypeError as e:
+            if "unexpected keyword argument 'period'" in str(e):
+                res = registry.calculate(ind, df, params={})
+            else:
+                return {"error": str(e)}
         except ValueError as e:
             return {"error": str(e)}
             
@@ -713,7 +719,7 @@ def get_specific_indicator(symbol: str, indicator_type: str, period: int = 14) -
         elif isinstance(res, pd.DataFrame):
             if ind == "MACD":
                 result["macd"] = safe_float(res['macd'].iloc[-1])
-                result["signal"] = safe_float(res['signal'].iloc[-1])
+                result["signal"] = safe_float(res.get('macd_signal', res.get('signal')).iloc[-1])
             elif ind == "BOLLINGER":
                 result["upper"] = safe_float(res['upper'].iloc[-1])
                 result["lower"] = safe_float(res['lower'].iloc[-1])

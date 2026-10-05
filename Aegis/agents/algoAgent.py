@@ -40,7 +40,8 @@ A strategy JSON must include:
 Each condition in the list must be a dict. 
 For comparing to a number: `{"indicator": "RSI", "params": {"period": 14}, "comparison": ">", "value": 65}` 
 For comparing to another indicator (e.g., EMA crossover): `{"indicator": "EMA", "params": {"period": 9}, "comparison": ">", "value": {"indicator": "EMA", "params": {"period": 21}}}`
-(Valid indicators: EMA, SMA, RSI, MACD, BOLLINGER. Valid comparisons: >, <, ==, >=, <=)
+To compare to price: NEVER use `"value": "price"`. Use `{"indicator": "Close"}`. For example: `{"indicator": "SMA", "params": {"period": 50}, "comparison": "<", "value": {"indicator": "Close"}}`
+(Valid indicators: Close, EMA, SMA, RSI, MACD, BOLLINGER. Valid comparisons: >, <, ==, >=, <=)
 - `stop_loss_pct`: (e.g. 0.05 for 5%)
 - `stop_loss_type`: "fixed" or "trailing"
 - `timeframe`: e.g. "1D", "15m"

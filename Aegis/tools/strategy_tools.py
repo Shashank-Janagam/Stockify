@@ -214,7 +214,8 @@ Common fixes to consider:
 Output ONLY the revised strategy as a single valid raw JSON object.
 No markdown. No prose. No code fences. No explanation.
 Just the raw JSON starting with {{ and ending with }}.
-Keep the same symbol, timeframe, and overall schema. Only change indicator params/thresholds."""
+Keep the same symbol, timeframe, and overall schema. Only change indicator params/thresholds.
+IMPORTANT: NEVER use `"value": "price"`. If comparing to price, use `"value": {{"indicator": "Close"}}`."""
 
     try:
         refinement_llm = ChatGoogleGenerativeAI(

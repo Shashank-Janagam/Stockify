@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def calculate_rsi(close: pd.Series, period: int) -> pd.Series:
+def calculate_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     """
     Calculate Relative Strength Index (RSI).
     """
