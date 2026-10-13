@@ -369,7 +369,7 @@ function MultiTradeResultCard({ payloads }: { payloads: any[] }) {
         </div>
         <div style={{
           background: 'rgba(59, 130, 246, 0.15)',
-          color: '#60a5fa',
+          color: '#2f3640',
           padding: '6px 12px',
           borderRadius: '20px',
           fontSize: '11px',
@@ -449,7 +449,7 @@ function MultiTradeResultCard({ payloads }: { payloads: any[] }) {
 }
 
 /* ─── Portfolio Allocation Card ─── */
-const PIE_COLORS = ['#4ade80', '#60a5fa', '#facc15', '#f87171', '#a78bfa', '#fb923c'];
+const PIE_COLORS = ['#4ade80', '#2f3640', '#facc15', '#f87171', '#a78bfa', '#fb923c'];
 function PortfolioAllocationCard({ payload, onAction }: { payload: any, onAction: (msg: string) => void }) {
   const data = payload.holdings || [];
   if (data.length === 0) return null;
@@ -753,7 +753,7 @@ function StrategyBacktestCard({ payload }: { payload: any }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#1e293b', borderTop: '1px solid #1e293b', borderBottom: '1px solid #1e293b' }}>
             {[
               { label: 'Win Rate', value: metrics.win_rate, color: '#10b981' },
-              { label: 'Return', value: metrics.total_return, color: '#3b82f6' },
+              { label: 'Return', value: metrics.total_return, color: '#2f3640' },
               { label: 'Drawdown', value: metrics.max_drawdown, color: '#ef4444' },
               { label: 'Sharpe', value: metrics.sharpe_ratio, color: '#f59e0b' },
             ].map((m, i) => (
@@ -807,7 +807,7 @@ function StrategyBacktestCard({ payload }: { payload: any }) {
         <div style={{ padding: '0 16px 16px', display: 'flex', gap: '8px' }}>
           <button
             onClick={() => navigate('/algo-backtest', { state: { strategy: payload } })}
-            style={{ flex: 1, padding: '9px', borderRadius: '8px', background: 'transparent', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)', fontWeight: 600, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+            style={{ flex: 1, padding: '9px', borderRadius: '8px', background: 'transparent', color: '#2f3640', border: '1px solid rgba(96,165,250,0.3)', fontWeight: 600, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
             Open in Studio
@@ -833,7 +833,7 @@ function HistoricalChartCard({ payload }: { payload: any }) {
     <div className="aegis-receipt-card">
       <div className="aegis-receipt-header" style={{ marginBottom: '16px', borderBottom: 'none' }}>
         <div className="aegis-receipt-title">
-          <I.Activity color="#3b82f6" size={20} />
+          <I.Activity color="#2f3640" size={20} />
           Price History: {payload.symbol}
         </div>
       </div>
@@ -842,8 +842,8 @@ function HistoricalChartCard({ payload }: { payload: any }) {
           <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#2f3640" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#2f3640" stopOpacity={0}/>
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
@@ -853,7 +853,7 @@ function HistoricalChartCard({ payload }: { payload: any }) {
               contentStyle={{ background: '#121822', border: '1px solid #334155', borderRadius: '8px' }}
               itemStyle={{ color: '#fff' }}
             />
-            <Area type="monotone" dataKey="price" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" />
+            <Area type="monotone" dataKey="price" stroke="#2f3640" strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -875,7 +875,7 @@ function FinancialSnapshotCard({ payload }: { payload: any }) {
       <div className="aegis-receipt-grid">
         <div className="aegis-receipt-item">
           <span className="aegis-receipt-label">Market Cap</span>
-          <span className="aegis-receipt-value" style={{ color: '#3b82f6' }}>{m.market_cap || '-'}</span>
+          <span className="aegis-receipt-value" style={{ color: '#2f3640' }}>{m.market_cap || '-'}</span>
         </div>
         <div className="aegis-receipt-item">
           <span className="aegis-receipt-label">P/E Ratio</span>
@@ -900,7 +900,7 @@ function NewsCarouselCard({ payload, onAction }: { payload: any, onAction: (msg:
   return (
     <div className="aegis-news-carousel-container">
       <div className="aegis-receipt-title" style={{ marginBottom: '12px' }}>
-        <I.Activity color="#3b82f6" size={20} />
+        <I.Activity color="#2f3640" size={20} />
         Latest Intelligence: {payload.symbol}
       </div>
       <div className="aegis-news-carousel">
@@ -1230,8 +1230,7 @@ export default function AegisPage() {
   const [isLoadingConv, setIsLoadingConv] = useState(false);
   const [isLoadingSidebar, setIsLoadingSidebar] = useState(true);
   const [agentMode, setAgentMode] = useState<"fast" | "deep">("deep");
-  const [riskProfile, setRiskProfile] = useState<string>(() => localStorage.getItem("aegis_risk_profile") || "Aggressive");
-  const [timeframePref, setTimeframePref] = useState<string>(() => localStorage.getItem("aegis_timeframe") || "Swing");
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -1256,10 +1255,7 @@ export default function AegisPage() {
     }
   }, [activeConvId, searchParams, setSearchParams]);
 
-  useEffect(() => {
-    localStorage.setItem('aegis_risk_profile', riskProfile);
-    localStorage.setItem('aegis_timeframe', timeframePref);
-  }, [riskProfile, timeframePref]);
+
   
   /* Initial load if activeConvId exists */
   useEffect(() => {
@@ -1418,7 +1414,6 @@ export default function AegisPage() {
           thread_id: activeConvId,
           uid: user?.uid, // Pass UID for portfolio/trading tools
           displayName: user?.displayName, // Pass display name for personalization
-          preferences: { riskProfile, timeframePref },
           mode: agentMode
         }),
         signal: abortRef.current.signal,
@@ -1520,7 +1515,7 @@ export default function AegisPage() {
   const showHero = messages.length === 0 && !isLoadingConv;
 
   return (
-    <div className={`aegis-shell${isDark ? ' dark' : ''}`}>
+    <div className={`aegis-shell${isDark ? ' dark' : ' light'}`}>
       {/* ── LEFT SIDEBAR ── */}
       <aside className={`aegis-sidebar ${isSidebarOpen ? "" : "collapsed"}`}>
         <div className="aegis-brand">
@@ -1546,32 +1541,7 @@ export default function AegisPage() {
           <span className="aegis-theme-btn-text">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
         </button>
 
-        <div className="aegis-preferences" style={{ padding: "0 16px", marginTop: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <label style={{ fontSize: "11px", color: "var(--s-fg-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Risk Profile</label>
-            <select 
-              value={riskProfile} 
-              onChange={e => setRiskProfile(e.target.value)}
-              style={{ background: "var(--s-bg-light)", color: "var(--s-fg)", border: "1px solid var(--s-border)", borderRadius: "6px", padding: "6px", fontSize: "13px", outline: "none" }}
-            >
-              <option value="Conservative">Conservative</option>
-              <option value="Moderate">Moderate</option>
-              <option value="Aggressive">Aggressive</option>
-            </select>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <label style={{ fontSize: "11px", color: "var(--s-fg-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Timeframe</label>
-            <select 
-              value={timeframePref} 
-              onChange={e => setTimeframePref(e.target.value)}
-              style={{ background: "var(--s-bg-light)", color: "var(--s-fg)", border: "1px solid var(--s-border)", borderRadius: "6px", padding: "6px", fontSize: "13px", outline: "none" }}
-            >
-              <option value="Intraday">Intraday</option>
-              <option value="Swing">Swing (Days-Weeks)</option>
-              <option value="Long Term">Long Term (Months-Years)</option>
-            </select>
-          </div>
-        </div>
+
 
 
         <div className="aegis-conv-section">
@@ -1778,7 +1748,7 @@ export default function AegisPage() {
         .aegis-mode-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; margin-right: 12px; background: transparent; border: none; padding: 0; }
         .aegis-toggle-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; transition: color 0.2s ease; }
         .aegis-toggle-label.active { color: var(--text-primary); }
-        .aegis-toggle-track { width: 36px; height: 20px; border-radius: 20px; background: #3b82f6; position: relative; transition: background 0.3s ease; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); }
+        .aegis-toggle-track { width: 36px; height: 20px; border-radius: 20px; background: #2f3640; position: relative; transition: background 0.3s ease; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); }
         .aegis-toggle-track.fast { background: #10b981; }
         .aegis-toggle-thumb { width: 16px; height: 16px; border-radius: 50%; background: white; position: absolute; top: 2px; left: 2px; transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1); box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
         .aegis-toggle-track.fast .aegis-toggle-thumb { transform: translateX(16px); }
