@@ -70,7 +70,7 @@ jobs:
 
             # ── Ensure required env files exist (even if never had a value) ──
             echo "Ensuring required env files exist..."
-            for dir in AlgoTrading MultiAgent/PressRelease Upstox-Backend Notification_Service mcp Aegis; do
+            for dir in AlgoTrading AutoTrading MultiAgent/PressRelease Upstox-Backend Notification_Service mcp Aegis; do
               mkdir -p "./$dir"
               touch "./$dir/.env"
             done

@@ -19,6 +19,9 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 
+# Service URLs — configurable via env vars for Docker/VM deployment
+_NEWS_ANALYSIS_URL = os.getenv("NEWS_ANALYSIS_URL", "http://localhost:5001")
+
 # Find subscriptions.json path
 SUBSCRIPTION_PATHS = [
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "subscriptions.json")
@@ -893,7 +896,7 @@ def get_recent_news(symbol: str) -> Dict[str, Any]:
     import json
     
     clean_sym = _normalize_symbol(symbol)
-    url = f"http://localhost:5001/api/news/stock/{clean_sym}?live=true"
+    url = f"{_NEWS_ANALYSIS_URL}/api/news/stock/{clean_sym}?live=true"
     
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})

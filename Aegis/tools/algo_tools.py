@@ -6,7 +6,7 @@ from langchain_core.tools import tool
 from langchain_core.runnables.config import RunnableConfig
 
 NODE_BACKEND_URL = os.getenv("STOCKIFY_API_URL", "http://localhost:4000")
-PYTHON_ALGO_URL = "http://localhost:8000"
+PYTHON_ALGO_URL = os.getenv("ALGO_TRADING_URL", os.getenv("PYTHON_ALGO_URL", "http://localhost:8000"))
 
 def _get_headers(uid: str) -> dict:
     """Internal auth headers for Aegis → Node.js backend service calls."""
