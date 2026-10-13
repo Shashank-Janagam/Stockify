@@ -1,3 +1,10 @@
+import os
+from dotenv import load_dotenv
+
+# Load env from AutoTrading directory, fallback to Stockify-Backend
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Stockify-Backend", ".env"))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backtest import router as backtest_router

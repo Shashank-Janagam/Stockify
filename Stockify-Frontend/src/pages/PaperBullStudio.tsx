@@ -9,6 +9,14 @@ import { RecursiveBuilder } from '../components/NestedBuilder';
 import StockLogo from '../components/common/StockLogo';
 import SearchOverlay from '../components/layout/SearchOverlay';
 
+const ALGO_API_URL = import.meta.env.VITE_ALGO_API_URL ||
+  (import.meta.env.VITE_HOST_ADDRESS ? `${import.meta.env.VITE_HOST_ADDRESS}/autotrading` : 'http://localhost:8000');
+
+const ALGO_WS_URL = import.meta.env.VITE_ALGO_WS_URL ||
+  (import.meta.env.VITE_HOST_ADDRESS
+    ? `${import.meta.env.VITE_HOST_ADDRESS.replace(/^http/, 'ws')}/autotrading/live`
+    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:8000/live`);
+
 
 function computeSMA(data: { x: number, y: number }[], period: number) {
   let result: { x: number, y: number | null }[] = [];
@@ -194,8 +202,7 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
     let isActive = true;
 
     try {
-      const algoWsUrl = import.meta.env.VITE_ALGO_WS_URL ||
-        `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:8000/live`;
+      const algoWsUrl = ALGO_WS_URL;
       ws = new WebSocket(algoWsUrl);
       wsRef.current = ws;
       ws.onopen = () => {
@@ -564,7 +571,7 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
                         window.dispatchEvent(new CustomEvent('wallet-refetch', {}));
                         // 3. Refresh sidebar to remove stopped session
                         setTimeout(() => {
-                          fetch('http://localhost:8000/live/sessions')
+                          fetch(`${ALGO_API_URL}/live/sessions`)
                             .then(r => r.json())
                             .then(d => { if (d?.sessions) window.dispatchEvent(new CustomEvent('sessions-updated', { detail: d.sessions })); })
                             .catch(() => { });
@@ -967,7 +974,7 @@ export default function PaperBullStudio() {
 
   // Fetch active sessions once on mount and whenever the tab becomes visible
   const fetchActiveSessions = () => {
-    fetch('http://localhost:8000/live/sessions')
+    fetch(`${ALGO_API_URL}/live/sessions`)
       .then(res => res.json())
       .then(data => { if (data?.sessions) setActiveSessions(data.sessions); })
       .catch(() => { });
@@ -1208,7 +1215,7 @@ export default function PaperBullStudio() {
         timeframe: timeframe
       };
 
-      const res = await fetch('http://localhost:8000/evaluate', {
+      const res = await fetch(`${ALGO_API_URL}/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
