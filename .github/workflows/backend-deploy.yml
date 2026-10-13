@@ -18,9 +18,40 @@ jobs:
           script: |
             set -e
             echo "Connected to Azure VM"
-            cd ~/Stockify
+            git config --global --add safe.directory "*" 2>/dev/null || true
+
+            # Locate or restore the git repository
+            if [ -d "$HOME/Stockify/.git" ]; then
+              cd "$HOME/Stockify"
+            elif [ -d "$HOME/stockify/.git" ]; then
+              cd "$HOME/stockify"
+            elif [ -d "$HOME/Stockify/Stockify/.git" ]; then
+              cd "$HOME/Stockify/Stockify"
+            else
+              echo "No .git found in default paths. Searching home directory..."
+              FOUND_GIT=$(find "$HOME" -maxdepth 3 -name ".git" -type d 2>/dev/null | head -n 1)
+              if [ -n "$FOUND_GIT" ]; then
+                REPO_DIR=$(dirname "$FOUND_GIT")
+                echo "Found git repository at: $REPO_DIR"
+                cd "$REPO_DIR"
+              else
+                echo "No git repo found on VM. Cloning fresh into $HOME/Stockify..."
+                # Preserve any existing files/env in Stockify if present
+                if [ -d "$HOME/Stockify" ]; then
+                  cd "$HOME/Stockify"
+                  git init
+                  git remote add origin https://github.com/Shashank-Janagam/Stockify.git 2>/dev/null || git remote set-url origin https://github.com/Shashank-Janagam/Stockify.git
+                else
+                  git clone https://github.com/Shashank-Janagam/Stockify.git "$HOME/Stockify"
+                  cd "$HOME/Stockify"
+                fi
+              fi
+            fi
+
+            echo "Working in: $(pwd)"
 
             echo "Fetching and forcefully pulling latest code..."
+            git remote set-url origin https://github.com/Shashank-Janagam/Stockify.git 2>/dev/null || true
             git fetch origin main
             git reset --hard origin/main
 
