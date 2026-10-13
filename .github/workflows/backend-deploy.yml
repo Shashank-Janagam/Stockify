@@ -24,6 +24,14 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            echo "Ensuring required env files exist..."
+            mkdir -p ./AlgoTrading ./MultiAgent/PressRelease ./Upstox-Backend ./Notification_Service ./mcp
+            touch ./AlgoTrading/.env
+            touch ./MultiAgent/PressRelease/.env
+            touch ./Upstox-Backend/.env
+            touch ./Notification_Service/.env
+            touch ./mcp/.env
+
             echo "Rebuilding and starting services..."
             docker compose up --build -d
 

@@ -33,7 +33,7 @@ services:
       - "4001:4001"
     restart: unless-stopped
     env_file:
-      - ./AlgoTrading/.env
+      - ./Stockify-Backend/.env
 
   stoploss-engine:
     build:
@@ -42,7 +42,7 @@ services:
     container_name: stoploss-engine
     restart: unless-stopped
     env_file:
-      - ./AlgoTrading/.env
+      - ./Stockify-Backend/.env
     environment:
       - UPSTOX_WS_URL=ws://upstox-backend:4141
 
