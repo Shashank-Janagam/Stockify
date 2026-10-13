@@ -44,21 +44,19 @@ jobs:
             done
 
             # ── Ensure the repo is a valid git repo; re-clone if needed ─────
-            if [ -d "$REPO_DIR/.git" ]; then
-              echo "Git repo found at $REPO_DIR"
+            # NOTE: check git validity, not just .git existence (can be corrupt)
+            if git -C "$REPO_DIR" rev-parse --git-dir > /dev/null 2>&1; then
+              echo "Valid git repo at $REPO_DIR"
               cd "$REPO_DIR"
+              git remote set-url origin "$REPO_URL"
+              git fetch origin main
+              git reset --hard origin/main
             else
-              echo "No .git at $REPO_DIR — performing fresh clone..."
+              echo "$REPO_DIR is not a valid git repo — deleting and cloning fresh..."
               rm -rf "$REPO_DIR"
               git clone "$REPO_URL" "$REPO_DIR"
               cd "$REPO_DIR"
             fi
-
-            # ── Pull latest main ─────────────────────────────────────────────
-            echo "Fetching and resetting to origin/main..."
-            git remote set-url origin "$REPO_URL"
-            git fetch origin main
-            git reset --hard origin/main
 
             # ── Restore .env files (overwrite any blanks left by git reset) ──
             echo "Restoring .env files..."
