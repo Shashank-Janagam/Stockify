@@ -107,6 +107,7 @@ services:
       - "5050:5050"
     restart: unless-stopped
     env_file:
+      - ./Stockify-Backend/.env
       - ./Aegis/.env
     environment:
       - STOCKIFY_API_URL=http://backend:4000
@@ -123,6 +124,8 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+    env_file:
+      - ./Stockify-Backend/.env
     environment:
       - UPSTOX_WS_URL=ws://upstox-backend:4141
       - NODE_ENV=production

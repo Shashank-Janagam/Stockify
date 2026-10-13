@@ -34,6 +34,7 @@ jobs:
               "$REPO_DIR/Notification_Service/.env" \
               "$REPO_DIR/mcp/.env" \
               "$REPO_DIR/Aegis/.env" \
+              "$REPO_DIR/AutoTrading/.env" \
               "$REPO_DIR/MultiAgent/PressRelease/.env"; do
               if [ -f "$f" ]; then
                 REL=$(echo "$f" | sed "s|$REPO_DIR/||")
