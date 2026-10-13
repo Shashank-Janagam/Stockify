@@ -7,9 +7,20 @@ const yahoo = new YahooFinance({
 export async function getYahooIndiaQuote(symbol) {
   if (!symbol) return null;
 
-  let finalSymbol = (symbol.endsWith(".NS") || symbol.endsWith(".BO") || symbol.startsWith("^"))
-    ? symbol
-    : `${symbol}.NS`;
+  let s_up = symbol.toUpperCase().replace(".NS", "").replace(".BO", "");
+  let finalSymbol = symbol;
+  
+  if (s_up === "NIFTY 50" || s_up === "NIFTY50" || s_up === "NIFTY" || s_up === "NIFTY_50") {
+    finalSymbol = "^NSEI";
+  } else if (s_up === "BANKNIFTY" || s_up === "NIFTY BANK" || s_up === "NIFTYBANK") {
+    finalSymbol = "^NSEBANK";
+  } else if (s_up === "SENSEX" || s_up === "BSE SENSEX" || s_up === "BSESN") {
+    finalSymbol = "^BSESN";
+  } else if (s_up === "FINNIFTY" || s_up === "NIFTY FIN SERVICE") {
+    finalSymbol = "^CNXFIN";
+  } else if (!finalSymbol.endsWith(".NS") && !finalSymbol.endsWith(".BO") && !finalSymbol.startsWith("^")) {
+    finalSymbol = `${finalSymbol}.NS`;
+  }
 
   try {
     const quote = await yahoo.quote(finalSymbol);

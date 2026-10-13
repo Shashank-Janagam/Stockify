@@ -51,7 +51,17 @@ export async function getYahooIndiaHistory(symbol, days, customInterval = null) 
 
   // Normalize symbol for Yahoo Finance
   let targetSymbol = symbol.trim();
-  if (!targetSymbol.startsWith("^") && !targetSymbol.endsWith(".NS") && !targetSymbol.endsWith(".BO")) {
+  let s_up = targetSymbol.toUpperCase().replace(".NS", "").replace(".BO", "");
+  
+  if (s_up === "NIFTY 50" || s_up === "NIFTY50" || s_up === "NIFTY" || s_up === "NIFTY_50") {
+    targetSymbol = "^NSEI";
+  } else if (s_up === "BANKNIFTY" || s_up === "NIFTY BANK" || s_up === "NIFTYBANK") {
+    targetSymbol = "^NSEBANK";
+  } else if (s_up === "SENSEX" || s_up === "BSE SENSEX" || s_up === "BSESN") {
+    targetSymbol = "^BSESN";
+  } else if (s_up === "FINNIFTY" || s_up === "NIFTY FIN SERVICE") {
+    targetSymbol = "^CNXFIN";
+  } else if (!targetSymbol.startsWith("^") && !targetSymbol.endsWith(".NS") && !targetSymbol.endsWith(".BO")) {
     targetSymbol = `${targetSymbol}.NS`;
   }
 

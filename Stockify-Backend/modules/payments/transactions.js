@@ -132,7 +132,7 @@ router.get("/", requireAuth, async (req, res) => {
         if (txn.symbol && txn.side) {
             const action = txn.side === 'BUY' ? 'Bought' : 'Sold';
             title = `${action} ${txn.stock_name || txn.symbol}`;
-        } else if (tType === 'DEPOSIT') {
+        } else if (tType === 'DEPOSIT' && (!txn.reference_type || !txn.reference_type.toLowerCase().includes('algo'))) {
              title = 'Wallet Deposit';
         }
 

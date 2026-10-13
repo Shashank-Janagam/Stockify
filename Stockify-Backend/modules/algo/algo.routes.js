@@ -138,14 +138,23 @@ router.post("/session/start", requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/algo/session/stop
 router.post("/session/stop", requireAuth, async (req, res) => {
   try {
     const userId = await getUserId(req.user.uid, req.user.name, req.user.email);
-    const { returnedCapital, symbol, strategyName, pnl, trades } = req.body;
+    const { returnedCapital, symbol, strategyName, pnl, trades, sessionId } = req.body;
     
     if (returnedCapital === undefined || returnedCapital === null || isNaN(Number(returnedCapital))) {
        return res.status(400).json({ error: "Invalid returned capital" });
+    }
+    
+    // Prevent double refunds by checking if this explicit sessionId has already been processed
+    if (sessionId) {
+       try {
+           const existing = await db.query("SELECT id FROM orders WHERE algo_session_id = $1 LIMIT 1", [sessionId]);
+           if (existing.rows.length > 0) {
+               return res.status(400).json({ error: "Session already ended and refunded." });
+           }
+       } catch(e) {} // Ignore if column doesn't exist yet
     }
     
     const stockLabel = symbol ? symbol.replace('.NS','').toUpperCase() : 'ALGO';
@@ -158,7 +167,7 @@ router.post("/session/stop", requireAuth, async (req, res) => {
     
     // Add Transaction
     await db.query(
-        "INSERT INTO wallet_transactions (user_id, reference_type, transaction_type, amount, balance_after, created_at) VALUES ($1, $3, 'DEPOSIT', $2, (SELECT available_balance FROM wallet_accounts WHERE user_id=$1 AND (account_type = 'LIVE' OR account_type IS NULL) LIMIT 1), NOW() AT TIME ZONE 'Asia/Kolkata')",
+        "INSERT INTO wallet_transactions (user_id, reference_type, transaction_type, amount, balance_after, created_at) VALUES ($1, $3, 'REFUND', $2, (SELECT available_balance FROM wallet_accounts WHERE user_id=$1 AND (account_type = 'LIVE' OR account_type IS NULL) LIMIT 1), NOW() AT TIME ZONE 'Asia/Kolkata')",
         [userId, returnedCapital, refType]
     );
     
@@ -186,18 +195,17 @@ router.post("/session/stop", requireAuth, async (req, res) => {
          stockId = stockRes.rows[0].id;
        }
 
-       // Try adding reason and algo_session_id columns
        try { 
          await db.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS reason VARCHAR(255)`); 
          await db.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS algo_session_id VARCHAR(100)`);
        } catch(e) {}
 
-       const sessionId = `ALGO_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+       const finalSessionId = sessionId || `ALGO_${Date.now()}_${Math.floor(Math.random()*1000)}`;
 
        // Insert Master Session Order
        const masterRes = await db.query(
          "INSERT INTO orders (user_id, stock_id, side, order_type, quantity, price, category, sell_type, status, executed_at, reason, algo_session_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW() AT TIME ZONE 'Asia/Kolkata', $10, $11) RETURNING id",
-         [userId, stockId, 'BUY', 'MARKET', trades.length, 0, 'ALGO_SESSION', 'INTRADAY', 'COMPLETED', `Algo Session: ${strat}`, sessionId]
+         [userId, stockId, 'BUY', 'MARKET', trades.length, 0, 'ALGO_SESSION', 'INTRADAY', 'COMPLETED', `Algo Session: ${strat}`, finalSessionId]
        );
        const masterId = masterRes.rows[0].id;
        await db.query("INSERT INTO trades (order_id, user_id, stock_id, side, quantity, price, realized_pnl, created_at) VALUES ($1, $2, $3, 'BUY', 0, 0, $4, NOW() AT TIME ZONE 'Asia/Kolkata')", [masterId, userId, stockId, pnl]);
@@ -205,9 +213,18 @@ router.post("/session/stop", requireAuth, async (req, res) => {
        for (const trade of trades) {
          await db.query(
            "INSERT INTO orders (user_id, stock_id, side, order_type, quantity, price, category, sell_type, status, executed_at, reason, algo_session_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW() AT TIME ZONE 'Asia/Kolkata', $10, $11)",
-           [userId, stockId, trade.side, "MARKET", trade.quantity, trade.pricePerShare, "ALGO", "INTRADAY", "COMPLETED", (trade.reason || strat).substring(0, 255), sessionId]
+           [userId, stockId, trade.side, "MARKET", trade.quantity, trade.pricePerShare, "ALGO", "INTRADAY", "COMPLETED", (trade.reason || strat).substring(0, 255), finalSessionId]
          );
        }
+    } else {
+       // If no trades occurred, we still must record the session ID to prevent double refunds
+       try {
+           const finalSessionId = sessionId || `ALGO_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+           await db.query(
+             "INSERT INTO orders (user_id, stock_id, side, order_type, quantity, price, category, sell_type, status, executed_at, reason, algo_session_id) VALUES ($1, null, 'BUY', 'MARKET', 0, 0, 'ALGO_SESSION', 'INTRADAY', 'COMPLETED', NOW() AT TIME ZONE 'Asia/Kolkata', $2, $3)",
+             [userId, `Algo Session: ${strat} (No trades)`, finalSessionId]
+           );
+       } catch (e) {}
     }
     
     res.json({ success: true, message: "Capital returned" });

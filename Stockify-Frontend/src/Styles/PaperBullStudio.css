@@ -1,11 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-:root{--s-bg:#f3f4fd;--s-sidebar:#ffffff;--s-surface:#eef0fa;--s-card:#ffffff;--s-card-hover:#f6f7ff;--s-border:rgba(0,0,0,0.06);--s-border-md:rgba(0,0,0,0.09);--s-border-strong:rgba(0,0,0,0.15);--s-text:#0f172a;--s-text-muted:#64748b;--s-text-faint:#94a3b8;--s-primary:#3b82f6;--s-primary-dim:rgba(59,130,246,0.14);--s-primary-glow:rgba(59,130,246,0.28);--s-green:#10b981;--s-green-dim:rgba(16,185,129,0.12);--s-red:#f43f5e;--s-red-dim:rgba(244,63,94,0.12);--s-amber:#f59e0b;--s-radius:14px;--s-radius-sm:8px}
+:root{--s-bg:#f8fafc;--s-sidebar:#ffffff;--s-surface:#f1f5f9;--s-card:#ffffff;--s-card-hover:#f8fafc;--s-border:rgba(0,0,0,0.06);--s-border-md:rgba(0,0,0,0.09);--s-border-strong:rgba(0,0,0,0.15);--s-text:#0f172a;--s-text-muted:#64748b;--s-text-faint:#94a3b8;--s-primary:#334155;--s-primary-dim:#f1f5f9;--s-primary-glow:rgba(51,65,85,0.15);--s-green:#10b981;--s-green-dim:rgba(16,185,129,0.12);--s-red:#f43f5e;--s-red-dim:rgba(244,63,94,0.12);--s-amber:#f59e0b;--s-radius:14px;--s-radius-sm:8px}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 button{font-family:inherit;cursor:pointer;border:none}
 input,select,textarea{font-family:inherit}
-body.studio-active .page-content{padding-top:0 !important}
-.studio-layout{display:flex;height:100vh;width:100%;background:var(--s-bg);color:var(--s-text);font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;overflow:hidden}
-.studio-sidebar{width:260px;background:var(--s-sidebar);border-right:1px solid var(--s-border);display:flex;flex-direction:column;padding:22px 14px 18px;flex-shrink:0;overflow-y:auto;transition:width 0.3s ease, padding 0.3s ease}
+.studio-layout{display:flex;height:calc(100vh - 3.5rem);width:100%;background:var(--s-bg);color:var(--s-text);font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;overflow:hidden}
+.studio-sidebar{width:300px;background:var(--s-sidebar);border-right:1px solid var(--s-border);display:flex;flex-direction:column;padding:22px 14px 18px;flex-shrink:0;overflow-y:auto;transition:width 0.3s ease, padding 0.3s ease}
 .studio-sidebar::-webkit-scrollbar{display:none}
 .studio-sidebar.collapsed{width:60px;padding-left:8px;padding-right:8px}
 .studio-sidebar.collapsed .studio-brand-name,

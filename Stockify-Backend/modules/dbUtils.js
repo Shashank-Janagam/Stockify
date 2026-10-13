@@ -24,7 +24,7 @@ export async function getUserId(uid, name = "Trader", email = null) {
 
   // Create Wallet Account
   await db.query(
-    `INSERT INTO wallet_accounts (user_id, available_balance, blocked_balance) VALUES ($1, 0, 0)`,
+    `INSERT INTO wallet_accounts (user_id, available_balance) VALUES ($1, 0)`,
     [userId]
   );
   

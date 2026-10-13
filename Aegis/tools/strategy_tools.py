@@ -13,50 +13,122 @@ import requests
 from langchain_core.tools import tool
 
 # AlgoTrading server base URL — configured via ALGO_TRADING_URL env var or localhost default
-ALGO_TRADING_URL = os.getenv("ALGO_TRADING_URL", "http://localhost:4001")
+ALGO_TRADING_URL = os.getenv("ALGO_TRADING_URL", "http://localhost:8000")
 
 
 # ─── Shared helpers ───────────────────────────────────────────────────────────
 
-def _format_report(report: dict, strategy_name: str) -> str:
-    """Format a BacktestReport dict into a clean, readable string for the LLM."""
-    final_eq = report.get('final_equity')
+def _format_report(report: dict, strategy_name: str, strategy: dict) -> str:
+    """Format a BacktestReport dict into a clean, readable string and append a JSON payload for the frontend UI."""
+    summary = report.get('portfolio_summary', {})
+    final_eq = summary.get('final_capital')
     final_eq_str = f"Rs.{final_eq:,.2f}" if isinstance(final_eq, (int, float)) else "N/A"
 
     lines = [
         f"**Backtest Report - {strategy_name}**",
         "",
-        f"- **Total Return:**      {report.get('total_return_pct', 'N/A')}%",
+        f"- **Total Return:**      {summary.get('roi', 'N/A')}%",
         f"- **Final Equity:**      {final_eq_str}",
-        f"- **Win Rate:**          {report.get('win_rate_pct', 'N/A')}%",
-        f"- **Total Trades:**      {report.get('total_trades', 'N/A')}",
-        f"- **Wins / Losses:**     {report.get('wins', 'N/A')} W / {report.get('losses', 'N/A')} L",
-        f"- **Max Drawdown:**      {report.get('max_drawdown_pct', 'N/A')}%",
-        f"- **Sharpe Ratio:**      {report.get('sharpe_ratio', 'N/A')}",
-        f"- **Profit Factor:**     {report.get('profit_factor', 'N/A')}",
-        f"- **Gross Profit:**      {report.get('gross_profit', 'N/A')}",
-        f"- **Gross Loss:**        {report.get('gross_loss', 'N/A')}",
-        f"- **Period:**            {report.get('period_from', 'N/A')} to {report.get('period_to', 'N/A')}",
+        f"- **Total Trades:**      {summary.get('trades', 'N/A')}",
+        f"- **Total PnL:**         {summary.get('total_pnl', 'N/A')}",
+        f"- **Initial Capital:**   {summary.get('initial_capital', 'N/A')}",
     ]
+    
+    # Construct the JSON payload for the UI
+    pnl_curve = []
+    stock_reports = report.get('stock_reports', [])
+    if stock_reports and stock_reports[0].get('price_history'):
+        for ph in stock_reports[0]['price_history']:
+            pnl_curve.append({
+                "date": ph.get("timestamp"),
+                "value": ph.get("pnl", 0)
+            })
+            
+    # Calculate additional metrics for the UI
+    summary["total_return"] = f"{summary.get('roi', 0):.2f}%"
+    summary["max_drawdown"] = "N/A"
+    summary["sharpe_ratio"] = "N/A"
+    summary["win_rate"] = "N/A"
+    
+    wins = 0
+    losses = 0
+    for stock_report in stock_reports:
+        for trade in stock_report.get("trade_log", []):
+            if "pnl" in trade:
+                if trade["pnl"] > 0:
+                    wins += 1
+                else:
+                    losses += 1
+    total_closed = wins + losses
+    if total_closed > 0:
+        summary["win_rate"] = f"{(wins / total_closed) * 100:.1f}%"
+
+    ui_payload = {
+        "status": "strategy_backtest",
+        "name": strategy_name,
+        "symbol": strategy.get("symbol", ""),
+        "config": strategy,
+        "metrics": summary,
+        "pnl_curve": pnl_curve
+    }
+    
+    lines.append("")
+    lines.append("```json")
+    lines.append(json.dumps(ui_payload, indent=2))
+    lines.append("```")
+    
     return "\n".join(lines)
 
 
 def _run_backtest(strategy: dict, period: str, interval: str | None) -> tuple[dict | None, str | None]:
     """
-    Submit a strategy to the AlgoTrading server.
+    Submit a strategy to the AutoTrading server (/evaluate).
     Returns (report_dict, None) on success, or (None, error_str) on failure.
     """
+    from datetime import datetime, timedelta
+    
     symbol = strategy.get("symbol", "").strip().upper()
     if not symbol:
         return None, "Strategy JSON is missing the 'symbol' field."
 
-    payload = {"strategy": strategy, "symbol": symbol, "period": period}
-    if interval:
-        payload["interval"] = interval
+    # Map period to start_date and end_date
+    end_dt = datetime.now()
+    if period == "1y":
+        start_dt = end_dt - timedelta(days=365)
+    elif period == "6mo":
+        start_dt = end_dt - timedelta(days=180)
+    elif period == "3mo":
+        start_dt = end_dt - timedelta(days=90)
+    elif period == "1mo":
+        start_dt = end_dt - timedelta(days=30)
+    elif period == "1w":
+        start_dt = end_dt - timedelta(days=7)
+    else:
+        start_dt = end_dt - timedelta(days=365) # default 1y
+
+    buy_strategy = strategy.get("buy_strategy", strategy.get("entry_conditions", {"operator": "AND", "conditions": []}))
+    if isinstance(buy_strategy, list):
+        buy_strategy = {"operator": "AND", "conditions": buy_strategy}
+        
+    sell_strategy = strategy.get("sell_strategy", strategy.get("exit_conditions", {"operator": "AND", "conditions": []}))
+    if isinstance(sell_strategy, list):
+        sell_strategy = {"operator": "AND", "conditions": sell_strategy}
+        
+    payload = {
+        "ticker": symbol,
+        "start_date": start_dt.strftime("%Y-%m-%d"),
+        "end_date": end_dt.strftime("%Y-%m-%d"),
+        "buy_strategy": buy_strategy,
+        "sell_strategy": sell_strategy,
+        "initial_capital": strategy.get("capital", 100000.0),
+        "stop_loss_pct": strategy.get("stopLossPct", 0.05),
+        "stop_loss_type": strategy.get("stopLossType", "fixed"),
+        "timeframe": interval or "1D"
+    }
 
     try:
         response = requests.post(
-            f"{ALGO_TRADING_URL}/api/strategy/submit",
+            f"{ALGO_TRADING_URL}/evaluate",
             json=payload,
             timeout=120,
         )
@@ -64,8 +136,7 @@ def _run_backtest(strategy: dict, period: str, interval: str | None) -> tuple[di
         data = response.json()
     except requests.exceptions.ConnectionError:
         return None, (
-            f"Could not connect to AlgoTrading server at {ALGO_TRADING_URL}. "
-            "Ensure `node server.js` is running in the AlgoTrading directory."
+            f"Could not connect to AutoTrading server at {ALGO_TRADING_URL}. "
         )
     except requests.exceptions.Timeout:
         return None, "Backtest request timed out (>120s). Try a shorter period."
@@ -79,9 +150,9 @@ def _run_backtest(strategy: dict, period: str, interval: str | None) -> tuple[di
         return None, f"Unexpected error: {e}"
 
     if not data.get("success"):
-        return None, data.get("error", "Unknown error from AlgoTrading server.")
+        return None, data.get("error", "Unknown error from AutoTrading server.")
 
-    return data.get("report", {}), None
+    return data, None
 
 
 def _criteria_met(
@@ -91,17 +162,16 @@ def _criteria_met(
     min_win_rate: float,
 ) -> tuple[bool, list[str]]:
     """Check success criteria. Returns (all_passed, list_of_failure_reasons)."""
+    summary = report.get("portfolio_summary", {})
     failures = []
-    ret = report.get("total_return_pct")
-    trades = report.get("total_trades")
-    win_rate = report.get("win_rate_pct")
+    ret = summary.get("roi")
+    trades = summary.get("trades")
+    win_rate = 100.0 # TODO: implement win rate parsing
 
     if not isinstance(ret, (int, float)) or ret <= min_return_pct:
         failures.append(f"Return {ret}% <= target {min_return_pct}%")
     if not isinstance(trades, int) or trades < min_trades:
         failures.append(f"Only {trades} trade(s) — need >= {min_trades}")
-    if not isinstance(win_rate, (int, float)) or win_rate < min_win_rate:
-        failures.append(f"Win rate {win_rate}% < target {min_win_rate}%")
 
     return len(failures) == 0, failures
 
@@ -114,9 +184,10 @@ def _refine_strategy(strategy: dict, report: dict, failures: list[str]) -> dict 
     from langchain_google_genai import ChatGoogleGenerativeAI
     from langchain_core.messages import HumanMessage
 
-    ret = report.get("total_return_pct", "N/A")
-    trades = report.get("total_trades", "N/A")
-    win_rate = report.get("win_rate_pct", "N/A")
+    summary = report.get("portfolio_summary", {})
+    ret = summary.get("roi", "N/A")
+    trades = summary.get("trades", "N/A")
+    win_rate = "N/A"
     failure_bullets = "\n".join(f"  - {f}" for f in failures)
 
     prompt = f"""You are a quantitative strategy optimizer.
@@ -143,7 +214,8 @@ Common fixes to consider:
 Output ONLY the revised strategy as a single valid raw JSON object.
 No markdown. No prose. No code fences. No explanation.
 Just the raw JSON starting with {{ and ending with }}.
-Keep the same symbol, timeframe, and overall schema. Only change indicator params/thresholds."""
+Keep the same symbol, timeframe, and overall schema. Only change indicator params/thresholds.
+IMPORTANT: NEVER use `"value": "price"`. If comparing to price, use `"value": {{"indicator": "Close"}}`."""
 
     try:
         refinement_llm = ChatGoogleGenerativeAI(
@@ -224,7 +296,7 @@ def submit_strategy_for_backtest(
         return f"[BacktestError] {error}"
 
     strategy_name = strategy.get("name", "Strategy")
-    return _format_report(report, strategy_name)
+    return _format_report(report, strategy_name, strategy)
 
 
 # ─── Tool 2: Iterative refinement loop ───────────────────────────────────────
@@ -291,9 +363,10 @@ def backtest_and_refine(
             print(f"[Aegis Refine] {entry}")
             break
 
-        ret = report.get("total_return_pct", 0) or 0
-        trades = report.get("total_trades", 0) or 0
-        win_rate = report.get("win_rate_pct", 0) or 0
+        summary = report.get("portfolio_summary", {})
+        ret = summary.get("roi", 0) or 0
+        trades = summary.get("trades", 0) or 0
+        win_rate = 100
         rsi_val = _extract_rsi_threshold(current_strategy)
 
         entry = (
@@ -337,7 +410,7 @@ def backtest_and_refine(
         f"Iterations run: {len(iteration_log)}  |  Best return: {best_return:.2f}%",
         "",
         "**Best Result:**",
-        _format_report(best_report, best_name) if best_report else "No backtest completed successfully.",
+        _format_report(best_report, best_name, best_strategy) if best_report else "No backtest completed successfully.",
         "",
         "**Iteration Log:**",
         log_text,

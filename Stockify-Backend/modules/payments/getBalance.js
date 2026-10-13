@@ -16,12 +16,18 @@ router.get("/getBalance", requireAuth, async (req, res) => {
     res.setHeader('Expires', '0');
 
     // 1️⃣ Try Redis cache
-    const cached = await redis.get(redisKey);
+    let cached = null;
+    try {
+      cached = await redis.get(redisKey);
+    } catch(redisErr) {
+      console.warn(`[getBalance] Redis error, bypassing cache:`, redisErr.message);
+    }
+    
     if (cached) {
       console.log(`[getBalance] CACHE HIT for ${redisKey}:`, cached);
       return res.json(JSON.parse(cached));
     }
-    console.log(`[getBalance] CACHE MISS for ${redisKey}`);
+    console.log(`[getBalance] CACHE MISS or offline for ${redisKey}`);
 
     // 2️⃣ Resolve User & Wallet (Lazy Init)
     let userRes = await db.query(`SELECT id FROM users WHERE uid = $1`, [uid]);
@@ -43,22 +49,26 @@ router.get("/getBalance", requireAuth, async (req, res) => {
 
     // 3️⃣ Fetch Balance
     const walletRes = await db.query(
-        `SELECT available_balance, blocked_balance FROM wallet_accounts WHERE user_id = $1 AND (account_type = 'LIVE' OR account_type IS NULL)`,
+        `SELECT available_balance FROM wallet_accounts WHERE user_id = $1 AND (account_type = 'LIVE' OR account_type IS NULL)`,
         [userId]
     );
 
     const balance = {
       cash: Number(walletRes.rows[0]?.available_balance ?? 0),
-      blocked: Number(walletRes.rows[0]?.blocked_balance ?? 0)
+      blocked: 0 // Default to 0 since column is removed
     };
 
     // 4️⃣ Cache in Redis (5 minutes)
-    await redis.set(
-      redisKey,
-      JSON.stringify(balance),
-      "EX",
-      300
-    );
+    try {
+      await redis.set(
+        redisKey,
+        JSON.stringify(balance),
+        "EX",
+        300
+      );
+    } catch(redisErr) {
+      console.warn(`[getBalance] Redis set error:`, redisErr.message);
+    }
 
     return res.json(balance);
 

@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useContext, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AuthContext } from "../auth/AuthProvider";
 import { StockChartIndia } from "../components/charts/StocksChartIndia";
-import IndicatorCard, { parseIndicators } from "../components/aegis/IndicatorCard";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import "../Styles/Aegis.css";
 import aegisLogo from "../assets/logos/aegis.png";
@@ -74,7 +73,7 @@ const I = {
 
 /* ─── Inline markdown-lite renderer (text only, no tables) ─── */
 function renderMarkdownText(text: string): string {
-  let parsed = text;
+  let parsed = text.trim();
   
   // Group consecutive bullet points (even with empty lines between) into a card grid
   const bulletBlockRegex = /(?:^[*-]\s+.*(?:\n\s*)*)+/gm;
@@ -109,11 +108,15 @@ function renderMarkdownText(text: string): string {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`(.+?)`/g, '<code class="aegis-md-code">$1</code>')
     .replace(/^---+$/gm, '<hr class="aegis-md-hr"/>')
+    .replace(/\n{3,}/g, '\n\n')
     .replace(/\n/g, '<br/>')
-    // Clean up unwanted <br/> tags inside and around our grid container
-    .replace(/<br\/>\s*<div class="aegis-md-cards-grid">/g, '<div class="aegis-md-cards-grid">')
-    .replace(/<\/div>\s*<br\/>/g, '</div>')
-    .replace(/<div class="aegis-md-cards-grid"><br\/>/g, '<div class="aegis-md-cards-grid">');
+    // Clean up unwanted <br/> tags inside and around our grid container and block elements
+    .replace(/(?:<br\/>\s*)+<div class="aegis-md-cards-grid">/g, '<div class="aegis-md-cards-grid">')
+    .replace(/<\/div>\s*(?:<br\/>\s*)+/g, '</div>')
+    .replace(/<div class="aegis-md-cards-grid">(?:<br\/>\s*)+/g, '<div class="aegis-md-cards-grid">')
+    .replace(/(<\/h[1-4]>)\s*(?:<br\/>\s*)+/g, '$1')
+    .replace(/(?:<br\/>\s*)+(<h[1-4])/g, '$1')
+    .replace(/(<hr[^>]*>)\s*(?:<br\/>\s*)+/g, '$1');
 }
 
 
@@ -154,7 +157,7 @@ function inlineMd(text: string): string {
   return text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:11px">$1</code>');
+    .replace(/`(.+?)`/g, '<code class="aegis-inline-code">$1</code>');
 }
 
 /* ─── Beautiful Table Component ─── */
@@ -366,7 +369,7 @@ function MultiTradeResultCard({ payloads }: { payloads: any[] }) {
         </div>
         <div style={{
           background: 'rgba(59, 130, 246, 0.15)',
-          color: '#60a5fa',
+          color: '#2f3640',
           padding: '6px 12px',
           borderRadius: '20px',
           fontSize: '11px',
@@ -446,7 +449,7 @@ function MultiTradeResultCard({ payloads }: { payloads: any[] }) {
 }
 
 /* ─── Portfolio Allocation Card ─── */
-const PIE_COLORS = ['#4ade80', '#60a5fa', '#facc15', '#f87171', '#a78bfa', '#fb923c'];
+const PIE_COLORS = ['#4ade80', '#2f3640', '#facc15', '#f87171', '#a78bfa', '#fb923c'];
 function PortfolioAllocationCard({ payload, onAction }: { payload: any, onAction: (msg: string) => void }) {
   const data = payload.holdings || [];
   if (data.length === 0) return null;
@@ -554,111 +557,271 @@ function RiskRadarCard({ payload }: { payload: any }) {
 }
 
 /* ─── Strategy Backtest Card ─── */
+function StrategyConfirmModal({ payload, onConfirm, onCancel, isSaving }: { payload: any, onConfirm: () => void, onCancel: () => void, isSaving: boolean }) {
+  const cfg = payload.config || {};
+
+  // Parse DSL to a human-readable string
+  const parseDsl = (dsl: any): string => {
+    if (!dsl) return '—';
+    try {
+      const obj = typeof dsl === 'string' ? JSON.parse(dsl) : dsl;
+      if (!obj.conditions?.length) return '—';
+      const parts = obj.conditions.map((c: any) => {
+        if (c.operator) return `(${parseDsl(c)})`;
+        const lhs = c.indicator + (c.params?.period ? `(${c.params.period})` : '');
+        const rhs = typeof c.value === 'object' && c.value !== null
+          ? c.value.indicator + (c.value.params?.period ? `(${c.value.params.period})` : '')
+          : String(c.value ?? '');
+        return `${lhs} ${c.comparison} ${rhs}`;
+      });
+      return `${obj.operator}: ${parts.join(', ')}`;
+    } catch { return typeof dsl === 'string' ? dsl : JSON.stringify(dsl); }
+  };
+
+  const tickers = cfg.tickers || (cfg.portfolio?.symbols) || [];
+  const rows: { label: string; value: string; color?: string }[] = [
+    { label: 'Strategy Name', value: payload.name || cfg.name || '—', color: '#c4b5fd' },
+    { label: 'Tickers', value: Array.isArray(tickers) ? tickers.join(', ') : (String(tickers) || '—') },
+    { label: 'Capital', value: cfg.capital != null ? `₹${Number(cfg.capital).toLocaleString('en-IN')}` : (cfg.portfolio?.capital ? `₹${Number(cfg.portfolio.capital).toLocaleString('en-IN')}` : '—') },
+    { label: 'Timeframe', value: cfg.timeframe || cfg.portfolio?.interval || '—' },
+    { label: 'Start Date', value: cfg.startDate || cfg.portfolio?.start || '—' },
+    { label: 'End Date', value: cfg.endDate || cfg.portfolio?.end || '—' },
+    { label: 'Stop-Loss %', value: cfg.stopLossPct != null ? `${cfg.stopLossPct}%` : (cfg.stopLoss?.value != null ? `${cfg.stopLoss.value}%` : '—') },
+    { label: 'Stop-Loss Type', value: cfg.stopLossType || cfg.stopLoss?.type || '—' },
+    { label: 'Buy Logic', value: parseDsl(cfg.buyDsl || cfg.entry), color: '#86efac' },
+    { label: 'Sell Logic', value: parseDsl(cfg.sellDsl || cfg.exit), color: '#fca5a5' },
+  ];
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '16px', width: '100%', maxWidth: '520px', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '15px', color: '#f1f5f9' }}>Confirm Strategy Save</div>
+            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Review all parameters before saving to PaperBull Studio</div>
+          </div>
+        </div>
+
+        {/* Parameters Table */}
+        <div style={{ padding: '16px 24px', maxHeight: '55vh', overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '6px 10px', color: '#475569', fontWeight: 600, fontSize: '10px', letterSpacing: '0.8px', textTransform: 'uppercase', borderBottom: '1px solid #1e293b' }}>Parameter</th>
+                <th style={{ textAlign: 'left', padding: '6px 10px', color: '#475569', fontWeight: 600, fontSize: '10px', letterSpacing: '0.8px', textTransform: 'uppercase', borderBottom: '1px solid #1e293b' }}>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? 'rgba(30,41,59,0.4)' : 'transparent' }}>
+                  <td style={{ padding: '8px 10px', color: '#94a3b8', fontWeight: 500, verticalAlign: 'top', whiteSpace: 'nowrap', width: '36%' }}>{row.label}</td>
+                  <td style={{ padding: '8px 10px', color: row.color || '#e2e8f0', fontWeight: 500, wordBreak: 'break-word', lineHeight: '1.5' }}>{row.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Warning */}
+        <div style={{ margin: '0 24px 16px', padding: '10px 14px', background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: '8px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2" style={{ flexShrink: 0, marginTop: '1px' }}><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+          <span style={{ fontSize: '11px', color: '#fbbf24', lineHeight: '1.5' }}>This strategy will be saved and available in PaperBull Studio for backtesting and live trading.</span>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ padding: '0 24px 20px', display: 'flex', gap: '10px' }}>
+          <button onClick={onCancel} disabled={isSaving} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'transparent', color: '#94a3b8', border: '1px solid #334155', fontWeight: 600, fontSize: '13px', cursor: 'pointer', transition: 'all 0.15s' }}>
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={isSaving} style={{ flex: 2, padding: '10px', borderRadius: '8px', background: isSaving ? '#6d28d9' : 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', fontWeight: 700, fontSize: '13px', cursor: isSaving ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.15s' }}>
+            {isSaving ? (
+              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Saving...</>
+            ) : (
+              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Confirm & Save</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StrategyBacktestCard({ payload }: { payload: any }) {
   const data = payload.pnl_curve || [];
   const metrics = payload.metrics || {};
   const navigate = useNavigate();
-  
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const cfg = payload.config || {};
+
+  const doSave = async () => {
+    setIsSaving(true);
+    try {
+      // Build the payload in the exact schema the PaperBull backend expects
+      const strategyPayload: Record<string, any> = {
+        name: payload.name || cfg.name || `Strategy: ${payload.symbol || 'Auto'}`,
+        buyDsl: typeof cfg.buyDsl === 'string' ? cfg.buyDsl : (cfg.buyDsl ? JSON.stringify(cfg.buyDsl) : undefined),
+        sellDsl: typeof cfg.sellDsl === 'string' ? cfg.sellDsl : (cfg.sellDsl ? JSON.stringify(cfg.sellDsl) : undefined),
+        capital: cfg.capital ?? cfg.portfolio?.capital ?? 100000,
+        tickers: cfg.tickers ?? cfg.portfolio?.symbols ?? [payload.symbol || 'RELIANCE.NS'],
+        timeframe: cfg.timeframe ?? cfg.portfolio?.interval ?? '1D',
+        startDate: cfg.startDate ?? cfg.portfolio?.start ?? '2023-01-01',
+        startTime: cfg.startTime ?? '09:15',
+        endDate: cfg.endDate ?? cfg.portfolio?.end ?? '2024-01-01',
+        endTime: cfg.endTime ?? '15:30',
+        stopLossPct: cfg.stopLossPct ?? cfg.stopLoss?.value ?? 5,
+        stopLossType: cfg.stopLossType ?? cfg.stopLoss?.type ?? 'fixed',
+      };
+      // Remove undefined keys
+      Object.keys(strategyPayload).forEach(k => strategyPayload[k] === undefined && delete strategyPayload[k]);
+
+      const res = await fetch(`${HOST}/api/paperbull/strategy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(strategyPayload),
+      });
+      setSaveResult(res.ok ? 'success' : 'error');
+    } catch {
+      setSaveResult('error');
+    } finally {
+      setIsSaving(false);
+      setShowConfirm(false);
+      setTimeout(() => setSaveResult('idle'), 3000);
+    }
+  };
+
   return (
-    <div className="aegis-receipt-card">
-      <div className="aegis-receipt-header" style={{ marginBottom: '16px', borderBottom: 'none' }}>
-        <div className="aegis-receipt-title">
-          <I.Activity color="#8b5cf6" size={20} />
-          Algorithmic Strategy Backtest: {payload.symbol}
-        </div>
-      </div>
-      
-      {data.length > 0 && (
-        <div style={{ height: 180, width: '100%', marginBottom: '16px' }}>
-          <ResponsiveContainer>
-            <AreaChart data={data} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorPnl" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4}/>
-                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-              <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
-              <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} domain={['auto', 'auto']} width={40} />
-              <RechartsTooltip 
-                contentStyle={{ background: '#121822', border: '1px solid #334155', borderRadius: '8px' }}
-                itemStyle={{ color: '#fff' }}
-              />
-              <Area type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#colorPnl)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+    <>
+      {showConfirm && (
+        <StrategyConfirmModal
+          payload={payload}
+          onConfirm={doSave}
+          onCancel={() => setShowConfirm(false)}
+          isSaving={isSaving}
+        />
       )}
 
-      <div className="aegis-receipt-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-        <div className="aegis-receipt-item" style={{ padding: '8px', background: 'var(--bg-sidebar)', borderRadius: '8px' }}>
-          <span className="aegis-receipt-label" style={{ fontSize: '11px' }}>Win Rate</span>
-          <span className="aegis-receipt-value" style={{ color: '#10b981', fontSize: '14px' }}>{metrics.win_rate || '-'}</span>
+      <div className="aegis-receipt-card" style={{ overflow: 'hidden' }}>
+        {/* ── Header ── */}
+        <div style={{ padding: '14px 16px 10px', background: 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(99,102,241,0.06))', borderBottom: '1px solid rgba(139,92,246,0.15)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <I.Activity color="#a78bfa" size={16} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: '13px', color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {payload.name || cfg.name || 'Strategy'}
+            </div>
+            <div style={{ fontSize: '11px', color: '#7c3aed', fontWeight: 600, marginTop: '1px' }}>
+              AEGIS · AI-Generated Strategy
+            </div>
+          </div>
+          <div style={{ padding: '3px 8px', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: '20px', fontSize: '10px', color: '#c4b5fd', fontWeight: 700, letterSpacing: '0.5px' }}>
+            BACKTEST
+          </div>
         </div>
-        <div className="aegis-receipt-item" style={{ padding: '8px', background: 'var(--bg-sidebar)', borderRadius: '8px' }}>
-          <span className="aegis-receipt-label" style={{ fontSize: '11px' }}>Total Return</span>
-          <span className="aegis-receipt-value" style={{ color: '#3b82f6', fontSize: '14px' }}>{metrics.total_return || '-'}</span>
-        </div>
-        <div className="aegis-receipt-item" style={{ padding: '8px', background: 'var(--bg-sidebar)', borderRadius: '8px' }}>
-          <span className="aegis-receipt-label" style={{ fontSize: '11px' }}>Max Drawdown</span>
-          <span className="aegis-receipt-value" style={{ color: '#ef4444', fontSize: '14px' }}>{metrics.max_drawdown || '-'}</span>
-        </div>
-        <div className="aegis-receipt-item" style={{ padding: '8px', background: 'var(--bg-sidebar)', borderRadius: '8px' }}>
-          <span className="aegis-receipt-label" style={{ fontSize: '11px' }}>Sharpe Ratio</span>
-          <span className="aegis-receipt-value" style={{ color: '#f59e0b', fontSize: '14px' }}>{metrics.sharpe_ratio || '-'}</span>
-        </div>
-      </div>
 
-      <div className="aegis-receipt-footer" style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-        <button 
-          onClick={() => {
-            navigate('/algo-backtest', { state: { strategy: payload } });
-          }} 
-          style={{ flex: 1, padding: '10px', borderRadius: '8px', background: '#3b82f6', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer' }}
-        >
-          Open in Studio
-        </button>
-        <button 
-          onClick={async (e) => {
-            const btn = e.currentTarget;
-            const originalText = btn.innerText;
-            btn.innerText = "Saving...";
-            try {
-              const res = await fetch(`${HOST}/api/paperbull/strategies`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({
-                  name: payload.name || `Strategy: ${payload.symbol || 'Auto'}`,
-                  description: payload.description || "Auto-generated by AEGIS",
-                  mode: payload.code ? "code" : "visual",
-                  code: payload.code || "class CustomStrategy(Strategy):\n    def next(self):\n        pass",
-                  config: payload.config || { 
-                    universe: { market: "NSE", top_n: 50 }, 
-                    entry: { logic: "AND", conditions: [] }, 
-                    exit: { stop_loss: 5, take_profit: 15 },
-                    portfolio: { capital: 100000, market: "NSE", symbols: [payload.symbol || "RELIANCE.NS"], interval: "1d", start: "2023-01-01", end: "2024-01-01", warm_up_days: 20 }
-                  }
-                })
-              });
-              if (res.ok) {
-                btn.innerText = "Saved!";
-                btn.style.background = "#10b981";
-              } else {
-                btn.innerText = "Error Saving";
-              }
-            } catch (err) {
-              btn.innerText = "Error Saving";
-            }
-            setTimeout(() => { if (btn.innerText === "Saved!" || btn.innerText === "Error Saving") { btn.innerText = originalText; btn.style.background = "#8b5cf6"; } }, 2000);
-          }} 
-          style={{ flex: 1, padding: '10px', borderRadius: '8px', background: '#8b5cf6', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer' }}
-        >
-          Save Strategy
-        </button>
+        {/* ── PnL Curve ── */}
+        {data.length > 0 && (
+          <div style={{ height: 140, width: '100%', padding: '12px 0 0' }}>
+            <ResponsiveContainer>
+              <AreaChart data={data} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorPnlNew" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.35}/>
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.5)" vertical={false} />
+                <XAxis dataKey="date" stroke="#475569" fontSize={9} tickLine={false} axisLine={false} />
+                <YAxis stroke="#475569" fontSize={9} tickLine={false} axisLine={false} domain={['auto', 'auto']} width={40} />
+                <RechartsTooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', fontSize: '11px' }} itemStyle={{ color: '#c4b5fd' }} />
+                <Area type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#colorPnlNew)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* ── Performance Metrics ── */}
+        {Object.keys(metrics).length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#1e293b', borderTop: '1px solid #1e293b', borderBottom: '1px solid #1e293b' }}>
+            {[
+              { label: 'Win Rate', value: metrics.win_rate, color: '#10b981' },
+              { label: 'Return', value: metrics.total_return, color: '#2f3640' },
+              { label: 'Drawdown', value: metrics.max_drawdown, color: '#ef4444' },
+              { label: 'Sharpe', value: metrics.sharpe_ratio, color: '#f59e0b' },
+            ].map((m, i) => (
+              <div key={i} style={{ padding: '10px 8px', background: '#0f172a', textAlign: 'center' }}>
+                <div style={{ fontSize: '9px', color: '#475569', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '3px' }}>{m.label}</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: m.color }}>{m.value || '—'}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Strategy Parameters Preview ── */}
+        <div style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: '10px', color: '#475569', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: '8px' }}>Parameters</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+            {[
+              { label: 'Tickers', value: (cfg.tickers || cfg.portfolio?.symbols || [payload.symbol]).filter(Boolean).join(', ') || '—' },
+              { label: 'Capital', value: cfg.capital != null ? `₹${Number(cfg.capital).toLocaleString('en-IN')}` : '—' },
+              { label: 'Timeframe', value: cfg.timeframe || '—' },
+              { label: 'Stop-Loss', value: cfg.stopLossPct != null ? `${cfg.stopLossPct}% (${cfg.stopLossType || 'fixed'})` : '—' },
+              { label: 'Start', value: cfg.startDate || '—' },
+              { label: 'End', value: cfg.endDate || '—' },
+            ].map((item, i) => (
+              <div key={i} style={{ background: '#1e293b', borderRadius: '6px', padding: '7px 10px' }}>
+                <div style={{ fontSize: '10px', color: '#475569', fontWeight: 600, marginBottom: '2px' }}>{item.label}</div>
+                <div style={{ fontSize: '11px', color: '#cbd5e1', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Description ── */}
+        {payload.description && (
+          <div style={{ margin: '0 16px 12px', padding: '8px 12px', background: '#1e293b', borderRadius: '8px', fontSize: '11px', color: '#94a3b8', lineHeight: '1.5', borderLeft: '3px solid rgba(139,92,246,0.4)' }}>
+            {payload.description}
+          </div>
+        )}
+
+        {/* ── Save result banner ── */}
+        {saveResult !== 'idle' && (
+          <div style={{ margin: '0 16px 10px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', background: saveResult === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${saveResult === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, color: saveResult === 'success' ? '#10b981' : '#ef4444' }}>
+            {saveResult === 'success' ? (
+              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Strategy saved successfully to PaperBull Studio!</>
+            ) : (
+              <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Failed to save. The name may already exist.</>
+            )}
+          </div>
+        )}
+
+        {/* ── Actions ── */}
+        <div style={{ padding: '0 16px 16px', display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => navigate('/algo-backtest', { state: { strategy: payload } })}
+            style={{ flex: 1, padding: '9px', borderRadius: '8px', background: 'transparent', color: '#2f3640', border: '1px solid rgba(96,165,250,0.3)', fontWeight: 600, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+            Open in Studio
+          </button>
+          <button
+            onClick={() => { setSaveResult('idle'); setShowConfirm(true); }}
+            style={{ flex: 1, padding: '9px', borderRadius: '8px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', fontWeight: 700, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save to Studio
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -670,7 +833,7 @@ function HistoricalChartCard({ payload }: { payload: any }) {
     <div className="aegis-receipt-card">
       <div className="aegis-receipt-header" style={{ marginBottom: '16px', borderBottom: 'none' }}>
         <div className="aegis-receipt-title">
-          <I.Activity color="#3b82f6" size={20} />
+          <I.Activity color="#2f3640" size={20} />
           Price History: {payload.symbol}
         </div>
       </div>
@@ -679,8 +842,8 @@ function HistoricalChartCard({ payload }: { payload: any }) {
           <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#2f3640" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#2f3640" stopOpacity={0}/>
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
@@ -690,7 +853,7 @@ function HistoricalChartCard({ payload }: { payload: any }) {
               contentStyle={{ background: '#121822', border: '1px solid #334155', borderRadius: '8px' }}
               itemStyle={{ color: '#fff' }}
             />
-            <Area type="monotone" dataKey="price" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" />
+            <Area type="monotone" dataKey="price" stroke="#2f3640" strokeWidth={2} fillOpacity={1} fill="url(#colorPrice)" />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -712,7 +875,7 @@ function FinancialSnapshotCard({ payload }: { payload: any }) {
       <div className="aegis-receipt-grid">
         <div className="aegis-receipt-item">
           <span className="aegis-receipt-label">Market Cap</span>
-          <span className="aegis-receipt-value" style={{ color: '#3b82f6' }}>{m.market_cap || '-'}</span>
+          <span className="aegis-receipt-value" style={{ color: '#2f3640' }}>{m.market_cap || '-'}</span>
         </div>
         <div className="aegis-receipt-item">
           <span className="aegis-receipt-label">P/E Ratio</span>
@@ -737,7 +900,7 @@ function NewsCarouselCard({ payload, onAction }: { payload: any, onAction: (msg:
   return (
     <div className="aegis-news-carousel-container">
       <div className="aegis-receipt-title" style={{ marginBottom: '12px' }}>
-        <I.Activity color="#3b82f6" size={20} />
+        <I.Activity color="#2f3640" size={20} />
         Latest Intelligence: {payload.symbol}
       </div>
       <div className="aegis-news-carousel">
@@ -759,30 +922,36 @@ function NewsCarouselCard({ payload, onAction }: { payload: any, onAction: (msg:
 }
 
 /* ─── Smart Message Renderer ─── */
-function SmartMessage({ content, indicators, onAction }: { content: string; indicators: ReturnType<typeof parseIndicators>, onAction: (msg: string) => void }) {
-  // If we have indicator data, show the card with properly rendered surrounding text
-  if (indicators) {
-    return (
-      <>
-        {indicators.textBefore && (
-          <div className="aegis-msg-ai-text"
-            dangerouslySetInnerHTML={{ __html: renderMarkdownText(indicators.textBefore) }} />
-        )}
-        <IndicatorCard data={indicators} />
-        {indicators.textAfter && (
-          <div className="aegis-msg-ai-text"
-            dangerouslySetInnerHTML={{ __html: renderMarkdownText(indicators.textAfter) }} />
-        )}
-      </>
-    );
-  }
+function SmartMessage({ content, onAction }: { content: string; onAction: (msg: string) => void }) {
 
   // Intercept structured JSON payloads
   let cleanContent = content;
   const parsedPayloads: any[] = [];
   
   const statusRegex = /"status"\s*:\s*"(pending_confirmation|trade_executed|portfolio_allocation|risk_profile|financial_snapshot|news_sentiment|historical_chart|strategy_backtest)"/;
-  
+
+  // ── Step 1: Extract JSON from ```json ... ``` fenced blocks (LLM default output) ──
+  {
+    const fenceRegex = /```(?:json)?\s*\n?([\s\S]*?)\n?```/g;
+    let fenceMatch: RegExpExecArray | null;
+    const fenceRanges: Array<[number, number]> = [];
+    while ((fenceMatch = fenceRegex.exec(cleanContent)) !== null) {
+      const inner = fenceMatch[1].trim();
+      if (statusRegex.test(inner)) {
+        try {
+          parsedPayloads.push(JSON.parse(inner));
+          fenceRanges.push([fenceMatch.index, fenceMatch.index + fenceMatch[0].length]);
+        } catch (_) { /* invalid JSON, skip */ }
+      }
+    }
+    for (let i = fenceRanges.length - 1; i >= 0; i--) {
+      const [s, e] = fenceRanges[i];
+      cleanContent = cleanContent.substring(0, s) + cleanContent.substring(e);
+    }
+    cleanContent = cleanContent.trim();
+  }
+
+  // ── Step 2: Scan for bare JSON objects not inside fences ──
   let currentIndex = 0;
   while (currentIndex < cleanContent.length) {
     const startIdx = cleanContent.indexOf('{', currentIndex);
@@ -1049,14 +1218,19 @@ export default function AegisPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlChatId = searchParams.get('chat');
+
   const [activeConvId, setActiveConvId] = useState<string | null>(() => {
-    return localStorage.getItem('aegis-active-conv') || null;
+    return urlChatId || localStorage.getItem('aegis-active-conv') || crypto.randomUUID();
   });
   const [serverConvs, setServerConvs] = useState<ConvMeta[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isDark, setIsDark] = useState<boolean>(() => localStorage.getItem('aegis-theme') !== 'light');
   const [isLoadingConv, setIsLoadingConv] = useState(false);
+  const [isLoadingSidebar, setIsLoadingSidebar] = useState(true);
   const [agentMode, setAgentMode] = useState<"fast" | "deep">("deep");
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -1070,10 +1244,18 @@ export default function AegisPage() {
   useEffect(() => {
     if (activeConvId) {
       localStorage.setItem('aegis-active-conv', activeConvId);
+      if (searchParams.get('chat') !== activeConvId) {
+        setSearchParams({ chat: activeConvId }, { replace: true });
+      }
     } else {
       localStorage.removeItem('aegis-active-conv');
+      if (searchParams.has('chat')) {
+        setSearchParams({}, { replace: true });
+      }
     }
-  }, [activeConvId]);
+  }, [activeConvId, searchParams, setSearchParams]);
+
+
   
   /* Initial load if activeConvId exists */
   useEffect(() => {
@@ -1104,10 +1286,16 @@ export default function AegisPage() {
   /* Load conversation list from backend */
   useEffect(() => {
     if (!user) return;
+    setIsLoadingSidebar(true);
     fetch(`${HOST}/api/ai/aegis/conversations`, { credentials: "include" })
       .then(r => r.ok ? r.json() : [])
-      .then(setServerConvs)
-      .catch(() => { });
+      .then(data => {
+        setServerConvs(data);
+        setIsLoadingSidebar(false);
+      })
+      .catch(() => {
+        setIsLoadingSidebar(false);
+      });
   }, [user]);
 
   /* Save conversation to backend whenever messages change */
@@ -1146,7 +1334,8 @@ export default function AegisPage() {
 
   /* Load a single conversation */
   const loadConversation = async (id: string) => {
-    if (streaming || id === activeConvId) return;
+    if (streaming) return;
+    if (id === activeConvId && messages.length > 0) return;
     
     // Immediate UI feedback
     setActiveConvId(id);
@@ -1173,6 +1362,8 @@ export default function AegisPage() {
 
   /* New chat */
   const newChat = () => {
+    if (messages.length === 0) return; // Already in a new/empty chat
+    
     if (abortRef.current) abortRef.current.abort();
     setMessages([]);
     setActiveConvId(crypto.randomUUID());
@@ -1185,9 +1376,20 @@ export default function AegisPage() {
     const text = (forcedText || input).trim();
     if (!text || streaming) return;
 
-    // Create conv id if needed
     const convId = activeConvId || crypto.randomUUID();
-    if (!activeConvId) setActiveConvId(convId);
+    if (!activeConvId) {
+      setActiveConvId(convId);
+    }
+    
+    // Eagerly add to sidebar so it reflects immediately for new chats
+    setServerConvs(prev => {
+      if (prev.some(c => c.id === convId)) return prev;
+      return [{ 
+        id: convId, 
+        title: text.length > 30 ? text.slice(0, 30) + "..." : text, 
+        updatedAt: new Date().toISOString() 
+      }, ...prev];
+    });
 
     const now = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
@@ -1211,6 +1413,7 @@ export default function AegisPage() {
           messages: history, 
           thread_id: activeConvId,
           uid: user?.uid, // Pass UID for portfolio/trading tools
+          displayName: user?.displayName, // Pass display name for personalization
           mode: agentMode
         }),
         signal: abortRef.current.signal,
@@ -1312,7 +1515,7 @@ export default function AegisPage() {
   const showHero = messages.length === 0 && !isLoadingConv;
 
   return (
-    <div className={`aegis-shell${isDark ? ' dark' : ''}`}>
+    <div className={`aegis-shell${isDark ? ' dark' : ' light'}`}>
       {/* ── LEFT SIDEBAR ── */}
       <aside className={`aegis-sidebar ${isSidebarOpen ? "" : "collapsed"}`}>
         <div className="aegis-brand">
@@ -1339,8 +1542,19 @@ export default function AegisPage() {
         </button>
 
 
+
+
         <div className="aegis-conv-section">
-          {serverConvs.length > 0 && (
+          {isLoadingSidebar ? (
+            <>
+              <div className="aegis-conv-group-label">Saved Conversations</div>
+              <div className="aegis-conv-list">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="aegis-conv-item" style={{ height: '36px', background: 'var(--s-bg-light)', borderRadius: '6px', marginBottom: '8px', opacity: 0.5, animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}></div>
+                ))}
+              </div>
+            </>
+          ) : serverConvs.length > 0 && (
             <>
               <div className="aegis-conv-group-label">Saved Conversations</div>
               <div className="aegis-conv-list">
@@ -1457,7 +1671,6 @@ export default function AegisPage() {
                     {msg.content ? (
                       <SmartMessage
                         content={msg.content}
-                        indicators={!msg.isStreaming ? parseIndicators(msg.content) : null}
                         onAction={onQuickAction}
                       />
                     ) : (
@@ -1535,7 +1748,7 @@ export default function AegisPage() {
         .aegis-mode-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; margin-right: 12px; background: transparent; border: none; padding: 0; }
         .aegis-toggle-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; transition: color 0.2s ease; }
         .aegis-toggle-label.active { color: var(--text-primary); }
-        .aegis-toggle-track { width: 36px; height: 20px; border-radius: 20px; background: #3b82f6; position: relative; transition: background 0.3s ease; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); }
+        .aegis-toggle-track { width: 36px; height: 20px; border-radius: 20px; background: #2f3640; position: relative; transition: background 0.3s ease; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); }
         .aegis-toggle-track.fast { background: #10b981; }
         .aegis-toggle-thumb { width: 16px; height: 16px; border-radius: 50%; background: white; position: absolute; top: 2px; left: 2px; transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1); box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
         .aegis-toggle-track.fast .aegis-toggle-thumb { transform: translateX(16px); }

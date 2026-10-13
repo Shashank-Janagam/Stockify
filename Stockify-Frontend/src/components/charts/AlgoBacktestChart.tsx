@@ -1215,13 +1215,13 @@ export function AlgoBacktestChart({
         d.getUTCFullYear(),
         d.getUTCMonth(),
         d.getUTCDate(),
-        9, 15, 0
+        3, 45, 0
       )).getTime(),
       marketClose: new Date(Date.UTC(
         d.getUTCFullYear(),
         d.getUTCMonth(),
         d.getUTCDate(),
-        15, 30, 0
+        10, 0, 0
       )).getTime()
     };
   }
@@ -1276,19 +1276,9 @@ export function AlgoBacktestChart({
 
   const minPriceFinal = Math.min(...allVisiblePrices);
   const maxPriceFinal = Math.max(...allVisiblePrices);
-  const pad = (maxPriceFinal - minPriceFinal) * 0.12 || minPriceFinal * 0.005 || 1;
+  const pad = (maxPriceFinal - minPriceFinal) * 0.15 || minPriceFinal * 0.01 || 2;
   const isMarketOpen = marketState === "REGULAR" || marketState === "SIMULATION";
-  const [lineColor, setLineColor] = useState("");
-  useEffect(() => {
-    const pct = Number(percent) || 0;
-
-    setLineColor(
-      pct > 0 ? "#00b386" :
-      pct < 0 ? "#f76767" :
-      "#9ca3af"
-    );
-  }, [timeframe, percent]);
-
+  
   // Instead of shrinking the array length, we nullify future values. 
   // This forces Chart.js to keep the X-axis completely rigid and full-width!
   const chartData = lineData.map((d, i) => {
@@ -1298,6 +1288,36 @@ export function AlgoBacktestChart({
       y: isFuture || isNaN(d.x) || isNaN(d.y) ? null : d.y
     };
   });
+  
+  const [lineColor, setLineColor] = useState("");
+  useEffect(() => {
+    let pct = Number(percent);
+    
+    // Fallback to chart data if percent is 0 or undefined (e.g. simulation mode without company info)
+    if ((isNaN(pct) || pct === 0) && chartData.length > 0) {
+       const openPrice = chartData[0]?.y;
+       let currentVal = chartData[chartData.length - 1]?.y;
+       
+       // Find the last non-null value if the chart extends into the future
+       for (let i = chartData.length - 1; i >= 0; i--) {
+         if (chartData[i].y != null) {
+           currentVal = chartData[i].y;
+           break;
+         }
+       }
+       
+       if (openPrice != null && currentVal != null && openPrice !== 0) {
+          pct = ((currentVal - openPrice) / openPrice) * 100;
+       }
+    }
+
+    setLineColor(
+      pct > 0 ? "#00b386" :
+      pct < 0 ? "#f76767" :
+      "#9ca3af"
+    );
+  }, [timeframe, percent, chartData]);
+
   currentIndex = (isReplaying || replayIndex < lineData.length) ? replayIndex : lineData.length - 1;
 
   // Build datasets for the main chart
@@ -1319,7 +1339,7 @@ export function AlgoBacktestChart({
       fill: true,
       borderWidth: 3,
       pointRadius: 0,
-      tension: 0.05,
+      tension: 0,
       parsing: false as const,
       yAxisID: 'y'
     },
@@ -1348,7 +1368,7 @@ export function AlgoBacktestChart({
         borderDash: ind.key.startsWith('Threshold') ? [5, 5] : [],
         fill: false,
         pointRadius: 0,
-        tension: 0.1,
+        tension: 0,
         parsing: false as const,
         yAxisID: 'y'
       };
@@ -1383,7 +1403,7 @@ export function AlgoBacktestChart({
         borderDash: [],
         fill: false,
         pointRadius: 0,
-        tension: 0.1,
+        tension: 0,
         parsing: false as const,
         yAxisID: 'y1'
       };

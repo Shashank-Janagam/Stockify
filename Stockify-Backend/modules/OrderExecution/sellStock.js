@@ -55,10 +55,12 @@ router.get("/holding/:symbol", requireAuth, async (req, res) => {
     const totalQuantity = intradayQuantity + deliveryQuantity;
 
     const tradesRes = await db.query(
-      `SELECT id, side, quantity, price, created_at
-       FROM trades
-       WHERE user_id = $1 AND stock_id = $2
-       ORDER BY created_at ASC`,
+      `SELECT t.id, t.side, t.quantity, t.price, t.created_at
+       FROM trades t
+       LEFT JOIN orders o ON t.order_id = o.id
+       WHERE t.user_id = $1 AND t.stock_id = $2
+         AND (o.category IS NULL OR (o.category != 'ALGO' AND o.category != 'ALGO_SESSION'))
+       ORDER BY t.created_at ASC`,
       [userId, stockId]
     );
     

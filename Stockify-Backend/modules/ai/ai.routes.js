@@ -191,8 +191,9 @@ const AEGIS_PYTHON_URL = process.env.AEGIS_PYTHON_URL || 'http://127.0.0.1:5050'
 
 /* POST /api/ai/aegis/chat */
 router.post('/aegis/chat', requireAuth, async (req, res) => {
-  const { messages, thread_id, mode } = req.body;
-  const uid = req.user?.uid || req.user?.id || null; // injected by requireAuth middleware
+  const { messages, thread_id, mode, displayName, preferences } = req.body;
+  const firebaseUid = req.user?.uid || req.user?.id || null; 
+
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'messages array is required' });
   }
@@ -207,6 +208,8 @@ router.post('/aegis/chat', requireAuth, async (req, res) => {
   const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
   try {
+    let aegisUid = firebaseUid; // Default to the currently logged in user's Firebase UID
+
     // Proxy request to Python Aegis server
     const pyRes = await fetch(`${AEGIS_PYTHON_URL}/chat`, {
       method: 'POST',
@@ -217,9 +220,10 @@ router.post('/aegis/chat', requireAuth, async (req, res) => {
           content: m.content
         })),
         thread_id: thread_id || undefined,
-        uid: uid, // ← forward authenticated user UID for portfolio/trading tools
-        mode: mode || "deep", // default to deep research mode
-
+        uid: aegisUid, // ← forward internal serial user ID
+        displayName: displayName,
+        preferences: preferences,
+        mode: mode || "deep",
       }),
     });
 
@@ -229,12 +233,64 @@ router.post('/aegis/chat', requireAuth, async (req, res) => {
       return res.end();
     }
 
+    let aiFullContent = "";
+    const decoder = new TextDecoder("utf-8");
+
     // Pipe the SSE stream from Python server → browser
     for await (const chunk of pyRes.body) {
       res.write(chunk);
+      
+      const decoded = decoder.decode(chunk, { stream: true });
+      const lines = decoded.split('\n');
+      for (const line of lines) {
+        if (line.trim().startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.trim().slice(6));
+            if (data.type === 'token' && data.text) {
+              aiFullContent += data.text;
+            }
+          } catch (e) {
+            // ignore partial json
+          }
+        }
+      }
     }
 
     res.end();
+
+    // Auto-save the complete conversation to MongoDB on the backend
+    if (thread_id && req.user?.uid) {
+       try {
+          const { getDb } = await import('../../db/mongo.js');
+          const db = getDb();
+          
+          // req.body.messages already contains the user's latest message
+          const finalMessages = [...messages, { 
+             id: Date.now().toString(), 
+             role: 'assistant', 
+             content: aiFullContent,
+             time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) 
+          }];
+          
+          // Ensure we don't overwrite the title if it already exists
+          const existing = await db.collection('aegis_conversations').findOne({ uid: req.user.uid, id: thread_id });
+          const title = existing?.title || "New chat";
+
+          await db.collection('aegis_conversations').updateOne(
+              { uid: req.user.uid, id: thread_id },
+              { $set: { 
+                  uid: req.user.uid, 
+                  id: thread_id, 
+                  messages: finalMessages, 
+                  updatedAt: new Date().toISOString(),
+                  title: title
+              } },
+              { upsert: true }
+          );
+       } catch (dbErr) {
+          console.error("Failed to auto-save to MongoDB", dbErr);
+       }
+    }
 
   } catch (err) {
     console.error('[AEGIS proxy error]', err.message);

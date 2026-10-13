@@ -745,7 +745,7 @@ export function StockChartIndia({
 
   const minPriceFinal = Math.min(...allVisiblePrices);
   const maxPriceFinal = Math.max(...allVisiblePrices);
-  const pad = (maxPriceFinal - minPriceFinal) * 0.12 || minPriceFinal * 0.005 || 1;
+  const pad = (maxPriceFinal - minPriceFinal) * 0.15 || minPriceFinal * 0.01 || 2;
   const isMarketOpen = marketState === "REGULAR" || marketState === "SIMULATION";
   const [lineColor, setLineColor] = useState("");
   useEffect(() => {
@@ -774,7 +774,7 @@ export function StockChartIndia({
                 borderColor: lineColor,
                 borderWidth: 3,
                 pointRadius: 0,
-                tension: 0.05,
+                tension: 0,
                 parsing: false
               }
             ]

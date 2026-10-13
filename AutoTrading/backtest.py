@@ -167,14 +167,13 @@ def evaluate_strategy(req: EvaluateRequest):
                         reason_str = row.get('buy_reason', 'Strategy BUY Condition Met')
                         trade_log.append({"ticker": ticker, "type": "BUY", "date": date_str, "price": round(buy_price, 2), "shares": shares_held, "cost": round(cost, 2), "reason": reason_str})
                         
-                # 3. Sell Signal
-                elif row['sell_signal'] and shares_held > 0:
+                # 3. Intraday Square Off (15:15)
+                elif hasattr(date, 'hour') and date.hour == 15 and date.minute >= 15 and shares_held > 0:
                     sell_value = shares_held * current_price
                     trade_pnl = sell_value - (shares_held * buy_price)
                     capital += sell_value
                     trades += 1
-                    reason_str = row.get('sell_reason', 'Strategy SELL Condition Met')
-                    trade_log.append({"ticker": ticker, "type": "SELL", "date": date_str, "price": round(current_price, 2), "shares": shares_held, "pnl": round(trade_pnl, 2), "capital": round(capital, 2), "reason": reason_str})
+                    trade_log.append({"ticker": ticker, "type": "SELL", "date": date_str, "price": round(current_price, 2), "shares": shares_held, "pnl": round(trade_pnl, 2), "capital": round(capital, 2), "reason": "Intraday Square Off (15:15)"})
                     shares_held = 0
                     buy_price = 0.0
                     highest_price = 0.0

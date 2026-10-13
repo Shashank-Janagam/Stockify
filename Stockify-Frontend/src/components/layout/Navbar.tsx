@@ -84,7 +84,7 @@ const NavBar = ({ onLoginClick }: NavbarProps) => {
     }
   };
   
-  const shouldAutoHide = isAegis || isStudio;
+  const shouldAutoHide = isAegis;
 
   return (
     <>

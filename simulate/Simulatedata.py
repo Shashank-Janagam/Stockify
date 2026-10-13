@@ -6,7 +6,7 @@ import pandas as pd
 
 data_cache = {}
 
-def get_historical_data(symbol="RELIANCE.NS", period="1d", interval="1m"):
+def get_historical_data(symbol="RELIANCE.NS", period="5d", interval="1m"):
     """
     Fetch historical data from Yahoo Finance.
     We cache it to avoid hitting rate limits on reconnects.
@@ -15,15 +15,32 @@ def get_historical_data(symbol="RELIANCE.NS", period="1d", interval="1m"):
         return data_cache[symbol]
         
     print(f"Fetching historical data for {symbol}...")
-    ticker = yf.Ticker(symbol)
+    s_up = symbol.upper().replace(".NS", "").replace(".BO", "").strip()
+    if symbol.startswith("^"):
+        fetch_sym = symbol.replace(".NS", "").replace(".BO", "")
+    elif s_up in ["NIFTY 50", "NIFTY50", "NIFTY", "NIFTY_50"]:
+        fetch_sym = "^NSEI"
+    elif s_up in ["BANKNIFTY", "NIFTY BANK", "NIFTYBANK"]:
+        fetch_sym = "^NSEBANK"
+    elif s_up in ["SENSEX", "BSE SENSEX", "BSESN"]:
+        fetch_sym = "^BSESN"
+    elif s_up in ["FINNIFTY", "NIFTY FIN SERVICE"]:
+        fetch_sym = "^CNXFIN"
+    else:
+        fetch_sym = f"{symbol}.NS" if not symbol.endswith(".NS") and not symbol.endswith(".BO") else symbol
+        
+    ticker = yf.Ticker(fetch_sym)
     hist = ticker.history(period=period, interval=interval)
     hist.reset_index(inplace=True)
     
-    # Filter to start from 9:15 AM local time
     if not hist.empty:
         time_col = 'Datetime' if 'Datetime' in hist.columns else 'Date'
-        # Extract time and filter >= 09:15
         if pd.api.types.is_datetime64_any_dtype(hist[time_col]):
+            # Get the very last trading day available in the 5d window
+            last_date = hist[time_col].dt.date.max()
+            hist = hist[hist[time_col].dt.date == last_date]
+            
+            # Filter to start from 9:15 AM local time
             hist = hist[hist[time_col].dt.time >= pd.to_datetime('09:15').time()]
             
     data_cache[symbol] = hist
@@ -65,7 +82,7 @@ async def send_ticks(websocket, symbol):
             await websocket.send(json.dumps(tick))
             
             # Simulate a 1-second delay between ticks
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.2)
             
     except websockets.exceptions.ConnectionClosed:
         pass

@@ -10,92 +10,94 @@ import StockLogo from '../components/common/StockLogo';
 import SearchOverlay from '../components/layout/SearchOverlay';
 
 
-function computeSMA(data: {x: number, y: number}[], period: number) {
-  let result: {x: number, y: number|null}[] = [];
-  for(let i=0; i<data.length; i++) {
-     if(i < period - 1) {
-       result.push({ x: data[i].x, y: null });
-     } else {
-       let sum = 0;
-       for(let j=0; j<period; j++) sum += data[i-j].y;
-       result.push({ x: data[i].x, y: sum / period });
-     }
+function computeSMA(data: { x: number, y: number }[], period: number) {
+  let result: { x: number, y: number | null }[] = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      result.push({ x: data[i].x, y: null });
+    } else {
+      let sum = 0;
+      for (let j = 0; j < period; j++) sum += data[i - j].y;
+      result.push({ x: data[i].x, y: sum / period });
+    }
   }
   return result;
 }
 
-function computeEMA(data: {x: number, y: number}[], period: number) {
-  let result: {x: number, y: number|null}[] = [];
+function computeEMA(data: { x: number, y: number }[], period: number) {
+  let result: { x: number, y: number | null }[] = [];
   let k = 2 / (period + 1);
   let ema: number | null = null;
-  for(let i=0; i<data.length; i++) {
-     if(i < period - 1) {
-       result.push({ x: data[i].x, y: null });
-     } else if(i === period - 1) {
-       let sum = 0;
-       for(let j=0; j<period; j++) sum += data[i-j].y;
-       ema = sum / period;
-       result.push({ x: data[i].x, y: ema });
-     } else {
-       ema = (data[i].y - ema!) * k + ema!;
-       result.push({ x: data[i].x, y: ema });
-     }
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      result.push({ x: data[i].x, y: null });
+    } else if (i === period - 1) {
+      let sum = 0;
+      for (let j = 0; j < period; j++) sum += data[i - j].y;
+      ema = sum / period;
+      result.push({ x: data[i].x, y: ema });
+    } else {
+      ema = (data[i].y - ema!) * k + ema!;
+      result.push({ x: data[i].x, y: ema });
+    }
   }
   return result;
 }
 
-function computeRSI(data: {x: number, y: number}[], period: number) {
-  let result: {x: number, y: number|null}[] = [];
+function computeRSI(data: { x: number, y: number }[], period: number) {
+  let result: { x: number, y: number | null }[] = [];
   let gains = 0, losses = 0;
-  for(let i=0; i<data.length; i++) {
-     if(i === 0) {
-       result.push({ x: data[i].x, y: null });
-       continue;
-     }
-     let diff = data[i].y - data[i-1].y;
-     if(i < period) {
-        if(diff > 0) gains += diff;
-        else losses -= diff;
-        result.push({ x: data[i].x, y: null });
-     } else if(i === period) {
-        if(diff > 0) gains += diff;
-        else losses -= diff;
-        gains /= period;
-        losses /= period;
-        let rs = gains / (losses === 0 ? 1 : losses);
-        result.push({ x: data[i].x, y: 100 - (100 / (1 + rs)) });
-     } else {
-        let gain = diff > 0 ? diff : 0;
-        let loss = diff < 0 ? -diff : 0;
-        gains = (gains * (period - 1) + gain) / period;
-        losses = (losses * (period - 1) + loss) / period;
-        let rs = gains / (losses === 0 ? 1 : losses);
-        result.push({ x: data[i].x, y: 100 - (100 / (1 + rs)) });
-     }
+  for (let i = 0; i < data.length; i++) {
+    if (i === 0) {
+      result.push({ x: data[i].x, y: null });
+      continue;
+    }
+    let diff = data[i].y - data[i - 1].y;
+    if (i < period) {
+      if (diff > 0) gains += diff;
+      else losses -= diff;
+      result.push({ x: data[i].x, y: null });
+    } else if (i === period) {
+      if (diff > 0) gains += diff;
+      else losses -= diff;
+      gains /= period;
+      losses /= period;
+      let rs = gains / (losses === 0 ? 1 : losses);
+      result.push({ x: data[i].x, y: 100 - (100 / (1 + rs)) });
+    } else {
+      let gain = diff > 0 ? diff : 0;
+      let loss = diff < 0 ? -diff : 0;
+      gains = (gains * (period - 1) + gain) / period;
+      losses = (losses * (period - 1) + loss) / period;
+      let rs = gains / (losses === 0 ? 1 : losses);
+      result.push({ x: data[i].x, y: 100 - (100 / (1 + rs)) });
+    }
   }
   return result;
 }
 
-const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userId, buyDsl, sellDsl, allocatedCapital, mode, stopLossPct, stopLossType }: { symbol: string, indicatorSeries: any[], onClose: () => void, strategyName?: string, userId?: string, buyDsl?: string, sellDsl?: string, allocatedCapital?: number, mode?: 'simulate' | 'upstox', stopLossPct: number, stopLossType: string }) => {
+const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userId, buyDsl, sellDsl, allocatedCapital, mode, stopLossPct, stopLossType, sessionId }: { symbol: string, indicatorSeries: any[], onClose: () => void, strategyName?: string, userId?: string, buyDsl?: string, sellDsl?: string, allocatedCapital?: number, mode?: 'simulate' | 'upstox', stopLossPct: number, stopLossType: string, sessionId?: string }) => {
   const HOST = import.meta.env.VITE_HOST_ADDRESS || "";
-  const [data, setData] = useState<{x: number, y: number}[]>([]);
-  const [indicatorData, setIndicatorData] = useState<{[key: string]: {x: number, y: number}[]}>({});
-  
+  const [data, setData] = useState<{ x: number, y: number }[]>([]);
+  const [indicatorData, setIndicatorData] = useState<{ [key: string]: { x: number, y: number }[] }>({});
+
   // Simulated stats for the dashboard
   const [invested, setInvested] = useState(0);
   const [pnl, setPnl] = useState(0);
   const [cash, setCash] = useState(allocatedCapital || 0);
   const [investedQty, setInvestedQty] = useState(0);
-  const [position, setPosition] = useState<"NONE"|"LONG"|"SHORT">("NONE");
+  const [position, setPosition] = useState<"NONE" | "LONG" | "SHORT">("NONE");
   const [trades, setTrades] = useState<any[]>([]);
-  
+
   const [ltp, setLtp] = useState(0);
   const [prevLtp, setPrevLtp] = useState(0);
   const [latestIndicators, setLatestIndicators] = useState<any>({});
   const [activeStopLoss, setActiveStopLoss] = useState<number | null>(null);
   const [showLiveLedger, setShowLiveLedger] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
-  const [companyInfo, setCompanyInfo] = useState<{ name: string; exchange: string } | null>(null);
+  const [companyInfo, setCompanyInfo] = useState<{ name: string; exchange: string; prevClose?: number; chg?: number; chgPct?: number } | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | undefined>(sessionId);
+  const wsRef = useRef<WebSocket | null>(null); // ref so stop button can send action:stop
 
   // Fetch real company name from backend
   useEffect(() => {
@@ -107,80 +109,83 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
         if (!d) return;
         const name = d?.longName || d?.shortName || d?.companyName || d?.name || null;
         const exchange = d?.fullExchangeName || (symbol.endsWith('.BO') ? 'BSE' : 'NSE');
-        if (name) setCompanyInfo({ name, exchange });
+        const prevClose = d?.regularMarketPreviousClose || d?.previousClose || null;
+        const chg = d?.regularMarketChange || null;
+        const chgPct = d?.regularMarketChangePercent || null;
+        if (name) setCompanyInfo({ name, exchange, prevClose, chg, chgPct });
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [symbol, HOST]);
 
-  const positionRef = useRef<"NONE"|"LONG"|"SHORT">("NONE");
+  const positionRef = useRef<"NONE" | "LONG" | "SHORT">("NONE");
   const investedRef = useRef(0);
   const investedQtyRef = useRef(0);
   const cashRef = useRef(allocatedCapital || 0);
   const ltpRef = useRef(0);
   const highestPriceRef = useRef(0);
-  
-  const [signals, setSignals] = useState<{BUY: boolean, SELL: boolean}>({BUY: false, SELL: false});
+
+  const [signals, setSignals] = useState<{ BUY: boolean, SELL: boolean }>({ BUY: false, SELL: false });
   const [isCompleted, setIsCompleted] = useState(false);
-  
+
   useEffect(() => {
     if (isCompleted) {
-        // Use refs for all values — refs are always current unlike stale closure state
-        const currentQty = investedQtyRef.current;
-        const currentInvestedCost = investedRef.current;
-        const currentLtp = ltpRef.current;
-        const currentCash = cashRef.current;
+      // Use refs for all values — refs are always current unlike stale closure state
+      const currentQty = investedQtyRef.current;
+      const currentInvestedCost = investedRef.current;
+      const currentLtp = ltpRef.current;
+      const currentCash = cashRef.current;
 
-        let finalTrades: any[] = [];
-        let finalReturnedCapital: number;
+      let finalTrades: any[] = [];
+      let finalReturnedCapital: number;
 
-        if (positionRef.current === "LONG" && currentQty > 0) {
-            // Auto-sell at current LTP
-            const sellValue = currentQty * currentLtp;
-            const realizedPnl = sellValue - currentInvestedCost;
-            finalTrades.push({
-                side: "SELL",
-                quantity: currentQty,
-                pricePerShare: currentLtp,
-                createdAtIST: new Date().toISOString(),
-                pnl: realizedPnl,
-                isAlgo: true
-            });
-            // Total capital returned = remaining cash + proceeds from selling
-            finalReturnedCapital = currentCash + sellValue;
-            setPnl(finalReturnedCapital - Number(allocatedCapital || 0));
-            setTrades(prev => [...prev, ...finalTrades]);
-            setInvested(0);
-            setInvestedQty(0);
-            setPosition("NONE");
-            investedRef.current = 0;
-            investedQtyRef.current = 0;
-            positionRef.current = "NONE";
-            cashRef.current = finalReturnedCapital;
-        } else {
-            // No open position — just return whatever cash is left
-            finalReturnedCapital = currentCash;
-        }
-
-        fetch(`${HOST}/api/algo/session/stop`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                returnedCapital: finalReturnedCapital,
-                symbol,
-                strategyName,
-                pnl: finalReturnedCapital - Number(allocatedCapital || 0),
-                trades: finalTrades
-            })
-        }).then(async res => {
-            if (res.ok) {
-                // Dispatch BEFORE onClose so parent is still mounted and can hear the event
-                window.dispatchEvent(new CustomEvent('wallet-refetch', {}));
-            }
-        }).catch(console.error).finally(() => {
-            onClose();
+      if (positionRef.current === "LONG" && currentQty > 0) {
+        // Auto-sell at current LTP
+        const sellValue = currentQty * currentLtp;
+        const realizedPnl = sellValue - currentInvestedCost;
+        finalTrades.push({
+          side: "SELL",
+          quantity: currentQty,
+          pricePerShare: currentLtp,
+          createdAtIST: new Date().toISOString(),
+          pnl: realizedPnl,
+          isAlgo: true
         });
-        setIsCompleted(false);
+        // Total capital returned = remaining cash + proceeds from selling
+        finalReturnedCapital = currentCash + sellValue;
+        setPnl(finalReturnedCapital - Number(allocatedCapital || 0));
+        setTrades(prev => [...prev, ...finalTrades]);
+        setInvested(0);
+        setInvestedQty(0);
+        setPosition("NONE");
+        investedRef.current = 0;
+        investedQtyRef.current = 0;
+        positionRef.current = "NONE";
+        cashRef.current = finalReturnedCapital;
+      } else {
+        // No open position — just return whatever cash is left
+        finalReturnedCapital = currentCash;
+      }
+
+      fetch(`${HOST}/api/algo/session/stop`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          returnedCapital: finalReturnedCapital,
+          symbol,
+          strategyName,
+          pnl: finalReturnedCapital - Number(allocatedCapital || 0),
+          trades: finalTrades
+        })
+      }).then(async res => {
+        if (res.ok) {
+          // Dispatch BEFORE onClose so parent is still mounted and can hear the event
+          window.dispatchEvent(new CustomEvent('wallet-refetch', {}));
+        }
+      }).catch(console.error).finally(() => {
+        onClose();
+      });
+      setIsCompleted(false);
     }
   }, [isCompleted]);
 
@@ -192,141 +197,158 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
       const algoWsUrl = import.meta.env.VITE_ALGO_WS_URL ||
         `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:8000/live`;
       ws = new WebSocket(algoWsUrl);
+      wsRef.current = ws;
       ws.onopen = () => {
         const visualIndicators = indicatorSeries.map(s => s.key);
         const activeMode = mode || 'simulate';
         console.log(`[LiveStudioGraph] Connecting | Symbol: ${symbol} | Mode: ${activeMode.toUpperCase()}`);
-        ws.send(JSON.stringify({ 
-            action: "subscribe", 
-            symbols: [symbol], 
-            reset: false, 
-            indicators: visualIndicators,
-            strategyName: strategyName,
-            userId: userId,
-            allocatedCapital: allocatedCapital,
-            mode: activeMode
+        ws.send(JSON.stringify({
+          action: "subscribe",
+          symbols: [symbol],
+          reset: false,
+          indicators: visualIndicators,
+          strategyName: strategyName,
+          userId: userId,
+          allocatedCapital: allocatedCapital,
+          mode: activeMode,
+          // Pass explicit sessionId so backend can rejoin even if userId is stale
+          ...(sessionId ? { sessionId } : {})
         }));
       };
       ws.onmessage = (e) => {
         try {
           const d = JSON.parse(e.data);
+
+          if (d.type === 'session_info' && d.session_id) {
+            setActiveSessionId(d.session_id);
+            return;
+          }
+
+          if (d.type === 'session_ended') {
+            console.log("Session ended by backend. Closing UI.");
+            onClose();
+            return;
+          }
+
+          if (d.action === 'completed') {
+            console.log("Algo trading stream completed. Triggering auto-sell...");
+            setIsCompleted(true);
+            return;
+          }
+
           if (
-            d.symbol === symbol || 
-            d.symbolNS === symbol || 
+            d.symbol === symbol ||
+            d.symbolNS === symbol ||
             (d.symbol && symbol && d.symbol.replace(".NS", "") === symbol.replace(".NS", ""))
           ) {
             const currentLtp = d.ltp || d.price;
             if (currentLtp && isActive) {
-               const time = d.candle_minute_ts ? new Date(d.candle_minute_ts).getTime() : Date.now();
-               
-               setLtp(currentLtp);
-               ltpRef.current = currentLtp;
+              const time = d.candle_minute_ts ? new Date(d.candle_minute_ts).getTime() : Date.now();
 
-               // Keep the displayed trailing stop synchronized with the live price.
-               if (positionRef.current === "LONG" && stopLossType === "trailing") {
-                   highestPriceRef.current = Math.max(highestPriceRef.current, currentLtp);
-                   setActiveStopLoss(highestPriceRef.current * (1 - Number(stopLossPct) / 100));
-               }
-               
-               setData(prev => {
-                  if (prev.length > 0 && prev[prev.length - 1].x === time) {
-                      const next = [...prev];
-                      next[next.length - 1] = { x: time, y: currentLtp };
-                      return next;
-                  }
-                  const next = [...prev, { x: time, y: currentLtp }];
-                  return next.length > 2500 ? next.slice(-2500) : next;
-               });
-               
-               if (d.indicators) {
-                   setLatestIndicators(d.indicators);
-                   setIndicatorData(prev => {
-                       const nextInds = { ...prev };
-                       for (const [key, val] of Object.entries(d.indicators)) {
-                           if (val !== null) {
-                               if (!nextInds[key]) nextInds[key] = [];
-                               if (nextInds[key].length > 0 && nextInds[key][nextInds[key].length - 1].x === time) {
-                                   nextInds[key][nextInds[key].length - 1] = { x: time, y: val as number };
-                               } else {
-                                   nextInds[key] = [...nextInds[key], { x: time, y: val as number }];
-                               }
-                               if (nextInds[key].length > 2500) nextInds[key] = nextInds[key].slice(-2500);
-                           }
-                       }
-                       return nextInds;
-                   });
-               }
+              setLtp(currentLtp);
+              ltpRef.current = currentLtp;
 
-               if (d.trade_executed) {
-                   const { side, qty, price, capital_remaining } = d.trade_executed;
-                   const currentPos = positionRef.current;
-                   const currentInvested = investedRef.current;
-                   
-                   // Beautiful Toast Notification Simulation
-                   const toastColor = side === "BUY" ? "#10b981" : "#ef4444";
-                   const toastIcon = side === "BUY" ? "🟩" : "🟥";
-                   console.log(`%c${toastIcon} ALGO ${side}: ${qty} Shares of ${symbol} at ₹${price} (Capital Left: ₹${capital_remaining.toFixed(2)})`, `color: ${toastColor}; font-weight: bold; font-size: 14px;`);
-                   
-                   if (side === "BUY") {
-                       const newInvested = price * qty;
-                       setInvested(newInvested);
-                       investedRef.current = newInvested;
-                        setInvestedQty(qty);
-                        investedQtyRef.current = qty;
-                        setCash(capital_remaining);
-                        cashRef.current = capital_remaining;
-                       setPosition("LONG");
-                       positionRef.current = "LONG";
-                       highestPriceRef.current = price;
-                       setActiveStopLoss(price * (1 - Number(stopLossPct) / 100));
-                       
-                       setTrades(prev => [...prev, {
-                           side: "BUY",
-                           quantity: qty,
-                           pricePerShare: price,
-                           createdAtIST: time,
-                           isAlgo: true
-                       }]);
-                   } else if (side === "SELL" && currentPos === "LONG") {
-                       const realizedPnl = (price * qty - currentInvested);
-                       setPnl(prev => prev + realizedPnl);
-                       setInvested(0);
-                       investedRef.current = 0;
-                        setInvestedQty(0);
-                        investedQtyRef.current = 0;
-                        setCash(capital_remaining);
-                        cashRef.current = capital_remaining;
-                       setPosition("NONE");
-                       positionRef.current = "NONE";
-                       highestPriceRef.current = 0;
-                       setActiveStopLoss(null);
-                       
-                       setTrades(prev => [...prev, {
-                           side: "SELL",
-                           quantity: qty,
-                           pricePerShare: price,
-                           createdAtIST: time,
-                           pnl: realizedPnl,
-                           isAlgo: true
-                       }]);
-                   }
-               }
-               
-               if (d.signals) {
-                   setSignals(d.signals);
-                   if (positionRef.current === "LONG") {
-                       // Very rough unrealized pnl for UI
-                       setPnl(prev => prev + (currentLtp - prev) * 0.001);
-                   }
-               }
+              // Keep the displayed trailing stop synchronized with the live price.
+              if (positionRef.current === "LONG" && stopLossType === "trailing") {
+                highestPriceRef.current = Math.max(highestPriceRef.current, currentLtp);
+                setActiveStopLoss(highestPriceRef.current * (1 - Number(stopLossPct) / 100));
+              }
 
-                if (d.action === "completed") {
-                    console.log("Algo trading stream completed. Triggering auto-sell...");
-                    setIsCompleted(true);
+              setData(prev => {
+                if (prev.length > 0 && prev[prev.length - 1].x === time) {
+                  const next = [...prev];
+                  next[next.length - 1] = { x: time, y: currentLtp };
+                  return next;
                 }
+                const next = [...prev, { x: time, y: currentLtp }];
+                return next.length > 2500 ? next.slice(-2500) : next;
+              });
+
+              if (d.indicators) {
+                setLatestIndicators(d.indicators);
+                setIndicatorData(prev => {
+                  const nextInds = { ...prev };
+                  for (const [key, val] of Object.entries(d.indicators)) {
+                    if (val !== null) {
+                      if (!nextInds[key]) nextInds[key] = [];
+                      if (nextInds[key].length > 0 && nextInds[key][nextInds[key].length - 1].x === time) {
+                        nextInds[key][nextInds[key].length - 1] = { x: time, y: val as number };
+                      } else {
+                        nextInds[key] = [...nextInds[key], { x: time, y: val as number }];
+                      }
+                      if (nextInds[key].length > 2500) nextInds[key] = nextInds[key].slice(-2500);
+                    }
+                  }
+                  return nextInds;
+                });
+              }
+
+              if (d.trade_executed) {
+                const { side, qty, price, capital_remaining } = d.trade_executed;
+                const currentPos = positionRef.current;
+                const currentInvested = investedRef.current;
+
+                // Beautiful Toast Notification Simulation
+                const toastColor = side === "BUY" ? "#10b981" : "#ef4444";
+                const toastIcon = side === "BUY" ? "🟩" : "🟥";
+                console.log(`%c${toastIcon} ALGO ${side}: ${qty} Shares of ${symbol} at ₹${price} (Capital Left: ₹${capital_remaining.toFixed(2)})`, `color: ${toastColor}; font-weight: bold; font-size: 14px;`);
+
+                if (side === "BUY") {
+                  const newInvested = price * qty;
+                  setInvested(newInvested);
+                  investedRef.current = newInvested;
+                  setInvestedQty(qty);
+                  investedQtyRef.current = qty;
+                  setCash(capital_remaining);
+                  cashRef.current = capital_remaining;
+                  setPosition("LONG");
+                  positionRef.current = "LONG";
+                  highestPriceRef.current = price;
+                  setActiveStopLoss(price * (1 - Number(stopLossPct) / 100));
+
+                  setTrades(prev => [...prev, {
+                    side: "BUY",
+                    quantity: qty,
+                    pricePerShare: price,
+                    createdAtIST: time,
+                    isAlgo: true
+                  }]);
+                } else if (side === "SELL" && currentPos === "LONG") {
+                  const realizedPnl = (price * qty - currentInvested);
+                  setPnl(prev => prev + realizedPnl);
+                  setInvested(0);
+                  investedRef.current = 0;
+                  setInvestedQty(0);
+                  investedQtyRef.current = 0;
+                  setCash(capital_remaining);
+                  cashRef.current = capital_remaining;
+                  setPosition("NONE");
+                  positionRef.current = "NONE";
+                  highestPriceRef.current = 0;
+                  setActiveStopLoss(null);
+
+                  setTrades(prev => [...prev, {
+                    side: "SELL",
+                    quantity: qty,
+                    pricePerShare: price,
+                    createdAtIST: time,
+                    pnl: realizedPnl,
+                    isAlgo: true
+                  }]);
+                }
+              }
+
+              if (d.signals) {
+                setSignals(d.signals);
+                if (positionRef.current === "LONG") {
+                  // Very rough unrealized pnl for UI
+                  setPnl(prev => prev + (currentLtp - prev) * 0.001);
+                }
+              }
+
             }
           }
-        } catch (_) {}
+        } catch (_) { }
       };
     } catch (e) {
       console.error("Live WS error", e);
@@ -334,6 +356,7 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
 
     return () => {
       isActive = false;
+      wsRef.current = null;
       if (ws) ws.close();
     };
   }, [symbol, HOST]);
@@ -345,54 +368,54 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
         const threshMatch = series.key.match(/\d+(\.\d+)?/);
         const threshNum = threshMatch ? parseFloat(threshMatch[0]) : null;
         return {
-           ...series,
-           values: data.map(d => ({ x: d.x, y: threshNum }))
+          ...series,
+          values: data.map(d => ({ x: d.x, y: threshNum }))
         };
       }
-      
+
       const keyLow = series.key.toLowerCase();
-      let newValues: {x: number, y: number}[] = [];
-      
+      let newValues: { x: number, y: number }[] = [];
+
       let backendKey = "";
       const periodMatch = keyLow.match(/\d+/);
       const period = periodMatch ? periodMatch[0] : "14";
-      
+
       if (keyLow.includes('sma')) backendKey = `SMA_${period}`;
       else if (keyLow.includes('ema')) backendKey = `EMA_${period}`;
       else if (keyLow.includes('rsi')) backendKey = `RSI_${period}`;
-      
+
       if (backendKey && indicatorData[backendKey]) {
-          newValues = indicatorData[backendKey];
+        newValues = indicatorData[backendKey];
       }
-      
+
       return {
         ...series,
         values: newValues
       };
     });
-    
+
     // Force inject any backend indicators that aren't properly mapped
     Object.keys(indicatorData).forEach(bKey => { // e.g., 'EMA_20'
-        const parts = bKey.split('_');
-        if (parts.length === 2) {
-            const name = parts[0].toLowerCase();
-            const period = parts[1];
-            
-            const exists = mapped.some(m => {
-                const low = m.key.toLowerCase();
-                return low.includes(name) && low.includes(period);
-            });
-            
-            if (!exists) {
-                mapped.push({
-                    key: bKey,
-                    label: bKey.replace('_', ' '),
-                    color: name === 'rsi' ? "#8b5cf6" : "#f59e0b",
-                    width: 2,
-                    values: indicatorData[bKey]
-                });
-            }
+      const parts = bKey.split('_');
+      if (parts.length === 2) {
+        const name = parts[0].toLowerCase();
+        const period = parts[1];
+
+        const exists = mapped.some(m => {
+          const low = m.key.toLowerCase();
+          return low.includes(name) && low.includes(period);
+        });
+
+        if (!exists) {
+          mapped.push({
+            key: bKey,
+            label: bKey.replace('_', ' '),
+            color: name === 'rsi' ? "#8b5cf6" : "#f59e0b",
+            width: 2,
+            values: indicatorData[bKey]
+          });
         }
+      }
     });
 
     return mapped;
@@ -404,55 +427,63 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
     : [];
 
   const formatDsl = (dslString?: string) => {
-      if (!dslString) return "None";
-      try {
-          const obj = JSON.parse(dslString);
-          if (obj.conditions && obj.conditions.length > 0) {
-             const c = obj.conditions[0];
-             const formatSide = (sideObj: any, fallbackVal: any) => {
-                 if (typeof sideObj === 'object' && sideObj !== null) {
-                     let n = sideObj.name || sideObj.indicator || '';
-                     if (sideObj.period) n += `(${sideObj.period})`;
-                     return n || '[Complex]';
-                 }
-                 if (typeof fallbackVal === 'object' && fallbackVal !== null) {
-                     let n = fallbackVal.name || fallbackVal.indicator || '';
-                     if (fallbackVal.period) n += `(${fallbackVal.period})`;
-                     return n || '[Complex]';
-                 }
-                 return fallbackVal !== undefined ? String(fallbackVal) : '';
-             };
-             
-             let left = formatSide(c.left, c.indicator);
-             
-             let op = c.comparison || c.op;
-             if (op === '>') op = '>';
-             else if (op === '<') op = '<';
-             else if (op === '>=') op = '≥';
-             else if (op === '<=') op = '≤';
-             
-             let right = formatSide(c.right, c.value ?? c.right_value);
-             
-             return `${left} ${op} ${right}`;
+    if (!dslString) return "None";
+    try {
+      const obj = JSON.parse(dslString);
+      if (obj.conditions && obj.conditions.length > 0) {
+        const c = obj.conditions[0];
+        const formatSide = (sideObj: any, fallbackVal: any) => {
+          if (typeof sideObj === 'object' && sideObj !== null) {
+            let n = sideObj.name || sideObj.indicator || '';
+            if (sideObj.period) n += `(${sideObj.period})`;
+            return n || '[Complex]';
           }
-          return "Custom Logic";
-      } catch(e) {
-          return "Custom Logic";
+          if (typeof fallbackVal === 'object' && fallbackVal !== null) {
+            let n = fallbackVal.name || fallbackVal.indicator || '';
+            if (fallbackVal.period) n += `(${fallbackVal.period})`;
+            return n || '[Complex]';
+          }
+          return fallbackVal !== undefined ? String(fallbackVal) : '';
+        };
+
+        let left = formatSide(c.left, c.indicator);
+
+        let op = c.comparison || c.op;
+        if (op === '>') op = '>';
+        else if (op === '<') op = '<';
+        else if (op === '>=') op = '≥';
+        else if (op === '<=') op = '≤';
+
+        let right = formatSide(c.right, c.value ?? c.right_value);
+
+        return `${left} ${op} ${right}`;
       }
+      return "Custom Logic";
+    } catch (e) {
+      return "Custom Logic";
+    }
   };
 
+  let stockChgVal = companyInfo?.chg || 0;
+  let stockChgPct = companyInfo?.chgPct || 0;
+  if (companyInfo?.prevClose && ltp > 0) {
+      stockChgVal = ltp - companyInfo.prevClose;
+      stockChgPct = (stockChgVal / companyInfo.prevClose) * 100;
+  }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--s-bg)", zIndex: 9999 }}>
-      
+    <div style={{ display: "flex", flexDirection: "column", position: "absolute", inset: 0, background: "var(--s-bg)", zIndex: 9999 }}>
+
       {/* ── Portfolio Header ────────────────────────────────────────────────── */}
-      <div style={{ padding: "16px 24px 0", background: "#f9fafb", flexShrink: 0 }}>
+      <div style={{ padding: "8px 16px 0", background: "#f9fafb", flexShrink: 0 }}>
         {/* ── Stock-page style header card ── */}
         {(() => {
           const liveTotalCap = cash + (position === "LONG" ? investedQty * ltp : 0);
           const livePnlVal = liveTotalCap - Number(allocatedCapital || 0);
           const livePnlPct = Number(allocatedCapital) ? (livePnlVal / Number(allocatedCapital)) * 100 : 0;
-          const ltpChange = ltp - (prevLtp || ltp);
-          const isNeg = livePnlVal < 0;
+          
+          const isStockNeg = stockChgVal < 0;
+
           const formattedSym = symbol.replace(".NS", "").replace(".BO", "");
           const displayName = companyInfo?.name || formattedSym;
           const exchange = companyInfo?.exchange || (symbol.endsWith('.BO') ? 'BSE' : 'NSE');
@@ -465,7 +496,7 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
           );
 
           return (
-            <div className="stock-header" style={{ marginBottom: 0, animation: 'none', borderRadius: '12px' }}>
+            <div className="stock-header" style={{ marginBottom: 0, animation: 'none', borderRadius: '12px', padding: '12px 16px' }}>
               {/* ── Top Row ── */}
               <div className="stock-header-top">
                 <div className="stock-header-title-area">
@@ -512,13 +543,33 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
                       const currentPortfolioValue = cashRef.current + (investedQtyRef.current * ltpRef.current);
                       const finalPnl = currentPortfolioValue - Number(allocatedCapital || 0);
                       try {
+                        // 1. Tell the Python algo backend to kill the background task
+                        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                          wsRef.current.send(JSON.stringify({
+                            action: 'stop',
+                            symbols: [symbol],
+                            strategyName,
+                            userId,
+                            mode: mode || 'simulate',
+                            // Pass explicit activeSessionId for precise stop targeting
+                            ...(activeSessionId ? { sessionId: activeSessionId } : {})
+                          }));
+                        }
+                        // 2. Refund capital via Node backend
                         await fetch(`${HOST}/api/algo/session/stop`, {
                           method: 'POST', credentials: 'include',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ returnedCapital: currentPortfolioValue, symbol, strategyName, pnl: finalPnl, trades })
+                          body: JSON.stringify({ returnedCapital: currentPortfolioValue, symbol, strategyName, pnl: finalPnl, trades, sessionId: activeSessionId })
                         });
                         window.dispatchEvent(new CustomEvent('wallet-refetch', {}));
-                      } catch(e) { console.error(e); }
+                        // 3. Refresh sidebar to remove stopped session
+                        setTimeout(() => {
+                          fetch('http://localhost:8000/live/sessions')
+                            .then(r => r.json())
+                            .then(d => { if (d?.sessions) window.dispatchEvent(new CustomEvent('sessions-updated', { detail: d.sessions })); })
+                            .catch(() => { });
+                        }, 500);
+                      } catch (e) { console.error(e); }
                       finally { setIsStopping(false); onClose(); }
                     }}
                     disabled={isStopping}
@@ -535,8 +586,8 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
                 <div className="stock-price-area">
                   <div className="price-row">
                     <span className="price" style={{ fontVariantNumeric: 'tabular-nums', minWidth: '140px' }}>₹{ltp.toFixed(2)}</span>
-                    <span className={`change ${isNeg ? 'negative' : 'positive'}`}>
-                      {isNeg ? '▼ ' : '▲ '}{Math.abs(livePnlVal).toFixed(2)} ({Math.abs(livePnlPct).toFixed(2)}%)
+                    <span className={`change ${isStockNeg ? 'negative' : 'positive'}`}>
+                      {isStockNeg ? '▼ ' : '▲ '}{Math.abs(stockChgVal).toFixed(2)} ({Math.abs(stockChgPct).toFixed(2)}%)
                     </span>
                   </div>
                   <div className="timestamp-row">
@@ -559,15 +610,15 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
 
               {/* ── Indicators & Signals bar ── */}
               {(Object.keys(latestIndicators).length > 0) && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid var(--stock-border)', marginTop: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '6px', borderTop: '1px solid var(--stock-border)', marginTop: '2px' }}>
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     {Object.entries(latestIndicators).filter(([key]) =>
                       indicatorSeries.some(series => {
                         const low = series.key.toLowerCase();
                         const p = (low.match(/\d+/) || ['14'])[0];
                         return (low.includes('sma') && key === `SMA_${p}`) ||
-                               (low.includes('ema') && key === `EMA_${p}`) ||
-                               (low.includes('rsi') && key === `RSI_${p}`);
+                          (low.includes('ema') && key === `EMA_${p}`) ||
+                          (low.includes('rsi') && key === `RSI_${p}`);
                       })
                     ).map(([key, val]) => {
                       const match = liveIndicatorSeries.find(s => {
@@ -600,7 +651,7 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
           );
         })()}
       </div>{/* Maximized Graph below */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden", padding: "16px" }}>
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", padding: "8px" }}>
         {data.length === 0 ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--s-text-muted)", fontSize: 16 }}>Waiting for first tick from Data Feed...</div>
         ) : (
@@ -618,11 +669,11 @@ const LiveStudioGraph = ({ symbol, indicatorSeries, onClose, strategyName, userI
                   lineData={data}
                   timeframe="1D"
                   marketState="REGULAR"
-                  percent="0"
+                  percent={stockChgPct.toString()}
                   trades={trades}
                   pendingSL={pendingStopLoss}
                   activeTrade={null}
-                  onReplayProgress={() => {}}
+                  onReplayProgress={() => { }}
                 />
               </div>
             </div>
@@ -684,16 +735,18 @@ export default function PaperBullStudio() {
   const [replayPnl, setReplayPnl] = useState<number | null>(null);
   const [hoveredTrade, setHoveredTrade] = useState<any>(null);
   const [savedStrategies, setSavedStrategies] = useState<any[]>([]);
+  const [activeSessions, setActiveSessions] = useState<any[]>([]);
+  const [joinedSession, setJoinedSession] = useState<any>(null);
+
   const [isSavingStrategy, setIsSavingStrategy] = useState(false);
   const [strategyName, setStrategyName] = useState('My Custom Strategy');
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<{message: string, type: 'success' | 'error' | ''}>({message: '', type: ''});
+  const [saveStatus, setSaveStatus] = useState<{ message: string, type: 'success' | 'error' | '' }>({ message: '', type: '' });
   const [activeTab, setActiveTab] = useState<'setup' | 'strategy' | 'results'>('setup');
   const [lightMode, setLightMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showTradeLedger, setShowTradeLedger] = useState(false);
-  const [liveDeployModes, setLiveDeployModes] = useState<Record<string, boolean>>({});
-  
+
   const [showDeployModal, setShowDeployModal] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
   const [algoCapital, setAlgoCapital] = useState<string>('50000');
@@ -754,13 +807,13 @@ export default function PaperBullStudio() {
     else if (p === '6M') start.setMonth(end.getMonth() - 6);
     else if (p === '1Y') start.setFullYear(end.getFullYear() - 1);
     else if (p === '3Y') start.setFullYear(end.getFullYear() - 3);
-    
+
     setEndDate(end.toISOString().split('T')[0]);
     setStartDate(start.toISOString().split('T')[0]);
   };
 
   const getCategoryTickers = (cat: string) => {
-    switch(cat) {
+    switch (cat) {
       case 'Indices':
         return [
           { symbol: '^NSEI', label: 'NIFTY 50' },
@@ -856,7 +909,7 @@ export default function PaperBullStudio() {
 
   useEffect(() => {
     if (results?.stock_reports) {
-      const activeReport = results.stock_reports.find((r:any) => r.ticker === selectedChartTicker) || results.stock_reports[0];
+      const activeReport = results.stock_reports.find((r: any) => r.ticker === selectedChartTicker) || results.stock_reports[0];
       if (activeReport?.trade_log?.length > 0) {
         const firstTrade = activeReport.trade_log[0];
         setHoveredTrade({
@@ -911,17 +964,46 @@ export default function PaperBullStudio() {
 
 
 
+
+  // Fetch active sessions once on mount and whenever the tab becomes visible
+  const fetchActiveSessions = () => {
+    fetch('http://localhost:8000/live/sessions')
+      .then(res => res.json())
+      .then(data => { if (data?.sessions) setActiveSessions(data.sessions); })
+      .catch(() => { });
+  };
   useEffect(() => {
-    fetch(`${HOST}/api/paperbull/strategies`, {credentials: 'include'})
+    fetchActiveSessions();
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchActiveSessions(); };
+    document.addEventListener('visibilitychange', onVisible);
+    // Also update sidebar when a session is stopped from LiveStudioGraph
+    const onSessionsUpdated = (e: Event) => {
+      const evt = e as CustomEvent;
+      if (Array.isArray(evt.detail)) setActiveSessions(evt.detail);
+    };
+    window.addEventListener('sessions-updated', onSessionsUpdated);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('sessions-updated', onSessionsUpdated);
+    };
+  }, []);
+
+  useEffect(() => {
+    fetch(`${HOST}/api/paperbull/strategies`, { credentials: 'include' })
       .then(res => res.json())
       .then(data => {
-          if (Array.isArray(data)) setSavedStrategies(data);
+        if (Array.isArray(data)) setSavedStrategies(data);
       })
       .catch(console.error);
   }, [HOST]);
 
+
+  const handleJoinSession = (session: any) => {
+    setJoinedSession(session);
+  };
+
   const handleSaveStrategyPrompt = (asNew: boolean = false) => {
-    setSaveStatus({message: '', type: ''});
+    setSaveStatus({ message: '', type: '' });
     if (!asNew && loadedStrategyId) {
       // Direct save
       executeSaveStrategy(strategyName, false);
@@ -933,18 +1015,18 @@ export default function PaperBullStudio() {
 
   const executeSaveStrategy = async (nameToSave: string, asNew: boolean) => {
     if (!nameToSave.trim()) {
-      setSaveStatus({message: 'Please enter a strategy name.', type: 'error'});
+      setSaveStatus({ message: 'Please enter a strategy name.', type: 'error' });
       return;
     }
-    
+
     // Check if duplicate name (only when creating new)
     if (asNew && savedStrategies.some(s => s.name.toLowerCase() === nameToSave.trim().toLowerCase())) {
-        setSaveStatus({message: 'A strategy with this name already exists. Please choose another name.', type: 'error'});
-        return;
+      setSaveStatus({ message: 'A strategy with this name already exists. Please choose another name.', type: 'error' });
+      return;
     }
-    
+
     setIsSavingStrategy(true);
-    setSaveStatus({message: '', type: ''});
+    setSaveStatus({ message: '', type: '' });
     try {
       const payload = {
         name: nameToSave.trim(),
@@ -960,12 +1042,12 @@ export default function PaperBullStudio() {
         stopLossPct,
         stopLossType
       };
-      
+
       const isUpdate = !asNew && loadedStrategyId;
-      const endpoint = isUpdate 
+      const endpoint = isUpdate
         ? `${HOST}/api/paperbull/strategy/${loadedStrategyId}`
         : `${HOST}/api/paperbull/strategy`;
-        
+
       const res = await fetch(endpoint, {
         method: isUpdate ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -974,24 +1056,24 @@ export default function PaperBullStudio() {
       });
       const data = await res.json();
       if (data.success) {
-        setSaveStatus({message: isUpdate ? 'Strategy updated successfully!' : 'Strategy saved successfully!', type: 'success'});
+        setSaveStatus({ message: isUpdate ? 'Strategy updated successfully!' : 'Strategy saved successfully!', type: 'success' });
         if (!isUpdate && data.id) {
-            setLoadedStrategyId(data.id);
-            setStrategyName(nameToSave.trim());
+          setLoadedStrategyId(data.id);
+          setStrategyName(nameToSave.trim());
         }
-        const stratsRes = await fetch(`${HOST}/api/paperbull/strategies`, {credentials: 'include'});
+        const stratsRes = await fetch(`${HOST}/api/paperbull/strategies`, { credentials: 'include' });
         const stratsData = await stratsRes.json();
         if (Array.isArray(stratsData)) setSavedStrategies(stratsData);
         setTimeout(() => {
-            setShowSaveModal(false);
-            if (isUpdate) setSaveStatus({message: '', type: ''});
+          setShowSaveModal(false);
+          if (isUpdate) setSaveStatus({ message: '', type: '' });
         }, 1500);
       } else {
-        setSaveStatus({message: 'Failed to save strategy: ' + data.message, type: 'error'});
+        setSaveStatus({ message: 'Failed to save strategy: ' + data.message, type: 'error' });
       }
     } catch (err) {
       console.error(err);
-      setSaveStatus({message: 'Failed to save strategy', type: 'error'});
+      setSaveStatus({ message: 'Failed to save strategy', type: 'error' });
     } finally {
       setIsSavingStrategy(false);
     }
@@ -1000,15 +1082,17 @@ export default function PaperBullStudio() {
   const loadSavedStrategy = (strat: any) => {
     setLoadedStrategyId(strat._id || null);
     setStrategyName(strat.name || 'Loaded Strategy');
-    if (strat.buyDsl) { setBuyDsl(strat.buyDsl); }
-    if (strat.sellDsl) { setSellDsl(strat.sellDsl); }
-    if (strat.startDate) setStartDate(strat.startDate);
-    if (strat.startTime) setStartTime(strat.startTime);
-    if (strat.endDate) setEndDate(strat.endDate);
-    if (strat.endTime) setEndTime(strat.endTime);
-    if (strat.timeframe) setTimeframe(strat.timeframe);
-    if (strat.capital) setCapital(strat.capital);
-    if (strat.tickers) setTickers(strat.tickers);
+    if (strat.buyDsl != null) { setBuyDsl(strat.buyDsl); }
+    if (strat.sellDsl != null) { setSellDsl(strat.sellDsl); }
+    if (strat.startDate != null) setStartDate(strat.startDate);
+    if (strat.startTime != null) setStartTime(strat.startTime);
+    if (strat.endDate != null) setEndDate(strat.endDate);
+    if (strat.endTime != null) setEndTime(strat.endTime);
+    if (strat.timeframe != null) setTimeframe(strat.timeframe);
+    if (strat.capital != null) setCapital(strat.capital);
+    if (Array.isArray(strat.tickers)) setTickers(strat.tickers);
+    if (strat.stopLossPct != null) setStopLossPct(strat.stopLossPct);
+    if (strat.stopLossType != null) setStopLossType(strat.stopLossType);
   };
 
   useEffect(() => {
@@ -1129,7 +1213,7 @@ export default function PaperBullStudio() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      
+
       const data = await res.json();
       setResults(data);
       if (data && data.stock_reports && data.stock_reports.length > 0) {
@@ -1162,267 +1246,268 @@ export default function PaperBullStudio() {
           }
         `}
       </style>
-    <main className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-2 w-full">
-      {/* CARD 1: Backtest Parameters */}
-      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4 w-full">
-        
-        {/* Card Header */}
-        <div className="flex items-start justify-between">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600">
-              <i className="fa-solid fa-chart-simple text-sm"></i>
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">1. Backtest Parameters</h2>
-              <p className="text-xs text-slate-500">Configure dates, capital, and benchmark index</p>
-            </div>
-          </div>
-          <div className="relative group z-50">
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-semibold hover:bg-slate-50 transition-colors">
-              <i className="fa-solid fa-layer-group text-slate-400"></i> Load Preset <i className="fa-solid fa-chevron-down text-[8px] text-slate-400"></i>
-            </button>
-            <div className="absolute right-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all py-2">
-              <div className="px-3 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Quick Templates</div>
-              <button onClick={() => loadTemplate('RSI_EMA')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">ðŸ“ˆ RSI + EMA</button>
-              <button onClick={() => loadTemplate('MACD_CROSS')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">ðŸ“Š MACD Crossover</button>
-              <button onClick={() => loadTemplate('BOLLINGER')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">ðŸŒŠ Bollinger Bands</button>
-              
-              {savedStrategies.length > 0 && (
-                <>
-                  <div className="border-t border-slate-100 my-2"></div>
-                  <div className="px-3 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Your Saved Strategies</div>
-                  {savedStrategies.map(strat => (
-                    <button key={strat._id} onClick={() => loadSavedStrategy(strat)} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors flex justify-between items-center">
-                      <span className="truncate max-w-[140px]">{strat.name}</span>
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+      <main className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-2 w-full">
+        {/* CARD 1: Backtest Parameters */}
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4 w-full">
 
-        {/* Date & Time Schedule */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
+          {/* Card Header */}
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600">
+                <i className="fa-solid fa-chart-simple text-sm"></i>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">1. Backtest Parameters</h2>
+                <p className="text-xs text-slate-500">Configure dates, capital, and benchmark index</p>
+              </div>
+            </div>
+            <div className="relative group z-50">
+              <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-semibold hover:bg-slate-50 transition-colors">
+                <i className="fa-solid fa-layer-group text-slate-400"></i> Load Preset <i className="fa-solid fa-chevron-down text-[8px] text-slate-400"></i>
+              </button>
+              <div className="absolute right-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all py-2">
+                <div className="px-3 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Quick Templates</div>
+                <button onClick={() => loadTemplate('RSI_EMA')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">ðŸ“ˆ RSI + EMA</button>
+                <button onClick={() => loadTemplate('MACD_CROSS')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">ðŸ“Š MACD Crossover</button>
+                <button onClick={() => loadTemplate('BOLLINGER')} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors">ðŸŒŠ Bollinger Bands</button>
+
+                {savedStrategies.length > 0 && (
+                  <>
+                    <div className="border-t border-slate-100 my-2"></div>
+                    <div className="px-3 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Your Saved Strategies</div>
+                    {savedStrategies.map(strat => (
+                      <button key={strat._id} onClick={() => loadSavedStrategy(strat)} className="w-full text-left px-4 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors flex justify-between items-center">
+                        <span className="truncate max-w-[140px]">{strat.name}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Date & Time Schedule */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-800">
+                <i className="fa-regular fa-calendar text-slate-400"></i> Date & Time Schedule
+                <i className="fa-solid fa-circle-info text-slate-300 text-[10px]"></i>
+              </h3>
+              <div className="flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded-lg border border-slate-100">
+                {['1M', '3M', '6M', '1Y', '3Y', 'Custom'].map(p => (
+                  <span key={p} className={datePreset === p ? "bg-brand-600 text-white rounded-md px-2 py-0.5 shadow-sm cursor-pointer" : "hover:text-slate-900 cursor-pointer px-1"} onClick={() => handleDatePresetChange(p)}>{p}</span>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+              {/* Start */}
+              <div className="flex-1 w-full">
+                <label className="text-[9px] font-bold text-brand-600 uppercase tracking-wider mb-1 block">Start <span className="text-slate-400 font-normal">Date & Time</span></label>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm">
+                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs font-semibold w-full focus:outline-none bg-transparent" />
+                  </div>
+                  <div className="flex-1 flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm">
+                    <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="text-xs font-semibold w-full focus:outline-none bg-transparent" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="hidden sm:block text-slate-300 mt-2"><i className="fa-solid fa-arrow-right text-xs"></i></div>
+
+              {/* End */}
+              <div className="flex-1 w-full">
+                <label className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider mb-1 block">End <span className="text-slate-400 font-normal">Date & Time</span></label>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm">
+                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs font-semibold w-full focus:outline-none bg-transparent" />
+                  </div>
+                  <div className="flex-1 flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm">
+                    <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="text-xs font-semibold text-slate-400 w-full focus:outline-none bg-transparent" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bar Resolution */}
+            <div className="flex items-center justify-between border-t border-slate-100 pt-2">
+              <span className="text-xs text-slate-500">Bar Resolution:</span>
+              <div className="flex items-center gap-1 text-xs font-medium text-slate-500">
+                {['1m', '5m', '15m', '1h', '1D', '1W'].map(tf => (
+                  <span key={tf} className={timeframe === tf ? "bg-brand-600 text-white rounded-md px-3 py-1 shadow-sm cursor-pointer" : "hover:text-slate-900 cursor-pointer px-2"} onClick={() => setTimeframe(tf)}>{tf}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Initial Capital */}
+          <div className="space-y-1 pt-1">
             <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-800">
-              <i className="fa-regular fa-calendar text-slate-400"></i> Date & Time Schedule
+              <i className="fa-solid fa-wallet text-slate-400"></i> Initial Capital
               <i className="fa-solid fa-circle-info text-slate-300 text-[10px]"></i>
             </h3>
-            <div className="flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded-lg border border-slate-100">
-              {['1M', '3M', '6M', '1Y', '3Y', 'Custom'].map(p => (
-                <span key={p} className={datePreset === p ? "bg-brand-600 text-white rounded-md px-2 py-0.5 shadow-sm cursor-pointer" : "hover:text-slate-900 cursor-pointer px-1"} onClick={() => handleDatePresetChange(p)}>{p}</span>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-2 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
-            {/* Start */}
-            <div className="flex-1 w-full">
-              <label className="text-[9px] font-bold text-brand-600 uppercase tracking-wider mb-1 block">Start <span className="text-slate-400 font-normal">Date & Time</span></label>
-              <div className="flex items-center gap-1.5">
-                <div className="flex-1 flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm">
-                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs font-semibold w-full focus:outline-none bg-transparent" />
-                </div>
-                <div className="flex-1 flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm">
-                  <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="text-xs font-semibold w-full focus:outline-none bg-transparent" />
-                </div>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="relative w-full sm:w-1/2">
+                <span className="absolute inset-y-0 left-3 flex items-center text-slate-500 font-semibold text-sm">â‚¹</span>
+                <input type="number" value={capital} onChange={(e) => setCapital(Number(e.target.value))} className="w-full pl-7 pr-3 py-1.5 border border-slate-200 rounded-lg font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 shadow-sm text-sm" />
               </div>
-            </div>
-
-            <div className="hidden sm:block text-slate-300 mt-2"><i className="fa-solid fa-arrow-right text-xs"></i></div>
-
-            {/* End */}
-            <div className="flex-1 w-full">
-              <label className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider mb-1 block">End <span className="text-slate-400 font-normal">Date & Time</span></label>
-              <div className="flex items-center gap-1.5">
-                <div className="flex-1 flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm">
-                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs font-semibold w-full focus:outline-none bg-transparent" />
-                </div>
-                <div className="flex-1 flex items-center justify-between bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-sm">
-                  <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="text-xs font-semibold text-slate-400 w-full focus:outline-none bg-transparent" />
-                </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-slate-500">
+                {[
+                  { label: '10K', val: 10000 },
+                  { label: '50K', val: 50000 },
+                  { label: '1L', val: 100000 },
+                  { label: '5L', val: 500000 },
+                  { label: '10L', val: 1000000 }
+                ].map(cp => (
+                  <span key={cp.label} className={capitalPreset === cp.label ? "bg-brand-600 text-white px-2 py-1 rounded-md shadow-sm cursor-pointer transition" : "hover:bg-slate-100 px-2 py-1 rounded-md border border-transparent cursor-pointer transition"} onClick={() => { setCapital(cp.val); setCapitalPreset(cp.label); }}>{cp.label}</span>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Bar Resolution */}
-          <div className="flex items-center justify-between border-t border-slate-100 pt-2">
-            <span className="text-xs text-slate-500">Bar Resolution:</span>
-            <div className="flex items-center gap-1 text-xs font-medium text-slate-500">
-              {['1m', '5m', '15m', '1h', '1D', '1W'].map(tf => (
-                <span key={tf} className={timeframe === tf ? "bg-brand-600 text-white rounded-md px-3 py-1 shadow-sm cursor-pointer" : "hover:text-slate-900 cursor-pointer px-2"} onClick={() => setTimeframe(tf)}>{tf}</span>
-              ))}
+          {/* Load Index */}
+          <div className="space-y-2 pt-1 border-t border-slate-100 mt-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-800">
+                <i className="fa-solid fa-chart-line text-slate-400"></i> Load Index <span className="text-slate-400 font-normal text-[10px]">(Optional)</span>
+              </h3>
+              <label className="flex items-center gap-1.5 text-[10px] font-medium text-slate-600 cursor-pointer">
+                <input type="checkbox" checked={loadBenchmarkIndex} onChange={(e) => setLoadBenchmarkIndex(e.target.checked)} className="w-3 h-3 text-brand-600 rounded border-slate-300 focus:ring-brand-500 accent-brand-600" />
+                Benchmark
+              </label>
             </div>
-          </div>
-        </div>
 
-        {/* Initial Capital */}
-        <div className="space-y-1 pt-1">
-          <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-800">
-            <i className="fa-solid fa-wallet text-slate-400"></i> Initial Capital
-            <i className="fa-solid fa-circle-info text-slate-300 text-[10px]"></i>
-          </h3>
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="relative w-full sm:w-1/2">
-              <span className="absolute inset-y-0 left-3 flex items-center text-slate-500 font-semibold text-sm">â‚¹</span>
-              <input type="number" value={capital} onChange={(e) => setCapital(Number(e.target.value))} className="w-full pl-7 pr-3 py-1.5 border border-slate-200 rounded-lg font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 shadow-sm text-sm" />
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-slate-500">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
-                { label: '10K', val: 10000 },
-                { label: '50K', val: 50000 },
-                { label: '1L', val: 100000 },
-                { label: '5L', val: 500000 },
-                { label: '10L', val: 1000000 }
-              ].map(cp => (
-                <span key={cp.label} className={capitalPreset === cp.label ? "bg-brand-600 text-white px-2 py-1 rounded-md shadow-sm cursor-pointer transition" : "hover:bg-slate-100 px-2 py-1 rounded-md border border-transparent cursor-pointer transition"} onClick={() => { setCapital(cp.val); setCapitalPreset(cp.label); }}>{cp.label}</span>
+                { name: 'NIFTY 50', symbol: '^NSEI', sub: 'NSE' },
+                { name: 'BANK NIFTY', symbol: '^NSEBANK', sub: 'NSE' },
+                { name: 'NIFTY IT', symbol: '^CNXIT', sub: 'NSE' },
+                { name: 'SENSEX', symbol: '^BSESN', sub: 'BSE' }
+              ].map(idx => {
+                const isSelected = tickers.includes(idx.symbol);
+                return (
+                  <button key={idx.symbol} onClick={() => handleLoadIndex(idx.name)} className={`flex flex-col items-start p-3 border rounded-xl transition-colors relative shadow-sm ${isSelected ? 'border-brand-600 bg-brand-50/50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                    {isSelected && (
+                      <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-brand-600 text-white rounded-full flex items-center justify-center text-[8px] border border-white">
+                        <i className="fa-solid fa-check"></i>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 w-full">
+                      <StockLogo symbol={idx.symbol} fallbackToAvatar style={{ width: '24px', height: '24px', borderRadius: '50%' }} />
+                      <div className="text-left">
+                        <p className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[80px]">{idx.name}</p>
+                        <p className="text-[10px] text-slate-400">{idx.sub}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* CARD 2: Stock Selection */}
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4 w-full h-full">
+
+          {/* Card Header */}
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600">
+                <i className="fa-solid fa-magnifying-glass text-sm"></i>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">2. Stock Selection</h2>
+                <p className="text-xs text-slate-500">Search or pick assets to backtest against strategy</p>
+              </div>
+            </div>
+            <button onClick={() => setTickers([])} className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50 rounded transition-colors">
+              <i className="fa-solid fa-trash-can text-[10px]"></i> Clear All
+            </button>
+          </div>
+
+          {/* Search Area Wrapper */}
+          <div className="flex flex-col gap-3 flex-1">
+
+            {/* Search Input */}
+            <div className="relative w-full">
+              <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+              <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={handleAddTicker} placeholder="Search stocks, indices, or ETFs..." className="w-full pl-10 pr-24 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors placeholder-slate-400" />
+              <button onClick={() => handleToggleTicker(searchInput)} className="absolute right-1 top-1 bottom-1 px-4 bg-brand-600 text-white text-xs font-semibold rounded-lg hover:bg-brand-700 transition flex items-center gap-1.5">
+                Search <i className="fa-solid fa-arrow-right text-[10px]"></i>
+              </button>
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg z-50 max-h-48 overflow-y-auto">
+                  {suggestions.map((s: any, idx: number) => (
+                    <div key={idx} onClick={() => handleSelectSuggestion(s.symbol || s.ticker)} className="px-3 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <StockLogo symbol={s.symbol || s.ticker} fallbackToAvatar style={{ width: '20px', height: '20px', borderRadius: '50%' }} />
+                        <span className="font-semibold text-slate-800 text-sm">{s.symbol || s.ticker}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 truncate max-w-[150px] text-right">{s.name || s.shortname}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Categories */}
+            <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
+              {['Popular', 'Indices', 'Large Cap', 'Mid Cap', 'Small Cap', 'Sector ETFs'].map(cat => (
+                <button key={cat} onClick={() => setStockCategory(cat)} className={`px-3 py-1 font-semibold text-[10px] rounded-md whitespace-nowrap ${stockCategory === cat ? 'bg-brand-50 text-brand-600' : 'text-slate-500 font-medium hover:bg-slate-50'}`}>{cat}</button>
               ))}
             </div>
-          </div>
-        </div>
 
-        {/* Load Index */}
-        <div className="space-y-2 pt-1 border-t border-slate-100 mt-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold flex items-center gap-2 text-slate-800">
-              <i className="fa-solid fa-chart-line text-slate-400"></i> Load Index <span className="text-slate-400 font-normal text-[10px]">(Optional)</span>
-            </h3>
-            <label className="flex items-center gap-1.5 text-[10px] font-medium text-slate-600 cursor-pointer">
-              <input type="checkbox" checked={loadBenchmarkIndex} onChange={(e) => setLoadBenchmarkIndex(e.target.checked)} className="w-3 h-3 text-brand-600 rounded border-slate-300 focus:ring-brand-500 accent-brand-600" />
-              Benchmark
-            </label>
-          </div>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {[
-              { name: 'NIFTY 50', symbol: '^NSEI', sub: 'NSE' },
-              { name: 'BANK NIFTY', symbol: '^NSEBANK', sub: 'NSE' },
-              { name: 'NIFTY IT', symbol: '^CNXIT', sub: 'NSE' },
-              { name: 'SENSEX', symbol: '^BSESN', sub: 'BSE' }
-            ].map(idx => {
-              const isSelected = tickers.includes(idx.symbol);
-              return (
-                <button key={idx.symbol} onClick={() => handleLoadIndex(idx.name)} className={`flex flex-col items-start p-3 border rounded-xl transition-colors relative shadow-sm ${isSelected ? 'border-brand-600 bg-brand-50/50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-                  {isSelected && (
-                    <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-brand-600 text-white rounded-full flex items-center justify-center text-[8px] border border-white">
-                      <i className="fa-solid fa-check"></i>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 w-full">
-                    <StockLogo symbol={idx.symbol} fallbackToAvatar style={{ width: '24px', height: '24px', borderRadius: '50%' }} />
-                    <div className="text-left">
-                      <p className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[80px]">{idx.name}</p>
-                      <p className="text-[10px] text-slate-400">{idx.sub}</p>
-                    </div>
-                  </div>
+            {/* Quick Picks */}
+            <div className="flex flex-wrap gap-1.5">
+              {getCategoryTickers(stockCategory).map(item => {
+                const isSelected = tickers.includes(item.symbol);
+                return (
+                  <button key={item.symbol} onClick={() => handleToggleTicker(item.symbol)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${isSelected ? 'bg-brand-50 text-brand-600 border border-brand-200 shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'}`}>
+                    <StockLogo symbol={item.symbol} fallbackToAvatar style={{ width: '16px', height: '16px', borderRadius: '50%' }} />
+                    {item.label}
+                    {isSelected && <i className="fa-solid fa-check text-[10px] ml-1"></i>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selected Box */}
+            <div className="mt-2 border border-slate-200 bg-slate-50/50 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold text-slate-500">Selected ({tickers.length})</span>
+                <button className="text-xs font-semibold text-brand-600 flex items-center gap-1 hover:text-brand-700">
+                  <i className="fa-solid fa-bolt text-[10px]"></i> Add from Watchlist
                 </button>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* CARD 2: Stock Selection */}
-      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4 w-full h-full">
-        
-        {/* Card Header */}
-        <div className="flex items-start justify-between">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600">
-              <i className="fa-solid fa-magnifying-glass text-sm"></i>
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">2. Stock Selection</h2>
-              <p className="text-xs text-slate-500">Search or pick assets to backtest against strategy</p>
-            </div>
-          </div>
-          <button onClick={() => setTickers([])} className="flex items-center gap-1 px-2 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50 rounded transition-colors">
-            <i className="fa-solid fa-trash-can text-[10px]"></i> Clear All
-          </button>
-        </div>
-
-        {/* Search Area Wrapper */}
-        <div className="flex flex-col gap-3 flex-1">
-          
-          {/* Search Input */}
-          <div className="relative w-full">
-            <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
-            <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={handleAddTicker} placeholder="Search stocks, indices, or ETFs..." className="w-full pl-10 pr-24 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-colors placeholder-slate-400" />
-            <button onClick={() => handleToggleTicker(searchInput)} className="absolute right-1 top-1 bottom-1 px-4 bg-brand-600 text-white text-xs font-semibold rounded-lg hover:bg-brand-700 transition flex items-center gap-1.5">
-              Search <i className="fa-solid fa-arrow-right text-[10px]"></i>
-            </button>
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-lg z-50 max-h-48 overflow-y-auto">
-                {suggestions.map((s: any, idx: number) => (
-                  <div key={idx} onClick={() => handleSelectSuggestion(s.symbol || s.ticker)} className="px-3 py-2 hover:bg-slate-50 cursor-pointer flex justify-between items-center border-b border-slate-100 last:border-0">
-                    <div className="flex items-center gap-2">
-                      <StockLogo symbol={s.symbol || s.ticker} fallbackToAvatar style={{ width: '20px', height: '20px', borderRadius: '50%' }} />
-                      <span className="font-semibold text-slate-800 text-sm">{s.symbol || s.ticker}</span>
-                    </div>
-                    <span className="text-[10px] text-slate-500 truncate max-w-[150px] text-right">{s.name || s.shortname}</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {tickers.map(t => (
+                  <div key={t} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm pr-2">
+                    <StockLogo symbol={t} fallbackToAvatar style={{ width: '16px', height: '16px', borderRadius: '50%' }} />
+                    <span className="text-xs font-bold text-slate-800">{t.replace('^', '')}</span>
+                    <button onClick={() => handleRemoveTicker(t)} className="ml-1 w-4 h-4 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400"><i className="fa-solid fa-xmark text-[10px]"></i></button>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* Categories */}
-          <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
-            {['Popular', 'Indices', 'Large Cap', 'Mid Cap', 'Small Cap', 'Sector ETFs'].map(cat => (
-              <button key={cat} onClick={() => setStockCategory(cat)} className={`px-3 py-1 font-semibold text-[10px] rounded-md whitespace-nowrap ${stockCategory === cat ? 'bg-brand-50 text-brand-600' : 'text-slate-500 font-medium hover:bg-slate-50'}`}>{cat}</button>
-            ))}
-          </div>
-
-          {/* Quick Picks */}
-          <div className="flex flex-wrap gap-1.5">
-            {getCategoryTickers(stockCategory).map(item => {
-              const isSelected = tickers.includes(item.symbol);
-              return (
-                <button key={item.symbol} onClick={() => handleToggleTicker(item.symbol)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${isSelected ? 'bg-brand-50 text-brand-600 border border-brand-200 shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'}`}>
-                  <StockLogo symbol={item.symbol} fallbackToAvatar style={{ width: '16px', height: '16px', borderRadius: '50%' }} />
-                  {item.label}
-                  {isSelected && <i className="fa-solid fa-check text-[10px] ml-1"></i>}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Selected Box */}
-          <div className="mt-2 border border-slate-200 bg-slate-50/50 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-slate-500">Selected ({tickers.length})</span>
-              <button className="text-xs font-semibold text-brand-600 flex items-center gap-1 hover:text-brand-700">
-                <i className="fa-solid fa-bolt text-[10px]"></i> Add from Watchlist
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {tickers.map(t => (
-                <div key={t} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm pr-2">
-                  <StockLogo symbol={t} fallbackToAvatar style={{ width: '16px', height: '16px', borderRadius: '50%' }} />
-                  <span className="text-xs font-bold text-slate-800">{t.replace('^', '')}</span>
-                  <button onClick={() => handleRemoveTicker(t)} className="ml-1 w-4 h-4 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400"><i className="fa-solid fa-xmark text-[10px]"></i></button>
-                </div>
-              ))}
             </div>
           </div>
-        </div>
 
-        {/* Bottom Action Button */}
-        <div className="mt-auto pt-6">
-          <button onClick={() => setShowBuilderModal(true)} className="w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r from-brand-600 to-blue-500 text-white rounded-xl shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5">
-            <div className="flex items-center gap-3">
-              <i className="fa-solid fa-gear"></i>
-              <span className="font-bold tracking-wide">Configure Strategy</span>
-            </div>
-            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
-              <i className="fa-solid fa-arrow-right text-xs"></i>
-            </div>
-          </button>
-        </div>
-      </section>
+          {/* Bottom Action Button */}
+          <div className="mt-auto pt-6">
+            <button onClick={() => setShowBuilderModal(true)} className="w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r from-brand-600 to-blue-500 text-white rounded-xl shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5">
+              <div className="flex items-center gap-3">
+                <i className="fa-solid fa-gear"></i>
+                <span className="font-bold tracking-wide">Configure Strategy</span>
+              </div>
+              <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                <i className="fa-solid fa-arrow-right text-xs"></i>
+              </div>
+            </button>
+          </div>
+        </section>
 
-    </main>
+      </main>
+
     </div>
   );
 
@@ -1442,16 +1527,132 @@ export default function PaperBullStudio() {
           </div>
         </div>
 
-        <button className="studio-new-btn" onClick={() => { setResults(null); setActiveTab('setup'); }}>
+        <button className="studio-new-btn" onClick={() => { setResults(null); setActiveTab('setup'); setJoinedSession(null); }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
           <span className="btn-text">New backtest</span>
         </button>
+
+        {/* Active Sessions */}
+        {activeSessions.length > 0 && (() => {
+          // Small inline component so each card can independently fetch company name
+          const SessionCard = ({ session, onJoin }: { session: any; onJoin: () => void }) => {
+            const [companyName, setCompanyName] = React.useState<string>(session.symbol);
+            React.useEffect(() => {
+              const encoded = encodeURIComponent(session.symbol);
+              fetch(`${HOST}/api/stocks/${encoded}/quote`, { credentials: 'include' })
+                .then(r => r.ok ? r.json() : null)
+                .then(d => { if (d?.name) setCompanyName(d.name); })
+                .catch(() => { });
+            }, [session.symbol]);
+
+            const pnlPositive = session.live_pnl >= 0;
+            const sessionIdShort = session.session_id || `SESSION-${Math.random()}`;
+
+            return (
+              <div
+                onClick={onJoin}
+                style={{
+                  background: '#fff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: isSidebarOpen ? 12 : 50,
+                  padding: isSidebarOpen ? '10px 12px' : '4px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 7,
+                  alignItems: isSidebarOpen ? 'stretch' : 'center',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = '#6366f1'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 10px rgba(99,102,241,0.13)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = '#e2e8f0'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; }}
+              >
+                {/* Top row: logo + name + mode | pnl badge */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: isSidebarOpen ? 'space-between' : 'center', gap: 8, width: '100%' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, justifyContent: isSidebarOpen ? 'flex-start' : 'center', width: isSidebarOpen ? 'auto' : '100%' }}>
+                    {/* Stock logo with live pulse */}
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <StockLogo
+                        symbol={session.symbol}
+                        fallbackToAvatar
+                        style={{ width: isSidebarOpen ? 32 : 36, height: isSidebarOpen ? 32 : 36, borderRadius: isSidebarOpen ? 8 : '50%' }}
+                      />
+                      <span style={{
+                        position: 'absolute', bottom: isSidebarOpen ? -2 : 0, right: isSidebarOpen ? -2 : 0,
+                        width: 8, height: 8, borderRadius: '50%',
+                        background: '#22c55e', border: '2px solid #fff',
+                        display: 'block'
+                      }} />
+                    </div>
+                    {/* Company name + symbol */}
+                    {isSidebarOpen && (
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>
+                          {companyName}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                          <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.03em' }}>{session.symbol}</span>
+                          <span style={{ fontSize: 8, fontWeight: 600, color: session.mode === 'upstox' ? '#10b981' : '#6366f1', background: session.mode === 'upstox' ? '#ecfdf5' : '#eef2ff', padding: '0px 5px', borderRadius: 99, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                            {session.mode}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* PnL badge */}
+                  {isSidebarOpen && (
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+                        ₹{Number(session.last_price || 0).toFixed(2)}
+                      </div>
+                      <div style={{ fontSize: 9, color: pnlPositive ? '#16a34a' : '#dc2626', marginTop: 1, fontWeight: 600 }}>
+                        {pnlPositive ? '+' : ''}₹{Number(session.live_pnl).toFixed(2)} • {session.shares_held} shares
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom row: strategy + session ID */}
+                {isSidebarOpen && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 5, width: '100%' }}>
+                    <span style={{ fontSize: 9, color: '#64748b', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '55%' }}>
+                      {session.strategy_name || 'Unknown Strategy'}
+                    </span>
+                    <span style={{ fontSize: 8, color: '#cbd5e1', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '43%', textAlign: 'right' }} title={sessionIdShort}>
+                      {sessionIdShort}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          return (
+            <div style={{ margin: '16px 0 4px' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', marginBottom: 8, justifyContent: isSidebarOpen ? 'flex-start' : 'center' }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 0 3px rgba(34,197,94,0.2)', flexShrink: 0 }} />
+                {isSidebarOpen && (
+                  <span style={{ fontSize: 9, fontWeight: 700, color: '#64748b', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    Live Sessions ({activeSessions.length})
+                  </span>
+                )}
+              </div>
+              {/* Cards */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 10px' }}>
+                {activeSessions.map((session, idx) => (
+                  <SessionCard key={session.session_id || idx} session={session} onJoin={() => handleJoinSession(session)} />
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
 
         <div className="studio-saved-section">
           <div className="studio-saved-label">SAVED SETUPS</div>
           {savedStrategies.map(strat => (
             <button key={strat._id} className={`studio-saved-item ${strategyName === strat.name ? 'active' : ''}`}
-              onClick={() => { loadSavedStrategy(strat); setActiveTab('setup'); }}>
+              onClick={() => { loadSavedStrategy(strat); setActiveTab('setup'); setJoinedSession(null); }}>
               {strat.name}
             </button>
           ))}
@@ -1471,7 +1672,7 @@ export default function PaperBullStudio() {
             <button className={`studio-tab-btn ${activeTab === 'strategy' ? 'active' : ''}`} onClick={() => setActiveTab('strategy')}>Strategy</button>
             <button className={`studio-tab-btn ${activeTab === 'results' ? 'active' : ''}`} onClick={() => setActiveTab('results')}>Results</button>
           </div>
-          
+
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {activeTab === 'results' && results && (
               <button className="pb-btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => setActiveTab('setup')}>&lt;- Edit Setup</button>
@@ -1535,7 +1736,7 @@ export default function PaperBullStudio() {
                 <div className="studio-form-group">
                   <div className="studio-form-label">Range</div>
                   <div className="studio-pill-row">
-                    {['1M','3M','6M','1Y','3Y','Custom'].map(p => (
+                    {['1M', '3M', '6M', '1Y', '3Y', 'Custom'].map(p => (
                       <button key={p} className={`studio-pill ${datePreset === p ? 'active' : ''}`} onClick={() => handleDatePresetChange(p)}>{p}</button>
                     ))}
                   </div>
@@ -1543,7 +1744,7 @@ export default function PaperBullStudio() {
                 <div className="studio-form-group">
                   <div className="studio-form-label">Bar resolution</div>
                   <div className="studio-pill-row">
-                    {['1m','5m','15m','1h','1D','1W'].map(tf => (
+                    {['1m', '5m', '15m', '1h', '1D', '1W'].map(tf => (
                       <button key={tf} className={`studio-pill ${timeframe === tf ? 'active' : ''}`} onClick={() => setTimeframe(tf)}>{tf}</button>
                     ))}
                   </div>
@@ -1590,11 +1791,11 @@ export default function PaperBullStudio() {
                     <div className="studio-search-suggestions">
                       {suggestions.map((s: any, idx: number) => (
                         <div key={idx} className="studio-search-suggestion-item" onClick={() => handleSelectSuggestion(s.symbol || s.ticker)}>
-                          <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <StockLogo symbol={s.symbol || s.ticker} fallbackToAvatar style={{ width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0 }} />
-                            <span style={{fontSize:'12px', fontWeight:600, color:'var(--s-text)'}}>{s.symbol || s.ticker}</span>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--s-text)' }}>{s.symbol || s.ticker}</span>
                           </div>
-                          <span style={{fontSize:'10px', color:'var(--s-text-muted)', textAlign:'right', maxWidth:'150px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{s.name || s.shortname}</span>
+                          <span style={{ fontSize: '10px', color: 'var(--s-text-muted)', textAlign: 'right', maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name || s.shortname}</span>
                         </div>
                       ))}
                     </div>
@@ -1636,7 +1837,7 @@ export default function PaperBullStudio() {
                     {tickers.map(t => (
                       <div key={t} className="studio-chip">
                         <StockLogo symbol={t} fallbackToAvatar style={{ width: '14px', height: '14px', borderRadius: '50%' }} />
-                        {t.replace('^','').replace('.NS','').replace('.BO','')}
+                        {t.replace('^', '').replace('.NS', '').replace('.BO', '')}
                         <button className="studio-chip-close" onClick={() => handleRemoveTicker(t)}>x</button>
                       </div>
                     ))}
@@ -1671,7 +1872,7 @@ export default function PaperBullStudio() {
                 <div className="studio-form-group">
                   <div className="studio-form-label">Timeframe</div>
                   <div className="studio-pill-row">
-                    {[{label:'1 Day',val:'1D'},{label:'1 Hour',val:'1h'},{label:'15m',val:'15m'}].map(tf => (
+                    {[{ label: '1 Day', val: '1D' }, { label: '1 Hour', val: '1h' }, { label: '15m', val: '15m' }].map(tf => (
                       <button key={tf.val} className={`studio-pill ${timeframe === tf.val ? 'active' : ''}`} onClick={() => setTimeframe(tf.val)}>{tf.label}</button>
                     ))}
                   </div>
@@ -1744,7 +1945,7 @@ export default function PaperBullStudio() {
               <div className="studio-results">
                 {/* Unified Performance Summaries */}
                 {(() => {
-                  const activeReport = results.stock_reports?.find((r:any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
+                  const activeReport = results.stock_reports?.find((r: any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
                   return (
                     <div className="studio-unified-perf-card">
                       <div className="studio-unified-perf-split">
@@ -1787,7 +1988,7 @@ export default function PaperBullStudio() {
 
                         {/* Right: Individual Stock (Selected) */}
                         <div className="studio-unified-perf-half">
-                          <div className="studio-unified-perf-header">Individual Summary: {activeReport?.ticker?.replace('.NS','').replace('.BO','').replace('^','') || 'N/A'}</div>
+                          <div className="studio-unified-perf-header">Individual Summary: {activeReport?.ticker?.replace('.NS', '').replace('.BO', '').replace('^', '') || 'N/A'}</div>
                           <div className="studio-unified-perf-grid">
                             <div className="studio-u-stat">
                               <span className="studio-u-stat-lbl">Total return</span>
@@ -1834,27 +2035,33 @@ export default function PaperBullStudio() {
                           {results.stock_reports.map((r: any) => (
                             <button key={r.ticker} className={`studio-chart-ticker-btn ${selectedChartTicker === r.ticker ? 'active' : ''}`} onClick={() => setSelectedChartTicker(r.ticker)}>
                               <StockLogo symbol={r.ticker} fallbackToAvatar style={{ width: '14px', height: '14px', borderRadius: '50%' }} />
-                              {r.ticker.replace('.NS','').replace('.BO','').replace('^','')}
+                              {r.ticker.replace('.NS', '').replace('.BO', '').replace('^', '')}
                             </button>
                           ))}
                         </div>
                       )}
                       {(() => {
-                        const activeReport = results.stock_reports?.find((r:any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
+                        const activeReport = results.stock_reports?.find((r: any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
                         const indicatorKeySet = new Set<string>();
                         (activeReport?.price_history || []).forEach((d: any) => { Object.keys(d).forEach(k => { if (k !== 'date' && k !== 'price') indicatorKeySet.add(k); }); });
                         const indKeys = Array.from(indicatorKeySet);
-                        const lblParts = indKeys.slice(0,3).map(k => k.replace(/^indicator_/i,'').replace(/period(\d+)/i,'($1)').replace(/_/g,' ').trim());
+                        const lblParts = indKeys.slice(0, 3).map(k => k.replace(/^indicator_/i, '').replace(/period(\d+)/i, '($1)').replace(/_/g, ' ').trim());
                         return (
-                          <div className="studio-equity-title" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingRight:'12px' }}>
+                          <div className="studio-equity-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '12px' }}>
                             <div>
                               Equity curve
                               {activeReport?.ticker && <span className="studio-equity-subtitle"> vs {activeReport.ticker}{lblParts.length > 0 ? ': ' + lblParts.join(', ') : ''}</span>}
                             </div>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                              <button className="studio-cta-btn" style={{ background: liveDeployModes[activeReport?.ticker] ? '#ef4444' : '#10b981', borderColor: liveDeployModes[activeReport?.ticker] ? '#dc2626' : '#059669', padding: '6px 12px', fontSize: '11px', gap: '4px', minHeight: '26px' }} onClick={() => { if(liveDeployModes[activeReport?.ticker]) { setLiveDeployModes(p => ({...p, [activeReport!.ticker]: false})); } else { setShowDeployModal(true); } }} disabled={isRunning}>{liveDeployModes[activeReport?.ticker] ? '⏹ Stop Live' : '🚀 Deploy'}</button>
-                              <button className="studio-cta-btn" style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', minHeight: '26px' }} onClick={handleRunOnChart} disabled={isRunning}>{isRunning ? 'Running...' : '@ Re-run'}</button>
-                              <button className="pb-btn" onClick={() => setShowTradeLedger(!showTradeLedger)} style={{ fontSize:'10px', padding:'4px 10px', background: showTradeLedger ? 'var(--s-card-hover)' : 'var(--s-primary-dim)', color: showTradeLedger ? 'var(--s-text)' : 'var(--s-primary)', height: '26px' }}>
+                              <button className="studio-cta-btn" style={{ background: 'var(--s-card)', color: '#10b981', border: '1px solid #10b981', padding: '6px 14px', fontSize: '11px', gap: '6px', minHeight: '26px', borderRadius: '6px', fontWeight: 600, transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(16,185,129,0.1)' }} onClick={() => setShowDeployModal(true)} disabled={isRunning}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                Deploy Live
+                              </button>
+                              <button className="studio-cta-btn" style={{ background: 'var(--s-card)', color: 'var(--s-primary)', border: '1px solid var(--s-primary)', padding: '6px 14px', fontSize: '11px', gap: '6px', minHeight: '26px', borderRadius: '6px', fontWeight: 600, transition: 'all 0.2s' }} onClick={handleRunOnChart} disabled={isRunning}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                                {isRunning ? 'Running...' : 'Re-run'}
+                              </button>
+                              <button className="pb-btn" onClick={() => setShowTradeLedger(!showTradeLedger)} style={{ fontSize: '10px', padding: '4px 10px', background: showTradeLedger ? 'var(--s-card-hover)' : 'var(--s-primary-dim)', color: showTradeLedger ? 'var(--s-text)' : 'var(--s-primary)', height: '26px' }}>
                                 {showTradeLedger ? 'Hide Trade Ledger' : 'Show Trade Ledger'}
                               </button>
                             </div>
@@ -1864,9 +2071,9 @@ export default function PaperBullStudio() {
                       <div className="studio-chart-wrap">
                         <div className="studio-chart-inner">
                           {(() => {
-                            const activeReport = results.stock_reports?.find((r:any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
-                            if (!activeReport) return <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--s-text-muted)' }}>No chart data</div>;
-                            
+                            const activeReport = results.stock_reports?.find((r: any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
+                            if (!activeReport) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--s-text-muted)' }}>No chart data</div>;
+
                             const indicatorKeySet = new Set<string>();
                             (activeReport.price_history || []).forEach((d: any) => { Object.keys(d).forEach(k => { if (k !== 'date' && k !== 'price') indicatorKeySet.add(k); }); });
                             const indicatorKeys = Array.from(indicatorKeySet);
@@ -1875,7 +2082,7 @@ export default function PaperBullStudio() {
                             const extendedKeys = [...indicatorKeys];
                             if (hasRsi && !hasThresholds) extendedKeys.push('Threshold_70', 'Threshold_30');
                             const indicatorSeries = extendedKeys.map((k, i) => {
-                              const colors = ['#6366f1','#f59e0b','#06b6d4','#ec4899','#8b5cf6','#14b8a6','#f97316','#3b82f6'];
+                              const colors = ['#6366f1', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#3b82f6'];
                               const isThreshold = k.toLowerCase().startsWith('threshold');
                               const threshMatch = k.match(/\d+(\.\d+)?/);
                               const threshNum = threshMatch ? parseFloat(threshMatch[0]) : null;
@@ -1883,7 +2090,7 @@ export default function PaperBullStudio() {
                               if (isThreshold && threshNum != null) color = threshNum >= 50 ? '#ef4444' : '#10b981';
                               const formattedLabel = isThreshold && threshNum != null
                                 ? `Threshold (${threshNum})`
-                                : k.replace(/^indicator_/i,'').replace(/period(\d+)/i,'($1)').replace(/_/g,' ').trim();
+                                : k.replace(/^indicator_/i, '').replace(/period(\d+)/i, '($1)').replace(/_/g, ' ').trim();
                               return {
                                 key: k, label: formattedLabel, color, width: isThreshold ? 1.5 : 2,
                                 values: activeReport.price_history.map((d: any) => ({
@@ -1892,21 +2099,7 @@ export default function PaperBullStudio() {
                                 })).filter((d: any) => d.y !== undefined && d.y !== null)
                               };
                             });
-                            
-                            if (liveDeployModes[activeReport?.ticker]) return <LiveStudioGraph 
-                              symbol={activeReport.ticker} 
-                              indicatorSeries={indicatorSeries} 
-                              onClose={() => setLiveDeployModes(p => ({...p, [activeReport!.ticker]: false}))} 
-                              strategyName={strategyName}
-                              userId={savedStrategies[0]?.userId}
-                              buyDsl={buyDsl}
-                              sellDsl={sellDsl}
-                              allocatedCapital={Number(algoCapital)}
-                              mode={dataMode}
-                              stopLossPct={stopLossPct}
-                              stopLossType={stopLossType}
-                            />;
-                            
+
                             return (
                               <AlgoBacktestChart
                                 indicatorSeries={indicatorSeries}
@@ -1935,11 +2128,11 @@ export default function PaperBullStudio() {
                   {/* Right Column: Trade History */}
                   <div className={`studio-trades-side ${showTradeLedger ? 'open' : 'collapsed'}`}>
                     {(() => {
-                      const activeReport = results.stock_reports?.find((r:any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
+                      const activeReport = results.stock_reports?.find((r: any) => r.ticker === selectedChartTicker) || results.stock_reports?.[0];
                       if (!activeReport?.trade_log?.length) return (
                         <div className="studio-trades-section">
                           <div className="studio-trades-title">Trade Ledger</div>
-                          <div style={{ color:'var(--s-text-muted)', fontSize:'12px', marginTop:'16px' }}>No trades taken.</div>
+                          <div style={{ color: 'var(--s-text-muted)', fontSize: '12px', marginTop: '16px' }}>No trades taken.</div>
                         </div>
                       );
                       return (
@@ -1954,7 +2147,7 @@ export default function PaperBullStudio() {
                                 <div className="studio-timeline-content">
                                   <div className="studio-tl-header">
                                     <span className={`studio-tl-badge ${t.type.toLowerCase()}`}>{t.type}</span>
-                                    <span className="studio-tl-date">{new Date(t.date).toLocaleString('en-US', { timeZone:'UTC', month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
+                                    <span className="studio-tl-date">{new Date(t.date).toLocaleString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                                   </div>
                                   <div className="studio-tl-body">
                                     <div className="studio-tl-stat">
@@ -1993,6 +2186,39 @@ export default function PaperBullStudio() {
 
         <div className="studio-footer-disclaimer">Backtests are simulated on historical data and do not guarantee future performance.</div>
 
+        {/* === JOINED SESSION LIVE OVERLAY === */}
+        {joinedSession && (() => {
+          // Rebuild indicatorSeries from stored visual_indicators strings
+          const joinedIndSeries = (joinedSession.visual_indicators || []).map((vi: string) => {
+            const low = vi.toLowerCase();
+            let name = 'SMA', color = '#f59e0b';
+            if (low.includes('ema')) { name = 'EMA'; color = '#3b82f6'; }
+            else if (low.includes('rsi')) { name = 'RSI'; color = '#8b5cf6'; }
+            const periodMatch = low.match(/\d+/);
+            const period = periodMatch ? periodMatch[0] : '14';
+            return { key: vi, label: `${name} ${period}`, color, width: 2, values: [] };
+          });
+          return (
+            <div style={{ position: 'absolute', inset: 0, zIndex: 9999, background: '#fff', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <LiveStudioGraph
+                key={joinedSession.session_id || joinedSession.symbol}
+                symbol={joinedSession.symbol}
+                indicatorSeries={joinedIndSeries}
+                onClose={() => setJoinedSession(null)}
+                strategyName={joinedSession.strategy_name}
+                userId={savedStrategies[0]?.userId || ''}
+                buyDsl={buyDsl}
+                sellDsl={sellDsl}
+                allocatedCapital={Number(joinedSession.allocated_capital)}
+                mode={joinedSession.mode as 'simulate' | 'upstox'}
+                stopLossPct={Number(joinedSession.sl_pct) || 0}
+                stopLossType={joinedSession.sl_type || 'fixed'}
+                sessionId={joinedSession.session_id}
+              />
+            </div>
+          );
+        })()}
+
       </div>{/* end studio-main */}
 
       {/* === MODALS === */}
@@ -2002,8 +2228,8 @@ export default function PaperBullStudio() {
           <div className="pb-modal" onClick={e => e.stopPropagation()}>
             <div className="pb-modal-header">
               <div>
-                <h2 style={{ fontWeight:700, fontSize:'18px', color:'#0f172a' }}>Strategy Logic Builder</h2>
-                <p style={{ fontSize:'12px', color:'#64748b', marginTop:'2px' }}>Define when to buy and sell using indicators</p>
+                <h2 style={{ fontWeight: 700, fontSize: '18px', color: '#0f172a' }}>Strategy Logic Builder</h2>
+                <p style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Define when to buy and sell using indicators</p>
               </div>
               <button className="pb-modal-close-btn" onClick={() => setShowBuilderModal(false)}>x</button>
             </div>
@@ -2015,43 +2241,43 @@ export default function PaperBullStudio() {
                 </div>
                 {dslTab === 'json' ? (<>
                   <div className="pb-step">
-                    <div className="pb-step-header"><div className="pb-step-num">B</div><h3 style={{ fontWeight:700, fontSize:'15px', color:'#10b981' }}>BUY Logic</h3></div>
-                    <textarea className="pb-json-editor" style={{ width:'100%', height:'180px', resize:'vertical' }} value={buyDsl} onChange={handleBuyDslChange} spellCheck={false} />
+                    <div className="pb-step-header"><div className="pb-step-num">B</div><h3 style={{ fontWeight: 700, fontSize: '15px', color: '#10b981' }}>BUY Logic</h3></div>
+                    <textarea className="pb-json-editor" style={{ width: '100%', height: '180px', resize: 'vertical' }} value={buyDsl} onChange={handleBuyDslChange} spellCheck={false} />
                   </div>
                   <div className="pb-step">
-                    <div className="pb-step-header"><div className="pb-step-num" style={{ background:'#ef4444' }}>S</div><h3 style={{ fontWeight:700, fontSize:'15px', color:'#ef4444' }}>SELL Logic</h3></div>
-                    <textarea className="pb-json-editor" style={{ width:'100%', height:'180px', resize:'vertical' }} value={sellDsl} onChange={handleSellDslChange} spellCheck={false} />
+                    <div className="pb-step-header"><div className="pb-step-num" style={{ background: '#ef4444' }}>S</div><h3 style={{ fontWeight: 700, fontSize: '15px', color: '#ef4444' }}>SELL Logic</h3></div>
+                    <textarea className="pb-json-editor" style={{ width: '100%', height: '180px', resize: 'vertical' }} value={sellDsl} onChange={handleSellDslChange} spellCheck={false} />
                   </div>
                 </>) : (<>
                   <div className="pb-step">
-                    <div className="pb-step-header"><div className="pb-step-num">B</div><h3 style={{ fontWeight:700, fontSize:'15px', color:'#10b981' }}>BUY Conditions</h3></div>
+                    <div className="pb-step-header"><div className="pb-step-num">B</div><h3 style={{ fontWeight: 700, fontSize: '15px', color: '#10b981' }}>BUY Conditions</h3></div>
                     <RecursiveBuilder dslString={buyDsl} onChange={setBuyDsl} />
                   </div>
                   <div className="pb-step">
-                    <div className="pb-step-header"><div className="pb-step-num" style={{ background:'#ef4444' }}>S</div><h3 style={{ fontWeight:700, fontSize:'15px', color:'#ef4444' }}>SELL Conditions</h3></div>
+                    <div className="pb-step-header"><div className="pb-step-num" style={{ background: '#ef4444' }}>S</div><h3 style={{ fontWeight: 700, fontSize: '15px', color: '#ef4444' }}>SELL Conditions</h3></div>
                     <RecursiveBuilder dslString={sellDsl} onChange={setSellDsl} />
                   </div>
                 </>)}
               </div>
               <div className="pb-modal-col-right">
-                <h3 style={{ fontWeight:700, fontSize:'14px', marginBottom:'12px', color:'#334155' }}>Quick Templates</h3>
-                {[{key:'RSI_EMA',name:'RSI + EMA',desc:'Mean reversion with trend filter'},{key:'MACD_CROSS',name:'MACD Crossover',desc:'Classic signal line crossover'},{key:'BOLLINGER',name:'Bollinger Bands',desc:'Breakout & reversion strategy'}].map(t => (
-                  <button key={t.key} onClick={() => loadTemplate(t.key)} style={{ display:'block', width:'100%', textAlign:'left', padding:'12px', borderRadius:'10px', border:'1px solid #e2e8f0', background:'#fff', marginBottom:'8px', cursor:'pointer', transition:'all 0.15s' }}>
-                    <div style={{ fontWeight:600, fontSize:'13px', color:'#4f46e5', marginBottom:'2px' }}>{t.name}</div>
-                    <div style={{ fontSize:'11px', color:'#94a3b8' }}>{t.desc}</div>
+                <h3 style={{ fontWeight: 700, fontSize: '14px', marginBottom: '12px', color: '#334155' }}>Quick Templates</h3>
+                {[{ key: 'RSI_EMA', name: 'RSI + EMA', desc: 'Mean reversion with trend filter' }, { key: 'MACD_CROSS', name: 'MACD Crossover', desc: 'Classic signal line crossover' }, { key: 'BOLLINGER', name: 'Bollinger Bands', desc: 'Breakout & reversion strategy' }].map(t => (
+                  <button key={t.key} onClick={() => loadTemplate(t.key)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', marginBottom: '8px', cursor: 'pointer', transition: 'all 0.15s' }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px', color: '#4f46e5', marginBottom: '2px' }}>{t.name}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t.desc}</div>
                   </button>
                 ))}
                 {savedStrategies.length > 0 && (<>
-                  <div style={{ fontSize:'10px', fontWeight:700, color:'#94a3b8', letterSpacing:'1px', textTransform:'uppercase', margin:'14px 0 8px' }}>Your Saved</div>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase', margin: '14px 0 8px' }}>Your Saved</div>
                   {savedStrategies.map(s => (
-                    <button key={s._id} onClick={() => { loadSavedStrategy(s); setShowBuilderModal(false); }} style={{ display:'block', width:'100%', textAlign:'left', padding:'10px 12px', borderRadius:'8px', border:'1px solid #e2e8f0', background:'#f8fafc', marginBottom:'6px', cursor:'pointer', fontSize:'12px', fontWeight:600, color:'#334155' }}>{s.name}</button>
+                    <button key={s._id} onClick={() => { loadSavedStrategy(s); setShowBuilderModal(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', marginBottom: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: '#334155' }}>{s.name}</button>
                   ))}
                 </>)}
               </div>
             </div>
             <div className="pb-modal-footer">
               <button className="pb-btn" onClick={copyToClipboard}>[Copy] Copy JSON</button>
-              <div style={{ display:'flex', gap:'8px' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
                 <button className="studio-save-btn" onClick={() => handleSaveStrategyPrompt(false)}><i className="fa-solid fa-floppy-disk"></i> Save</button>
                 <button className="studio-save-btn" onClick={() => handleSaveStrategyPrompt(true)}><i className="fa-solid fa-copy"></i> Save As New</button>
                 <button className="studio-cta-btn" onClick={() => { setShowBuilderModal(false); handleRunOnChart(); }} disabled={isRunning}>
@@ -2067,7 +2293,7 @@ export default function PaperBullStudio() {
         <div className="pb-modal-overlay" onClick={() => setShowConfigModal(false)}>
           <div className="pb-config-popup-card" onClick={e => e.stopPropagation()}>
             <div className="pb-config-popup-header">
-              <span style={{ fontWeight:700, fontSize:'16px' }}>Setup Parameters</span>
+              <span style={{ fontWeight: 700, fontSize: '16px' }}>Setup Parameters</span>
               <button className="pb-modal-close-btn" onClick={() => setShowConfigModal(false)}>x</button>
             </div>
             <div className="pb-config-popup-body">{renderConfigCards()}</div>
@@ -2081,12 +2307,12 @@ export default function PaperBullStudio() {
 
       {showSaveModal && (
         <div className="pb-modal-overlay" onClick={() => setShowSaveModal(false)}>
-          <div style={{ background:'#fff', borderRadius:'16px', padding:'28px', width:'400px', maxWidth:'95vw', boxShadow:'0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontWeight:700, fontSize:'16px', color:'#0f172a', marginBottom:'6px' }}>Save Strategy</h3>
-            <p style={{ fontSize:'12px', color:'#64748b', marginBottom:'18px' }}>Give your strategy a name to save and reuse it later.</p>
-            <input className="pb-input" style={{ width:'100%', marginBottom:'12px', padding:'10px 12px', fontSize:'13px' }} placeholder="Strategy name..." value={strategyName} onChange={e => setStrategyName(e.target.value)} onKeyDown={e => e.key === 'Enter' && executeSaveStrategy(strategyName)} autoFocus />
-            {saveStatus.message && <p style={{ fontSize:'12px', fontWeight:600, color: saveStatus.type === 'success' ? '#10b981' : '#ef4444', marginBottom:'12px' }}>{saveStatus.message}</p>}
-            <div style={{ display:'flex', justifyContent:'flex-end', gap:'10px' }}>
+          <div style={{ background: '#fff', borderRadius: '16px', padding: '28px', width: '400px', maxWidth: '95vw', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontWeight: 700, fontSize: '16px', color: '#0f172a', marginBottom: '6px' }}>Save Strategy</h3>
+            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '18px' }}>Give your strategy a name to save and reuse it later.</p>
+            <input className="pb-input" style={{ width: '100%', marginBottom: '12px', padding: '10px 12px', fontSize: '13px' }} placeholder="Strategy name..." value={strategyName} onChange={e => setStrategyName(e.target.value)} onKeyDown={e => e.key === 'Enter' && executeSaveStrategy(strategyName, saveAsMode)} autoFocus />
+            {saveStatus.message && <p style={{ fontSize: '12px', fontWeight: 600, color: saveStatus.type === 'success' ? '#10b981' : '#ef4444', marginBottom: '12px' }}>{saveStatus.message}</p>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button className="pb-btn" onClick={() => setShowSaveModal(false)}>Cancel</button>
               <button className="pb-btn primary" onClick={() => executeSaveStrategy(strategyName, saveAsMode)} disabled={isSavingStrategy}>{isSavingStrategy ? 'Saving...' : 'Save Strategy'}</button>
             </div>
@@ -2309,12 +2535,33 @@ export default function PaperBullStudio() {
                         if (res.ok) {
                           setUserBalance(prev => prev - Number(algoCapital));
                           setShowDeployModal(false);
-                          setLiveDeployModes(p => ({...p, [selectedChartTicker || tickers[0]]: true}));
+                          const activeReport = results.stock_reports?.find((r: any) => r.ticker === (selectedChartTicker || tickers[0])) || results.stock_reports?.[0];
+                          const indicatorKeySet = new Set<string>();
+                          if (activeReport && activeReport.price_history) {
+                            activeReport.price_history.forEach((d: any) => { Object.keys(d).forEach(k => { if (k !== 'date' && k !== 'price') indicatorKeySet.add(k); }); });
+                          }
+                          const indicatorKeys = Array.from(indicatorKeySet);
+                          const hasRsi = indicatorKeys.some(k => k.toLowerCase().includes('rsi'));
+                          const hasThresholds = indicatorKeys.some(k => k.toLowerCase().startsWith('threshold'));
+                          const extendedKeys = [...indicatorKeys];
+                          if (hasRsi && !hasThresholds) extendedKeys.push('Threshold_70', 'Threshold_30');
+
+                          setJoinedSession({
+                            symbol: selectedChartTicker || tickers[0],
+                            strategy_name: strategyName,
+                            allocated_capital: algoCapital,
+                            mode: dataMode,
+                            sl_pct: stopLossPct,
+                            sl_type: stopLossType,
+                            visual_indicators: extendedKeys
+                          });
+                          // Refresh sessions list after a short delay so the new session shows in sidebar
+                          setTimeout(() => fetchActiveSessions(), 3000);
                         } else {
                           const data = await res.json();
                           alert(data.error || "Failed to allocate capital.");
                         }
-                      } catch(e) { console.error("Error starting session", e); }
+                      } catch (e) { console.error("Error starting session", e); }
                       finally { setIsDeploying(false); }
                     }}
                     style={{
