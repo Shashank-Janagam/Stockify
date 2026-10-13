@@ -12,7 +12,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 router = APIRouter()
 # --- LIVE SERVER LOGIC ---
 
-MONGO_URI = "mongodb+srv://shashijanagam2004_db_user:hg00fvxTmkNkOdj8@stocks.ugz3urv.mongodb.net/?appName=stocks"
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://shashijanagam2004_db_user:hg00fvxTmkNkOdj8@stocks.ugz3urv.mongodb.net/?appName=stocks")
 
 def get_latest_strategy(user_id=None, strategy_name=None):
     client = MongoClient(MONGO_URI)
