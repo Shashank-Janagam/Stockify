@@ -111,7 +111,21 @@ services:
     environment:
       - STOCKIFY_API_URL=http://backend:4000
       - NEWS_ANALYSIS_URL=http://news-analysis:5001
+      - ALGO_TRADING_URL=http://autotrading:8000
     depends_on:
       - backend
       - news-analysis
+
+  autotrading:
+    build:
+      context: ./AutoTrading
+    container_name: stockify-autotrading
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    environment:
+      - UPSTOX_WS_URL=ws://upstox-backend:4141
+      - NODE_ENV=production
+    depends_on:
+      - upstox-backend
 
