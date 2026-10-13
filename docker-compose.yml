@@ -11,6 +11,7 @@ services:
     environment:
       - PYTHON_SERVER_URL=http://news-analysis:5001/api/news
       - UPSTOX_WS_URL=ws://upstox-backend:4141
+      - AEGIS_PYTHON_URL=http://aegis:5050
       - NODE_ENV=production
 
   news-analysis:
@@ -97,4 +98,20 @@ services:
       - MCP_TRANSPORT=sse
     depends_on:
       - backend
+
+  aegis:
+    build:
+      context: ./Aegis
+    container_name: stockify-aegis
+    ports:
+      - "5050:5050"
+    restart: unless-stopped
+    env_file:
+      - ./Aegis/.env
+    environment:
+      - STOCKIFY_API_URL=http://backend:4000
+      - NEWS_ANALYSIS_URL=http://news-analysis:5001
+    depends_on:
+      - backend
+      - news-analysis
 
