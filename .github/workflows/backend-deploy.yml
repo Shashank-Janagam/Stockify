@@ -20,49 +20,64 @@ jobs:
             echo "Connected to Azure VM"
             git config --global --add safe.directory "*" 2>/dev/null || true
 
-            # Locate or restore the git repository
-            if [ -d "$HOME/Stockify/.git" ]; then
-              cd "$HOME/Stockify"
-            elif [ -d "$HOME/stockify/.git" ]; then
-              cd "$HOME/stockify"
-            elif [ -d "$HOME/Stockify/Stockify/.git" ]; then
-              cd "$HOME/Stockify/Stockify"
-            else
-              echo "No .git found in default paths. Searching home directory..."
-              FOUND_GIT=$(find "$HOME" -maxdepth 3 -name ".git" -type d 2>/dev/null | head -n 1)
-              if [ -n "$FOUND_GIT" ]; then
-                REPO_DIR=$(dirname "$FOUND_GIT")
-                echo "Found git repository at: $REPO_DIR"
-                cd "$REPO_DIR"
-              else
-                echo "No git repo found on VM. Cloning fresh into $HOME/Stockify..."
-                # Preserve any existing files/env in Stockify if present
-                if [ -d "$HOME/Stockify" ]; then
-                  cd "$HOME/Stockify"
-                  git init
-                  git remote add origin https://github.com/Shashank-Janagam/Stockify.git 2>/dev/null || git remote set-url origin https://github.com/Shashank-Janagam/Stockify.git
-                else
-                  git clone https://github.com/Shashank-Janagam/Stockify.git "$HOME/Stockify"
-                  cd "$HOME/Stockify"
-                fi
+            REPO_DIR="$HOME/Stockify"
+            REPO_URL="https://github.com/Shashank-Janagam/Stockify.git"
+            BACKUP_DIR="$HOME/.stockify_env_backup"
+
+            # ── Backup .env files before any git operation ──────────────────
+            echo "Backing up .env files..."
+            rm -rf "$BACKUP_DIR" && mkdir -p "$BACKUP_DIR"
+            for f in \
+              "$REPO_DIR/Stockify-Backend/.env" \
+              "$REPO_DIR/Upstox-Backend/.env" \
+              "$REPO_DIR/AlgoTrading/.env" \
+              "$REPO_DIR/Notification_Service/.env" \
+              "$REPO_DIR/mcp/.env" \
+              "$REPO_DIR/Aegis/.env" \
+              "$REPO_DIR/MultiAgent/PressRelease/.env"; do
+              if [ -f "$f" ]; then
+                REL=$(echo "$f" | sed "s|$REPO_DIR/||")
+                mkdir -p "$BACKUP_DIR/$(dirname "$REL")"
+                cp "$f" "$BACKUP_DIR/$REL"
+                echo "  Backed up: $REL"
               fi
+            done
+
+            # ── Ensure the repo is a valid git repo; re-clone if needed ─────
+            if [ -d "$REPO_DIR/.git" ]; then
+              echo "Git repo found at $REPO_DIR"
+              cd "$REPO_DIR"
+            else
+              echo "No .git at $REPO_DIR — performing fresh clone..."
+              rm -rf "$REPO_DIR"
+              git clone "$REPO_URL" "$REPO_DIR"
+              cd "$REPO_DIR"
             fi
 
-            echo "Working in: $(pwd)"
-
-            echo "Fetching and forcefully pulling latest code..."
-            git remote set-url origin https://github.com/Shashank-Janagam/Stockify.git 2>/dev/null || true
+            # ── Pull latest main ─────────────────────────────────────────────
+            echo "Fetching and resetting to origin/main..."
+            git remote set-url origin "$REPO_URL"
             git fetch origin main
             git reset --hard origin/main
 
-            echo "Ensuring required env files exist..."
-            mkdir -p ./AlgoTrading ./MultiAgent/PressRelease ./Upstox-Backend ./Notification_Service ./mcp
-            touch ./AlgoTrading/.env
-            touch ./MultiAgent/PressRelease/.env
-            touch ./Upstox-Backend/.env
-            touch ./Notification_Service/.env
-            touch ./mcp/.env
+            # ── Restore .env files (overwrite any blanks left by git reset) ──
+            echo "Restoring .env files..."
+            for f in $(find "$BACKUP_DIR" -name ".env" -type f 2>/dev/null); do
+              REL=$(echo "$f" | sed "s|$BACKUP_DIR/||")
+              DEST="$REPO_DIR/$REL"
+              mkdir -p "$(dirname "$DEST")"
+              cp "$f" "$DEST"
+              echo "  Restored: $REL"
+            done
 
+            # ── Ensure required env files exist (even if never had a value) ──
+            echo "Ensuring required env files exist..."
+            for dir in AlgoTrading MultiAgent/PressRelease Upstox-Backend Notification_Service mcp Aegis; do
+              mkdir -p "./$dir"
+              touch "./$dir/.env"
+            done
+
+            # ── Build and start Docker services ─────────────────────────────
             echo "Rebuilding and starting services..."
             docker compose up --build -d
 
