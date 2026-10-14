@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+    # Skip VM deployment when ONLY frontend files changed
+    paths-ignore:
+      - 'Stockify-Frontend/**'
+      - '**.md'
 jobs:
   deploy-backend:
     runs-on: ubuntu-latest

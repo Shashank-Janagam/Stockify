@@ -701,8 +701,11 @@ export function StockChartIndia({
   const validTradeTimestamps = trades
     .map((t: any) => {
       const rawDate = t.createdAtIST || t.created_at || t.createdAt;
+      // created_at is stored as IST (NOW() AT TIME ZONE 'Asia/Kolkata' in Postgres).
+      // JS parses it as UTC-offset-less, which matches the chart's IST-as-UTC coordinate space.
+      // Do NOT add +5.5h — that would double-shift the timestamp.
       const ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
-      return ts + (5.5 * 3600 * 1000);
+      return ts;
     })
     .filter((t: number) => !isNaN(t));
   const maxTradeTs = validTradeTimestamps.length ? Math.max(...validTradeTimestamps) : 0;
@@ -714,8 +717,9 @@ export function StockChartIndia({
   const tradePoints = trades
     .map((t: any) => {
       const rawDate = t.createdAtIST || t.created_at || t.createdAt;
-      let ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
-      if (!isNaN(ts)) ts += (5.5 * 3600 * 1000);
+      // created_at is already IST (stored as NOW() AT TIME ZONE 'Asia/Kolkata').
+      // Do NOT add +5.5h — chart axis is IST-as-UTC and this is already in that space.
+      const ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
       const rawPrice = t.pricePerShare ?? t.price_per_share ?? t.price ?? 0;
       return {
         x: isNaN(ts) ? Date.now() : ts,
@@ -733,8 +737,8 @@ export function StockChartIndia({
   const allVisiblePrices: number[] = lineData.map(d => d.y).filter(y => y != null && !isNaN(y));
   trades.forEach((t: any) => {
     const rawDate = t.createdAtIST || t.created_at || t.createdAt;
-    let ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
-    if (!isNaN(ts)) ts += (5.5 * 3600 * 1000);
+    // created_at is already IST — no offset needed to match chart IST-as-UTC space.
+    const ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
     const rawPrice = t.pricePerShare ?? t.price_per_share ?? t.price;
     if (!isNaN(ts) && ts >= marketOpen && ts <= finalMarketClose && rawPrice != null && !isNaN(Number(rawPrice))) {
       allVisiblePrices.push(Number(rawPrice));
