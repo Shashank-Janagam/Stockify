@@ -51,7 +51,7 @@ router.get('/live/sessions/:userId', (req, res) => forwardToAutoTrading(req, res
 router.post('/live/start', (req, res) => forwardToAutoTrading(req, res, '/live/start'));
 router.post('/live/stop', (req, res) => forwardToAutoTrading(req, res, '/live/stop'));
 
-// Catch-all forwarder for any other routes
-router.all('*', (req, res) => forwardToAutoTrading(req, res, req.path));
+// Catch-all forwarder for any other routes (Express 5 compatible)
+router.use((req, res) => forwardToAutoTrading(req, res, req.path));
 
 export default router;
