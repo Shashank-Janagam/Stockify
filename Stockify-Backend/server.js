@@ -28,6 +28,8 @@ import newsRoutes from "./modules/news/news.routes.js";
 import userRoutes from "./modules/user/user.routes.js";
 import sectorAlertsRoutes from "./modules/sectorAlerts/sectorAlerts.routes.js";
 import algoRoutes from "./modules/algo/algo.routes.js";
+import autotradingRoutes from "./modules/algo/autotrading.routes.js";
+import { setupAutoTradingWsProxy } from "./modules/websocket/autoTradingWsProxy.js";
 import paperbullRoutes from "./modules/paperbull/paperbull.routes.js";
 import { spawn } from "child_process";
 import path from "path";
@@ -85,6 +87,7 @@ app.use("/api/news", newsRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/sectorAlerts", sectorAlertsRoutes);
 app.use("/api/algo", algoRoutes);
+app.use("/api/autotrading", autotradingRoutes);
 app.use("/api/paperbull", paperbullRoutes);
 
 // --- ALGO TRADING & BACKTEST APIS ---
@@ -191,6 +194,7 @@ async function startServer() {
     upstoxFeedService.connect();
     const server = http.createServer(app);
     wsManager.current = new WebSocketManager(server);
+    setupAutoTradingWsProxy(server);
     import("./modules/websocket/wsManager.js").then(m => m.setHoldingsService(holdings));
 
 
