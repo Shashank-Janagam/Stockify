@@ -83,10 +83,14 @@ function classifyCategory(item) {
  */
 function getSubscriptionsPath() {
   const potentialPaths = [
-    path.resolve(__dirname, "../../../Upstox-Backend/subscriptions.json"),
     path.resolve(__dirname, "../../data/subscriptions.json"),
+    path.resolve(__dirname, "../../subscriptions.json"),
+    path.resolve(process.cwd(), "data/subscriptions.json"),
+    path.resolve(process.cwd(), "subscriptions.json"),
+    path.resolve(__dirname, "../../../Upstox-Backend/subscriptions.json"),
     path.resolve(process.cwd(), "../Upstox-Backend/subscriptions.json"),
-    path.resolve(process.cwd(), "subscriptions.json")
+    "/app/data/subscriptions.json",
+    "/app/subscriptions.json"
   ];
 
   for (const p of potentialPaths) {
@@ -137,6 +141,23 @@ function getAcronym(name) {
     .toLowerCase();
 }
 
+function formatStockForMemory(doc) {
+  const sym = (doc.symbol || "").toUpperCase();
+  const name = doc.name || sym;
+  return {
+    symbol: sym,
+    name: name,
+    instrument_key: doc.instrument_key || `NSE_EQ|${sym}`,
+    exchange: doc.exchange || "NSE",
+    category: doc.category || classifyCategory(doc),
+    popularity: doc.popularity || 0,
+    _cleanSymbol: sym.toLowerCase().replace(/[^a-z0-9]/g, ""),
+    _cleanName: name.toLowerCase().replace(/[^a-z0-9\s]/g, ""),
+    _nameTokens: name.toLowerCase().split(/[\s,.-]+/).filter(Boolean),
+    _acronym: getAcronym(name)
+  };
+}
+
 /**
  * Initializes and syncs search engine with MongoDB & in-memory store
  */
@@ -144,10 +165,6 @@ export async function initStockSearchEngine() {
   try {
     console.log("🔍 Initializing Stock Search Engine from subscriptions.json...");
     const rawStocks = loadSubscriptionsData();
-
-    if (!rawStocks.length) {
-      console.warn("⚠️ No stocks loaded from subscriptions.json");
-    }
 
     let db;
     try {
@@ -191,28 +208,19 @@ export async function initStockSearchEngine() {
 
       // Fetch all stocks with their updated popularity from MongoDB
       const mongoDocs = await collection.find({}).toArray();
-      memoryStocks = mongoDocs.map(doc => ({
-        symbol: doc.symbol,
-        name: doc.name,
-        instrument_key: doc.instrument_key,
-        exchange: doc.exchange || "NSE",
-        category: doc.category || classifyCategory(doc),
-        popularity: doc.popularity || 0,
-        // Pre-computed lowercase tokens for instant search
-        _cleanSymbol: doc.symbol.toLowerCase().replace(/[^a-z0-9]/g, ""),
-        _cleanName: doc.name.toLowerCase().replace(/[^a-z0-9\s]/g, ""),
-        _nameTokens: doc.name.toLowerCase().split(/[\s,.-]+/).filter(Boolean),
-        _acronym: getAcronym(doc.name)
-      }));
+      memoryStocks = mongoDocs.map(formatStockForMemory);
+    } else if (db) {
+      // If subscriptions.json was not found locally, load existing stocks from MongoDB
+      const collection = db.collection("stocks");
+      const mongoDocs = await collection.find({}).toArray();
+      if (mongoDocs && mongoDocs.length > 0) {
+        console.log(`📦 Loaded ${mongoDocs.length} stocks from existing MongoDB collection`);
+        memoryStocks = mongoDocs.map(formatStockForMemory);
+      } else {
+        memoryStocks = rawStocks.map(formatStockForMemory);
+      }
     } else {
-      // Use rawStocks in-memory if DB isn't available
-      memoryStocks = rawStocks.map(doc => ({
-        ...doc,
-        _cleanSymbol: doc.symbol.toLowerCase().replace(/[^a-z0-9]/g, ""),
-        _cleanName: doc.name.toLowerCase().replace(/[^a-z0-9\s]/g, ""),
-        _nameTokens: doc.name.toLowerCase().split(/[\s,.-]+/).filter(Boolean),
-        _acronym: getAcronym(doc.name)
-      }));
+      memoryStocks = rawStocks.map(formatStockForMemory);
     }
 
     // Populate symbol index map
