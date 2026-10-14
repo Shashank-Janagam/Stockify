@@ -21,7 +21,7 @@ export function setHoldingsService(service) {
 
 export  class WebSocketManager {
   constructor(server) {
-    this.wss = new WebSocketServer({ server, path: "/api" });
+    this.wss = new WebSocketServer({ noServer: true });
     this.clients = new Map();
     this.exploreSubscribers = new Set();
     this.exploreInterval = null;

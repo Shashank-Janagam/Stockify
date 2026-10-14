@@ -29,7 +29,7 @@ import userRoutes from "./modules/user/user.routes.js";
 import sectorAlertsRoutes from "./modules/sectorAlerts/sectorAlerts.routes.js";
 import algoRoutes from "./modules/algo/algo.routes.js";
 import autotradingRoutes from "./modules/algo/autotrading.routes.js";
-import { setupAutoTradingWsProxy } from "./modules/websocket/autoTradingWsProxy.js";
+import { createAutoTradingWsProxy } from "./modules/websocket/autoTradingWsProxy.js";
 import paperbullRoutes from "./modules/paperbull/paperbull.routes.js";
 import { spawn } from "child_process";
 import path from "path";
@@ -194,7 +194,32 @@ async function startServer() {
     upstoxFeedService.connect();
     const server = http.createServer(app);
     wsManager.current = new WebSocketManager(server);
-    setupAutoTradingWsProxy(server);
+    const autoTradingProxyHandler = createAutoTradingWsProxy();
+
+    server.on('upgrade', (req, socket, head) => {
+      try {
+        const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        const pathname = url.pathname;
+
+        if (pathname === '/api/autotrading/live' || pathname === '/autotrading/live') {
+          autoTradingProxyHandler(req, socket, head, url);
+        } else if (pathname === '/api' || pathname === '/api/') {
+          if (wsManager.current?.wss) {
+            wsManager.current.wss.handleUpgrade(req, socket, head, (ws) => {
+              wsManager.current.wss.emit('connection', ws, req);
+            });
+          } else {
+            socket.destroy();
+          }
+        } else {
+          socket.destroy();
+        }
+      } catch (err) {
+        console.error('Server upgrade error:', err);
+        socket.destroy();
+      }
+    });
+
     import("./modules/websocket/wsManager.js").then(m => m.setHoldingsService(holdings));
 
 
