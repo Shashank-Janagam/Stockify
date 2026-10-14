@@ -12,6 +12,8 @@ services:
       - PYTHON_SERVER_URL=http://news-analysis:5001/api/news
       - UPSTOX_WS_URL=ws://upstox-backend:4141
       - AEGIS_PYTHON_URL=http://aegis:5050
+      - AUTOTRADING_URL=http://autotrading:8000
+      - AUTOTRADING_WS_URL=ws://autotrading:8000
       - NODE_ENV=production
 
   news-analysis:
