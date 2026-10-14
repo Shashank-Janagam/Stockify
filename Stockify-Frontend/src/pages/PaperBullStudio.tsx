@@ -10,12 +10,12 @@ import StockLogo from '../components/common/StockLogo';
 import SearchOverlay from '../components/layout/SearchOverlay';
 
 const ALGO_API_URL = import.meta.env.VITE_ALGO_API_URL ||
-  (import.meta.env.VITE_HOST_ADDRESS ? `${import.meta.env.VITE_HOST_ADDRESS}/api/autotrading` : 'http://localhost:8000');
+  (import.meta.env.VITE_HOST_ADDRESS ? `${import.meta.env.VITE_HOST_ADDRESS}/api/autotrading` : 'http://localhost:8000'); // local: http://localhost:8000
 
 const ALGO_WS_URL = import.meta.env.VITE_ALGO_WS_URL ||
   (import.meta.env.VITE_HOST_ADDRESS
     ? `${import.meta.env.VITE_HOST_ADDRESS.replace(/^http/, 'ws')}/api/autotrading/live`
-    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:8000/live`);
+    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:8000/live`); // local: ws://localhost:8000/live
 
 
 function computeSMA(data: { x: number, y: number }[], period: number) {
