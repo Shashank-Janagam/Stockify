@@ -3,7 +3,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { createClient } from "redis";
 import { setTickListener, updateTrackedSymbols } from "./priceMonitor.js";
-import { executeSell, executeBuy } from "./orderExecution.js";
+import { sendOrder } from "../kafka/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
@@ -94,32 +94,38 @@ async function loadPendingOrders() {
 }
 
 // ─────────────────────────────────────────────────────────
-//  Execute a triggered order
+//  Execute a triggered order via Kafka OrderExecution
 // ─────────────────────────────────────────────────────────
 async function executeTrigger(descriptor, currentPrice) {
-  const { orderId, symbol, side } = descriptor;
+  const { orderId, symbol, side, userId, quantity, product_type } = descriptor;
 
   console.log(
     `[SL Engine] 🔔 TRIGGER: ${side} #${orderId} | ${symbol}` +
     ` | current ₹${currentPrice} | trigger ₹${descriptor.stopLoss}`
   );
 
-  let result;
-  if (side === "SELL") {
-    result = await executeSell(descriptor, currentPrice);
-  } else if (side === "BUY") {
-    result = await executeBuy(descriptor, currentPrice);
-  }
+  try {
+    await sendOrder({
+      orderId,
+      userId,
+      symbol,
+      side,
+      quantity,
+      productType: product_type || "Delivery",
+      executionPrice: currentPrice,
+      category: "STOPLOSS",
+    });
 
-  if (result && !result.error) {
+    console.log(`[SL Engine] 📤 Sent triggered ${side} #${orderId} to Kafka orders.incoming`);
+
     await publisher.publish(
       "STOPLOSS_TRIGGERED",
       JSON.stringify({
         orderId, side, symbol, price: currentPrice, status: "EXECUTED",
       })
     );
-  } else {
-    console.error(`[SL Engine] ❌ Execution failed for #${orderId}:`, result?.error || "Unknown error");
+  } catch (err) {
+    console.error(`[SL Engine] ❌ Failed to produce triggered order #${orderId} to Kafka:`, err.message);
   }
 }
 
@@ -224,4 +230,4 @@ await subscriber.subscribe("CANCEL_STOPLOSS", (message) => {
 
 await loadPendingOrders();
 
-console.log("[SL Engine] 🚀 Running — Listening for real-time WebSocket ticks...");
+console.log("[SL Engine] 🚀 Running — Listening for real-time Redis ticks...");

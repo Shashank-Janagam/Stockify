@@ -2,9 +2,13 @@ FROM node:22
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install --production
+# Copy Kafka-communication
+COPY Kafka-communication ./Kafka-communication
+RUN cd Kafka-communication && npm install --omit=dev
 
-COPY . .
+# Copy AlgoTrading
+COPY AlgoTrading ./AlgoTrading
+WORKDIR /app/AlgoTrading
+RUN npm install --production
 
 CMD ["node", "stoploss-engine/stoploss.js"]

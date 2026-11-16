@@ -26,6 +26,7 @@ import AegisPage from "./pages/AegisPage.tsx";
 import { PortfolioThemeProvider } from "./context/PortfolioThemeContext";
 
 import { AuthContext } from "./auth/AuthProvider.tsx";
+import GlobalOrderNotification from "./components/common/GlobalOrderNotification.tsx";
 
 /* ---------------- TITLE MANAGER ---------------- */
 
@@ -93,6 +94,9 @@ const App = () => {
             <CookieConsent />
 
             <NavBar onLoginClick={() => setShowLogin(true)} />
+
+            {/* Global Order Execution Notification */}
+            <GlobalOrderNotification />
 
             {showLogin && (
               <LoginModal onClose={() => setShowLogin(false)} />

@@ -22,6 +22,7 @@ import multiStocks from "./modules/stocks/multiStream.routes.js"
 import OrderExecution from "./modules/OrderExecution/buyStock.js";
 import sellStock from "./modules/OrderExecution/sellStock.js";
 import * as holdings from "./modules/OrderExecution/holdings.js";
+import { initOrderProducer } from "./modules/OrderExecution/orderProducer.js";
 import portfolioRoutes from "./modules/portfolio/portfolio.routes.js";
 import aiRoutes from "./modules/ai/ai.routes.js";
 import newsRoutes from "./modules/news/news.routes.js";
@@ -222,7 +223,8 @@ async function startServer() {
 
     import("./modules/websocket/wsManager.js").then(m => m.setHoldingsService(holdings));
 
-
+    // Connect Kafka Order Producer for instantaneous order publishing
+    await initOrderProducer();
 
     server.listen(PORT, () => {
       console.log(`✅ Server running on http://localhost:${PORT}`);

@@ -440,11 +440,14 @@ if (!Array.isArray(dataPoints) || !dataPoints.length) return;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
 
     // Determine marker type and colors
-    const isBuy = trade.side === "BUY";
-    const isPartial = trade.side === "PARTIAL"; 
+    const isBuy = (trade.side || "").toUpperCase() === "BUY";
+    const isPartial = (trade.side || "").toUpperCase() === "PARTIAL"; 
     let color = isBuy ? "#10b981" : "#ef4444";
     let text = isBuy ? "B" : "S";
     if (isPartial) { color = "#f59e0b"; text = "P"; }
+
+    // Only render markers within visible chart area
+    if (x < left - 6 || x > right + 6) return;
 
     const mx = chart.options.plugins?.growwPlugin?.mx;
     const my = chart.options.plugins?.growwPlugin?.my;
@@ -533,10 +536,12 @@ if (!Array.isArray(dataPoints) || !dataPoints.length) return;
     // Dot on the chart line (always visible)
     ctx.save();
     ctx.beginPath();
-    ctx.arc(x, y, isHovered ? 6 : 4, 0, Math.PI * 2);
+    ctx.arc(x, y, isHovered ? 7.5 : 5, 0, Math.PI * 2);
     ctx.fillStyle = color;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = color;
     ctx.fill();
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 2;
     ctx.strokeStyle = "#ffffff";
     ctx.stroke();
     ctx.restore();
@@ -698,14 +703,26 @@ export function StockChartIndia({
   }
 
   const lastCandleTs = lineData.length ? lineData[lineData.length - 1].x : Date.now();
+  const IST_OFFSET_MS = 5.5 * 3600 * 1000;
+
+  function toChartTimestamp(rawDate: any, anchorTs: number): number {
+    if (!rawDate) return NaN;
+    let ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
+    if (isNaN(ts)) return NaN;
+
+    // Chart candles (lineData) are shifted by +5.5h into IST-as-UTC space.
+    // If rawDate was parsed in real UTC (5.5h behind), shifting it by +5.5h aligns
+    // it perfectly with the chart's timeline.
+    if (Math.abs((ts + IST_OFFSET_MS) - anchorTs) < Math.abs(ts - anchorTs)) {
+      ts += IST_OFFSET_MS;
+    }
+    return ts;
+  }
+
   const validTradeTimestamps = trades
     .map((t: any) => {
       const rawDate = t.createdAtIST || t.created_at || t.createdAt;
-      // created_at is stored as IST (NOW() AT TIME ZONE 'Asia/Kolkata' in Postgres).
-      // JS parses it as UTC-offset-less, which matches the chart's IST-as-UTC coordinate space.
-      // Do NOT add +5.5h — that would double-shift the timestamp.
-      const ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
-      return ts;
+      return toChartTimestamp(rawDate, lastCandleTs);
     })
     .filter((t: number) => !isNaN(t));
   const maxTradeTs = validTradeTimestamps.length ? Math.max(...validTradeTimestamps) : 0;
@@ -717,9 +734,7 @@ export function StockChartIndia({
   const tradePoints = trades
     .map((t: any) => {
       const rawDate = t.createdAtIST || t.created_at || t.createdAt;
-      // created_at is already IST (stored as NOW() AT TIME ZONE 'Asia/Kolkata').
-      // Do NOT add +5.5h — chart axis is IST-as-UTC and this is already in that space.
-      const ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
+      const ts = toChartTimestamp(rawDate, lastCandleTs);
       const rawPrice = t.pricePerShare ?? t.price_per_share ?? t.price ?? 0;
       return {
         x: isNaN(ts) ? Date.now() : ts,
@@ -737,8 +752,7 @@ export function StockChartIndia({
   const allVisiblePrices: number[] = lineData.map(d => d.y).filter(y => y != null && !isNaN(y));
   trades.forEach((t: any) => {
     const rawDate = t.createdAtIST || t.created_at || t.createdAt;
-    // created_at is already IST — no offset needed to match chart IST-as-UTC space.
-    const ts = typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime();
+    const ts = toChartTimestamp(rawDate, lastCandleTs);
     const rawPrice = t.pricePerShare ?? t.price_per_share ?? t.price;
     if (!isNaN(ts) && ts >= marketOpen && ts <= finalMarketClose && rawPrice != null && !isNaN(Number(rawPrice))) {
       allVisiblePrices.push(Number(rawPrice));

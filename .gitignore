@@ -1,55 +1,154 @@
-# Ignore all node_modules folders anywhere in the project
+# =========================================================
+#  Stockify Master .gitignore
+#  Guarantees zero secret leaks & prevents git push conflicts
+# =========================================================
 
+# ── 1. Secrets, Keys, Certificates & Credentials ─────────
+*.env
+*.env.*
+.env
+.env.*
+**/.env
+**/.env.*
+**/.env.local
+**/.env.development
+**/.env.test
+**/.env.production
+!.env.example
+!**/.env.example
+
+*.pem
+**/*.pem
+*.key
+**/*.key
+*.cert
+**/*.cert
+*.crt
+**/*.crt
+*.pfx
+**/*.pfx
+*.p12
+**/*.p12
+*serviceAccount*.json
+**/*serviceAccount*.json
+*credentials*.json
+**/*credentials*.json
+*firebase*.json
+**/*firebase*.json
+id_rsa*
+**/.ssh/
+
+# ── 2. Dependencies & Node Modules ───────────────────────
 node_modules/
 **/node_modules/
+.pnp/
+.pnp.js
+.yarn/
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
 
-# Logs
+# ── 3. Python Virtual Environments, Bytecode & Caches ────
+__pycache__/
+**/__pycache__/
+*.py[cod]
+**/*.py[cod]
+*$py.class
+**/*$py.class
+.Python
+**/.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+**/*.egg-info/
+.installed.cfg
+*.egg
 
+# Virtual environments
+venv/
+**/venv/
+.venv/
+**/.venv/
+env/
+**/env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing & Coverage
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ── 4. Build Outputs & Compilers ─────────────────────────
+dist/
+**/dist/
+build/
+**/build/
+out/
+**/out/
+coverage/
+**/coverage/
+.vite/
+**/.vite/
+.cache/
+**/.cache/
+*.tsbuildinfo
+**/*.tsbuildinfo
+.turbo/
+**/.turbo/
+
+# ── 5. Logs & Debugging ──────────────────────────────────
 logs/
+**/logs/
 *.log
+**/*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+lerna-debug.log*
 
-# Environment variables
-
-.env
-.env.*
-!.env.example
-
-# Build outputs
-
-dist/
-build/
-out/
-coverage/
-
-# Dependency directories
-
-.pnp/
-.pnp.js
-
-# OS files
-
+# ── 6. OS & Editor Metadata ──────────────────────────────
 .DS_Store
+**/.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
-
-# IDE/editor files
+**/Thumbs.db
 
 .vscode/
+**/.vscode/
+!.vscode/extensions.json
 .idea/
+**/.idea/
 *.swp
+**/*.swp
 *.swo
+**/*.swo
+*~
 
-# Optional: ignore package lock files if needed (usually keep them)
-
-# package-lock.json
-
-# yarn.lock
-
-# pnpm-lock.yaml
-
-# Sensitive/internal files — do NOT commit
+# ── 7. Sensitive / Local Internal Configs ────────────────
 n8n.json
 **/n8n.json
+*.local
+**/*.local

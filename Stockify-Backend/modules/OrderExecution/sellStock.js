@@ -3,7 +3,7 @@ import requireAuth from "../../Middleware/requireAuth.js";
 import { db } from "../../db/sql.js";
 import YahooFinance from "yahoo-finance2";
 import redis from "../../cache/redisClient.js";
-import notificationQueue from "../../queue/notificationQueue.js";
+import { publishOrderToQueue } from "./orderProducer.js";
 
 const router = express.Router();
 
@@ -13,6 +13,24 @@ const yahoo = new YahooFinance({
 
 async function getCurrentPrice(symbol) {
   const finalSymbol = symbol.endsWith(".NS") ? symbol : `${symbol}.NS`;
+  const cleanSymbol = symbol.replace(".NS", "");
+
+  // 1. Check live Upstox ticks from Redis cache
+  try {
+    const rawTick = await redis.hget("ticks:latest", cleanSymbol);
+    if (rawTick) {
+      const tick = JSON.parse(rawTick);
+      if (tick && tick.price && tick.price > 0) {
+        return {
+          symbol: finalSymbol,
+          pricePerShare: Number(tick.price),
+          name: tick.name || cleanSymbol,
+        };
+      }
+    }
+  } catch (_) {}
+
+  // 2. Fallback to Yahoo Finance
   const quote = await yahoo.quote(finalSymbol);
   return {
     symbol: finalSymbol,
@@ -155,7 +173,7 @@ router.post("/sell", requireAuth, async (req, res) => {
     }
 
     // ══════════════════════════════════════════════════════
-    //  PATH B: REGULAR MARKET SELL
+    //  PATH B: REGULAR MARKET SELL (Produced to Kafka)
     // ══════════════════════════════════════════════════════
     await client.query("BEGIN");
 
@@ -183,155 +201,50 @@ router.post("/sell", requireAuth, async (req, res) => {
     }
     const sellValue = pricePerShare * quantity;
 
-    let qtyToSell = quantity;
-    let totalRealizedPnL = 0;
-
-    for (const pos of posRes.rows) {
-      if (qtyToSell <= 0) break;
-
-      const posQty = Number(pos.remaining_quantity);
-      const consume = Math.min(posQty, qtyToSell);
-      const pnl = (pricePerShare - Number(pos.entry_price)) * consume;
-      totalRealizedPnL += pnl;
-
-      const newRem = posQty - consume;
-      await client.query(
-        `UPDATE positions
-         SET remaining_quantity = $1, status = $2, updated_at = NOW() AT TIME ZONE 'Asia/Kolkata'
-         WHERE id = $3`,
-        [newRem, newRem === 0 ? "CLOSED" : "OPEN", pos.id]
-      );
-
-      qtyToSell -= consume;
-    }
-
-    const walletRes = await client.query(
-      `UPDATE wallet_accounts SET available_balance = available_balance + $1
-       WHERE user_id = $2 AND (account_type = 'LIVE' OR account_type IS NULL) RETURNING available_balance`,
-      [sellValue, userId]
-    );
-    const newBalance = walletRes.rows[0].available_balance;
-
     const orderRes = await client.query(
       `INSERT INTO orders
        (user_id, stock_id, side, order_type, quantity, price,
-        status, created_at, executed_at, updated_at, sell_type, category)
-       VALUES ($1, $2, 'SELL', 'MARKET', $3, $4, 'EXECUTED',
-               NOW() AT TIME ZONE 'Asia/Kolkata',
+        status, created_at, updated_at, sell_type, category)
+       VALUES ($1, $2, 'SELL', 'MARKET', $3, $4, 'PENDING',
                NOW() AT TIME ZONE 'Asia/Kolkata',
                NOW() AT TIME ZONE 'Asia/Kolkata', $5, $6)
        RETURNING id`,
       [userId, stockId, quantity, pricePerShare, finalProductType, category || 'REGULAR']
     );
     const orderId = orderRes.rows[0].id;
-
-    const tradeRes = await client.query(
-      `INSERT INTO trades
-       (order_id, user_id, stock_id, side, quantity, price, realized_pnl, created_at)
-       VALUES ($1, $2, $3, 'SELL', $4, $5, $6, NOW() AT TIME ZONE 'Asia/Kolkata')
-       RETURNING id`,
-      [orderId, userId, stockId, quantity, pricePerShare, totalRealizedPnL]
-    );
-    const tradeId = tradeRes.rows[0].id;
-
-    await client.query(
-      `INSERT INTO wallet_transactions
-       (user_id, reference_type, reference_id, transaction_type, amount, balance_after, created_at)
-       VALUES ($1, 'TRADE', $2, 'SELL', $3, $4, NOW() AT TIME ZONE 'Asia/Kolkata')`,
-      [userId, tradeId, sellValue, newBalance]
-    );
-
-    const slOrdersRes = await client.query(
-      `SELECT id, quantity, stop_trigger_price
-       FROM orders
-       WHERE user_id = $1 AND stock_id = $2 AND side = 'SELL' 
-         AND status = 'PENDING' AND sell_type = $3
-       ORDER BY created_at ASC
-       FOR UPDATE`,
-      [userId, stockId, finalProductType]
-    );
-
-    let remainingSellQty = quantity;
-    const itemsToNotify = [];
-
-    for (const slOrder of slOrdersRes.rows) {
-      if (remainingSellQty <= 0) break;
-      const slQty = Number(slOrder.quantity);
-      const reduction = Math.min(slQty, remainingSellQty);
-      const newSlQty = slQty - reduction;
-
-      if (newSlQty <= 0) {
-        await client.query(`DELETE FROM orders WHERE id = $1`, [slOrder.id]);
-        itemsToNotify.push({ id: slOrder.id, action: "DELETE" });
-      } else {
-        await client.query(
-          `UPDATE orders SET quantity = $1, updated_at = NOW() AT TIME ZONE 'Asia/Kolkata' WHERE id = $2`,
-          [newSlQty, slOrder.id]
-        );
-        itemsToNotify.push({
-          id: slOrder.id, action: "UPDATE",
-          newQuantity: newSlQty, stopLoss: slOrder.stop_trigger_price
-        });
-      }
-      remainingSellQty -= reduction;
-    }
-
     await client.query("COMMIT");
-    await redis.del(`wallet:balance:${uid}`);
-    await redis.del(`ai_portfolio_v3_${userId}`);
-    await redis.del(`portfolio:summary:${uid}`);
-    await redis.del(`portfolio:ai-eval:${uid}`);
-    await redis.del(`portfolio:forecasts:${uid}`);
 
-    for (const item of itemsToNotify) {
-      if (item.action === "DELETE") {
-        await redis.publish("CANCEL_STOPLOSS", JSON.stringify({ orderId: item.id }));
-      } else {
-        await redis.publish("UPDATE_STOPLOSS", JSON.stringify({
-          orderId: item.id, newQuantity: item.newQuantity, stopLoss: item.stopLoss
-        }));
-      }
-    }
-
-    const webhookData = {
-      status: "EXECUTED",
-      side: "SELL",
-      order_type: category || "REGULAR",
-      product_type: finalProductType,
-      sl_pending: false,
-      symbol,
-      stockName,
-      quantity,
-      PricePerShare: pricePerShare,
-      totalValue: sellValue,
-      walletBalance: newBalance,
-      userId,
-      orderId,
-      tradeId,
-      uid,
-      email,
-      name: userName || null,
-      mobile: userMobile || null,
-      telegram_chat_id: telegramChatId || null,
-      notify_email: notifyEmail,
-      notify_whatsapp: notifyWhatsapp,
-      notify_telegram: notifyTelegram,
-      subject:"PaperBull Order Execution",
-    };
-
+    // Publish order to Kafka queue using the dedicated Kafka producer
     try {
-      await notificationQueue.add("trade", webhookData);
-      console.log("✅ Notification job enqueued for", symbol);
-    } catch (queueErr) {
-      // Non-fatal: the trade already executed — just log and continue
-      console.error("❌ Failed to enqueue notification:", queueErr.message);
+      await publishOrderToQueue({
+        orderId,
+        userId,
+        userUid: uid,
+        symbol,
+        side: "SELL",
+        quantity,
+        productType: finalProductType,
+        category: category || "REGULAR",
+        executionPrice: pricePerShare,
+      });
+    } catch (kafkaErr) {
+      console.error(`[SellRoute] ❌ Failed to publish SELL #${orderId} to Kafka queue:`, kafkaErr.message);
+      await db.query(`UPDATE orders SET status = 'FAILED', updated_at = NOW() AT TIME ZONE 'Asia/Kolkata' WHERE id = $1`, [orderId]);
+      return res.status(500).json({ error: "Failed to queue order to execution pipeline" });
     }
 
     res.json({
-      status: "EXECUTED", side: "SELL", order_type: "MARKET",
-      product_type: finalProductType, sl_pending: false,
-      symbol, quantity, sellPricePerShare: pricePerShare,
-      totalValue: sellValue, walletBalance: newBalance,
+      status: "PENDING",
+      orderId,
+      side: "SELL",
+      order_type: "MARKET",
+      product_type: finalProductType,
+      sl_pending: false,
+      symbol,
+      quantity,
+      sellPricePerShare: pricePerShare,
+      totalValue: sellValue,
+      message: "Order placed and queued for execution via Kafka",
     });
   } catch (err) {
     if (client) await client.query("ROLLBACK");

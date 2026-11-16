@@ -27,7 +27,7 @@ def get_llm(temperature=0.1):
     if provider == "groq":
         if not groq_key:
             raise ValueError("GROQ_API_KEY (or GROK_API_KEY) is required but not configured.")
-        model_name = os.getenv("AEGIS_MODEL") or "llama-3.3-70b-versatile"
+        model_name = os.getenv("AEGIS_MODEL") or "meta-llama/llama-prompt-guard-2-22m"
         return ChatGroq(
             model=model_name,
             temperature=temperature,

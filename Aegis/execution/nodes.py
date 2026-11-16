@@ -48,7 +48,7 @@ def execute(state: AgentState, config: RunnableConfig):
     import json
     try:
         parsed_res = json.loads(res)
-        if parsed_res.get("status") == "EXECUTED":
+        if parsed_res.get("status") in ("EXECUTED", "PENDING"):
             parsed_res["status"] = "trade_executed"
         res = json.dumps(parsed_res)
     except:

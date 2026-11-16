@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { getStockLogoCandidates, setCachedLogo, getCachedLogo } from "../../utils/stockLogo";
+import React, { useState, useEffect, useMemo } from "react";
+import { getStockLogoCandidates, setCachedLogo, removeCachedLogo } from "../../utils/stockLogo";
 const defaultLogo = "https://mystockifyassets.blob.core.windows.net/assets/imageinv.png";
 
 interface StockLogoProps {
@@ -21,8 +21,7 @@ export const StockLogo: React.FC<StockLogoProps> = ({
   fallbackToAvatar = false,
   avatarClassName = "stock-symbol-avatar",
 }) => {
-  const cachedUrl = getCachedLogo(symbol);
-  const candidates = getStockLogoCandidates(symbol);
+  const candidates = useMemo(() => getStockLogoCandidates(symbol, domain), [symbol, domain]);
   const [candidateIdx, setCandidateIdx] = useState(0);
   const [hasError, setHasError] = useState(false);
 
@@ -32,6 +31,12 @@ export const StockLogo: React.FC<StockLogoProps> = ({
   }, [symbol, domain, name]);
 
   const handleError = () => {
+    // Invalidate cached logo if the current candidate failed to load
+    const failedUrl = candidates[candidateIdx];
+    if (failedUrl) {
+      removeCachedLogo(symbol);
+    }
+
     if (candidateIdx + 1 < candidates.length) {
       setCandidateIdx((prev) => prev + 1);
     } else {
@@ -45,11 +50,12 @@ export const StockLogo: React.FC<StockLogoProps> = ({
     }
   };
 
-  const currentSrc = cachedUrl || candidates[candidateIdx];
+  const currentSrc = candidates[candidateIdx];
 
   if (!hasError && currentSrc) {
     return (
       <img
+        key={currentSrc}
         src={currentSrc}
         alt={symbol}
         className={className}

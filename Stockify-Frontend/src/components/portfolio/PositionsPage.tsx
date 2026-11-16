@@ -2,8 +2,6 @@ import React, { useEffect, useState, useContext, useRef } from "react";
 import "../../Styles/HoldingsPage.css";
 import { AuthContext } from "../../auth/AuthProvider";
 import { useNavigate } from "react-router-dom";
-import { useAIAnalysis } from "../../hooks/useAIAnalysis";
-import AIInsightCard from "./AIInsightCard";
 import { useWebSocket } from "../../context/WebSocketContext";
 import StockLogo from "../common/StockLogo";
 
@@ -203,9 +201,6 @@ const PositionsPage: React.FC = () => {
     const [filter, setFilter] = useState<"ALL" | "LONG" | "SHORT" | "Intraday" | "Delivery">("ALL");
     const [drawer, setDrawer] = useState<DrawerState>(null);
 
-    const EMPTY_ARRAY = React.useMemo(() => [], []);
-    const { data: aiData, loading: aiLoading, refetch: refetchAI } = useAIAnalysis(user?.uid, positions, EMPTY_ARRAY, !loading);
-
     const { subscribe, unsubscribe, lastMessage } = useWebSocket();
 
     /* WS */
@@ -223,7 +218,7 @@ const PositionsPage: React.FC = () => {
         }
     }, [lastMessage]);
 
-    const handleOrderDone = () => { setDrawer(null); refetchAI(); };
+    const handleOrderDone = () => { setDrawer(null); };
 
     /* Merge lots → grouped rows */
     const merged = React.useMemo(() => mergePositions(positions), [positions]);
@@ -245,7 +240,6 @@ const PositionsPage: React.FC = () => {
     /* ── List Row ── */
     const renderRow = (p: MergedPosition) => {
         const rowProfit = p.totalPnl >= 0;
-        const aiInsight = aiData?.positionsAnalysis?.find(a => a.symbol === p.symbol.replace(".NS", "").replace(".BO", ""));
 
         return (
             <React.Fragment key={p.key}>
@@ -317,50 +311,7 @@ const PositionsPage: React.FC = () => {
                         </div>
                     </td>
 
-                    {/* 6. AI Insight */}
-                    <td onClick={e => e.stopPropagation()}>
-                        <div style={{ minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {aiInsight ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                        <span style={{
-                                            padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800,
-                                            backgroundColor: aiInsight.suggestion === 'Add' ? '#ecfdf5' : aiInsight.suggestion === 'Exit' ? '#fef2f2' : aiInsight.suggestion === 'Reduce' ? '#fffbeb' : '#eff6ff',
-                                            color: aiInsight.suggestion === 'Add' ? '#10b981' : aiInsight.suggestion === 'Exit' ? '#ef4444' : aiInsight.suggestion === 'Reduce' ? '#f59e0b' : '#3b82f6',
-                                            border: `1px solid ${aiInsight.suggestion === 'Add' ? '#10b981' : aiInsight.suggestion === 'Exit' ? '#ef4444' : aiInsight.suggestion === 'Reduce' ? '#f59e0b' : '#3b82f6'}`,
-                                            textTransform: 'uppercase'
-                                        }}>
-                                            {aiInsight.suggestion}
-                                        </span>
-                                        <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 600 }}>{aiInsight.riskLevel} Risk</span>
-                                    </div>
-                                    <div style={{ fontSize: '13px', color: '#4b5563', lineHeight: '1.3', fontWeight: 500 }}>
-                                        <span style={{ marginRight: '4px' }}>🧠</span> {aiInsight.keyInsight}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div style={{ fontSize: '12px', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-                                    {aiLoading ? (
-                                        <div style={{ position: 'relative', width: '10px', height: '10px' }}>
-                                            <div style={{ position: 'absolute', width: '100%', height: '100%', backgroundColor: '#60a5fa', borderRadius: '50%', animation: 'aiPulseOpacity 1.5s infinite ease-in-out' }} />
-                                            <div style={{ position: 'absolute', width: '100%', height: '100%', border: '1px solid #60a5fa', borderRadius: '50%', animation: 'aiOrbScale 1.5s infinite ease-out' }} />
-                                        </div>
-                                    ) : '🧠'}
-                                    <span style={{
-                                        background: aiLoading ? 'linear-gradient(90deg, #9ca3af, #60a5fa, #9ca3af)' : 'none',
-                                        backgroundSize: '200% 100%',
-                                        WebkitBackgroundClip: aiLoading ? 'text' : 'none',
-                                        WebkitTextFillColor: aiLoading ? 'transparent' : 'inherit',
-                                        animation: aiLoading ? 'aiShimmer 2s infinite linear' : 'none'
-                                    }}>
-                                        {aiLoading ? 'AI ANALYZING...' : 'No insight.'}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-                    </td>
-
-                    {/* 7. Actions */}
+                    {/* 6. Actions */}
                     <td className="h-action-cell" onClick={e => e.stopPropagation()}>
                         <button className="h-action-btn h-buy" onClick={() => setDrawer(d => d?.symbol === p.symbol && d?.productType === p.productType && d.tab === "BUY" ? null : { symbol: p.symbol, price: p.ltp, tab: "BUY", availableQty: p.totalQty, productType: p.productType })}>Buy</button>
                         <button className="h-action-btn h-sell" onClick={() => setDrawer(d => d?.symbol === p.symbol && d?.productType === p.productType && d.tab === "SELL" ? null : { symbol: p.symbol, price: p.ltp, tab: "SELL", availableQty: p.totalQty, productType: p.productType })}>Sell</button>
@@ -369,7 +320,7 @@ const PositionsPage: React.FC = () => {
 
                 {drawer?.symbol === p.symbol && drawer?.productType === p.productType && (
                     <tr className="h-drawer-row" onClick={e => e.stopPropagation()}>
-                        <td colSpan={7} className="h-drawer-cell">
+                        <td colSpan={6} className="h-drawer-cell">
                             <InlineOrderDrawer state={drawer} onClose={() => setDrawer(null)} onDone={handleOrderDone} />
                         </td>
                     </tr>
@@ -384,7 +335,7 @@ const PositionsPage: React.FC = () => {
         const pnlPos = sectionPnl >= 0;
         return (
             <tr key={`sh-${label}`} className="hp-section-header-row">
-                <td colSpan={7}>
+                <td colSpan={6}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <span style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{label}</span>
                         <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 500 }}>{rows.length} position{rows.length !== 1 ? "s" : ""}</span>
@@ -406,18 +357,6 @@ const PositionsPage: React.FC = () => {
                     <p className="hp-page-sub">All your open lots — live unrealized P&amp;L updated every few seconds</p>
                 </div>
             </div>
-
-            {/* AI Insight */}
-            {(loading || aiLoading || aiData) && (
-                <AIInsightCard
-                    portfolioRiskScore={aiData?.portfolioRiskScore || 0}
-                    riskCategory={aiData?.riskCategory || ''}
-                    emotionalFlags={aiData?.emotionalFlags || { revengeTrading: false, fomo: false, panicSelling: false, overtrading: false }}
-                    behavioralMetrics={aiData?.behavioralMetrics}
-                    overallAdvice={aiData?.overallAdvice || ''}
-                    loading={loading || aiLoading}
-                />
-            )}
 
             {/* Summary bar */}
             <div className="hp-summary-card" style={{ marginBottom: '24px' }}>
@@ -487,7 +426,6 @@ const PositionsPage: React.FC = () => {
                                 <th>LTP · Day %</th>
                                 <th>Current / Invested</th>
                                 <th>P&amp;L</th>
-                                <th>AI Insight</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -495,7 +433,7 @@ const PositionsPage: React.FC = () => {
                             {loading
                                 ? Array.from({ length: 4 }).map((_, i) => (
                                     <tr key={i} className="hp-sk-row">
-                                        {Array.from({ length: 7 }).map((_, j) => (
+                                        {Array.from({ length: 6 }).map((_, j) => (
                                             <td key={j}>
                                                 <div className="holdings-skeleton holdings-sk-cell" style={{ width: `${45 + (j * 7) % 40}%` }} />
                                             </td>

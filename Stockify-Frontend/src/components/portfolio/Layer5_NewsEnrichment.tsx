@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 
-// News server runs on port 5001 — endpoint: GET /api/news/stock/:symbol
-const NEWS_HOST = "http://localhost:5001";
+// News server endpoint — configured via VITE_PYTHON_API_URL env var
+const NEWS_HOST = import.meta.env.VITE_PYTHON_API_URL || "http://localhost:5001";
 
 interface NewsItem {
   headline: string;

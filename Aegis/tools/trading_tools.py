@@ -110,6 +110,27 @@ def get_user_transactions(config: RunnableConfig) -> str:
         return json.dumps({"error": str(e)})
 
 
+@tool
+def get_payment_orders(config: RunnableConfig) -> str:
+    """
+    Retrieve the user's online bank/payment deposit orders and gateway transactions (Razorpay, bank UPI, card).
+    Shows deposit status (SUCCESS, CREATED, PENDING), payment ID, amount, and timestamps.
+    Use this when the user asks about deposit status, funds added, why funds are missing or pending, or bank/payment gateway transactions.
+    """
+    uid = _uid_from_config(config)
+    if not uid:
+        return json.dumps({"error": "User UID not found."})
+    try:
+        res = requests.get(
+            f"{NODE_BACKEND_URL}/api/payments/orders",
+            headers=_get_headers(uid),
+            timeout=10,
+        )
+        return res.text if res.status_code == 200 else json.dumps({"error": res.text})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 # ─────────────────────────────────────────────────────────────
 # TRADE EXECUTION
 # ─────────────────────────────────────────────────────────────
@@ -138,6 +159,7 @@ def buy_stock(symbol: str, quantity: int, product_type: str = "Delivery", sl_ena
         "quantity": int(quantity),
         "product_type": product_type,
         "sl_enabled": bool(sl_enabled),
+        "category": "AEGIS",
     }
     if sl_price is not None:
         body["sl_price"] = float(sl_price)
@@ -178,6 +200,7 @@ def sell_stock(symbol: str, quantity: int, product_type: str = "Delivery", sl_en
         "quantity": int(quantity),
         "product_type": product_type,
         "sl_enabled": bool(sl_enabled),
+        "category": "AEGIS",
     }
     if sl_price is not None:
         body["sl_price"] = float(sl_price)

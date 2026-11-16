@@ -129,12 +129,29 @@ export default function OrderPanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Order failed");
       console.log("Order placed:", data);
+      if (isSimulation && data.status === "EXECUTED") {
+        window.dispatchEvent(
+          new CustomEvent("STOCKIFY_ORDER_EXECUTED", {
+            detail: {
+              side: "BUY",
+              symbol,
+              stockName: companyName || symbol,
+              quantity: finalQty,
+              price,
+              orderType: "Market",
+              orderId: data.orderId,
+            },
+          })
+        );
+      }
     } catch (err) {
       console.error("Failed to place order", err);
     } finally {
       setLoading(false);
       setQty("");
       rerefresh();
+      setTimeout(rerefresh, 600);
+      setTimeout(rerefresh, 1800);
     }
   }
 
@@ -178,12 +195,29 @@ export default function OrderPanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Order failed");
       console.log("Order placed:", data);
+      if (isSimulation && data.status === "EXECUTED") {
+        window.dispatchEvent(
+          new CustomEvent("STOCKIFY_ORDER_EXECUTED", {
+            detail: {
+              side: "SELL",
+              symbol,
+              stockName: companyName || symbol,
+              quantity: finalQty,
+              price,
+              orderType: "Market",
+              orderId: data.orderId,
+            },
+          })
+        );
+      }
     } catch (err) {
       console.error("Failed to place order", err);
     } finally {
       setLoading(false);
       setQty("");
       rerefresh();
+      setTimeout(rerefresh, 600);
+      setTimeout(rerefresh, 1800);
     }
   }
 

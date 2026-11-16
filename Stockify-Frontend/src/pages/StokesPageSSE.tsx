@@ -1,20 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useParams } from "react-router-dom";
 import StockHeader from "../components/stocks/StockHeader";
 import ConstituentsContainer from "../components/stocks/ConstituentsContainer";
 import { StockChartIndia, GraphSkeleton } from "../components/charts/StocksChartIndia";
 import TimeframeBar from "../components/charts/TimeframeBar";
 import OrderPanel from "../components/stocks/OrderPanel";
-// import {useContext} from "react"
-// import { AuthContext } from "../auth/AuthProvider";
 import { useWebSocket } from "../context/WebSocketContext";
 import "../Styles/stock.css";
 import StockPerformance from "../components/stocks/StockPerformanceFundamentals"
 import CompanyNewsPanel from "../components/stocks/CompanyNewsPanel";
 import CompanyProfile from "../components/stocks/CompanyProfile";
 import StockSectorAlerts from "../components/stocks/StockSectorAlerts";
-import { useContext } from "react"
-
 import { AuthContext } from "../auth/AuthProvider";
 import StockChart from "../components/charts/StockChart";
 import ReplayControls from "../components/stocks/ReplayControls";
@@ -39,14 +35,20 @@ type Trade = {
 };
 type YahooQuote = {
   regularMarketPrice: number;
-  regularMarketPreviousClose: number;
-  regularMarketChange: number;
-  regularMarketChangePercent: number;
-  marketState: string;
+  regularMarketPreviousClose?: number;
+  regularMarketChange?: number;
+  regularMarketChangePercent?: number;
+  marketState?: string;
   longName?: string;
   shortName?: string;
   symbol?: string;
   fullExchangeName?: string;
+  regularMarketDayHigh?: number;
+  regularMarketDayLow?: number;
+  regularMarketOpen?: number;
+  fiftyTwoWeekHigh?: number;
+  fiftyTwoWeekLow?: number;
+  [key: string]: any;
 };
 
 /* =========================
@@ -414,13 +416,13 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     fetch(`${HOST}/api/stocks/${symbol}/quote`)
       .then(res => res.json())
       .then((q: YahooQuote) => {
-        setMarketState(q.marketState);
+        setMarketState(q.marketState ?? null);
         setQuote(q);
         setCompanyName(q.longName ?? q.shortName ?? q.symbol ?? symbol);
         setPrice(q.regularMarketPrice);
-        setBaseline(q.regularMarketPreviousClose);
-        setChange(q.regularMarketChange);
-        setPercent(q.regularMarketChangePercent);
+        setBaseline(q.regularMarketPreviousClose ?? null);
+        setChange(q.regularMarketChange ?? 0);
+        setPercent(q.regularMarketChangePercent ?? 0);
       });
 
     // Also fetch profile for Sector/Industry
@@ -450,13 +452,24 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     return () => unsubscribe("USER_EVENTS");
   }, []);
 
-  // Listen for background Stoploss execution events
+  // Listen for background execution events
   useEffect(() => {
     if (lastMessage?.type === "ORDER_EXECUTED") {
+      // Ensure the order status has officially transitioned to EXECUTED
+      if (lastMessage.status && lastMessage.status !== "EXECUTED") {
+        return;
+      }
+
+      // Instantly refresh trades, balance, and holdings
       rerefresh();
-      playAlertSound();
-      setStoplossAlert({ show: true, symbol: lastMessage.symbol });
-      setTimeout(() => setStoplossAlert(null), 8000);
+
+      // Only trigger audio alert & modal banner if it was specifically a STOPLOSS execution
+      const isStoploss = lastMessage.isStoploss === true || lastMessage.category === "STOPLOSS";
+      if (isStoploss) {
+        playAlertSound();
+        setStoplossAlert({ show: true, symbol: lastMessage.symbol });
+        setTimeout(() => setStoplossAlert(null), 8000);
+      }
     }
   }, [lastMessage]);
 
@@ -510,25 +523,80 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
   }, [symbol, timeframe, marketState, candleInterval]);
 
   useEffect(() => {
-    if (lastMessage?.type === "STOCK_UPDATE" && lastMessage.symbol === symbol) {
-      const { candles, quote } = lastMessage.data;
+    if (!lastMessage) return;
+
+    const symClean = symbol.replace(/\.NS$/, "").toUpperCase();
+    const msgSymClean = (lastMessage.symbol || "").replace(/\.NS$/, "").toUpperCase();
+    if (symClean !== msgSymClean) return;
+
+    if (lastMessage.type === "TICK_PRICE") {
+      const { price: newPrice, change: newChange, percent: newPercent, high, low, open } = lastMessage.data || {};
+      if (newPrice != null) {
+        setPrice(newPrice);
+        setLineData((prev) => {
+          if (!prev || prev.length === 0) return prev;
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          updated[lastIdx] = { ...updated[lastIdx], y: newPrice };
+          return updated;
+        });
+        setData((prev) => {
+          if (!prev || prev.length === 0) return prev;
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          const lastCandle = updated[lastIdx];
+          updated[lastIdx] = {
+            ...lastCandle,
+            c: newPrice,
+            h: Math.max(lastCandle.h, newPrice),
+            l: Math.min(lastCandle.l, newPrice),
+          };
+          return updated;
+        });
+      }
+      if (newChange != null) setChange(newChange);
+      if (newPercent != null) setPercent(newPercent);
+      if (newPrice != null) {
+        setQuote((prev) =>
+          prev
+            ? {
+                ...prev,
+                regularMarketPrice: newPrice,
+                regularMarketChange: newChange ?? prev.regularMarketChange,
+                regularMarketChangePercent: newPercent ?? prev.regularMarketChangePercent,
+                regularMarketDayHigh: high ?? prev.regularMarketDayHigh,
+                regularMarketDayLow: low ?? prev.regularMarketDayLow,
+                regularMarketOpen: open ?? prev.regularMarketOpen,
+              }
+            : null
+        );
+      }
+    } else if (lastMessage.type === "STOCK_UPDATE") {
+      const { candles, quote: newQuote } = lastMessage.data || {};
       if (candles) {
         const shifted = candles.map((d: any) => ({
           ...d,
-          x: d.x + 5.5 * 3600 * 1000
+          x: d.x + 5.5 * 3600 * 1000,
         }));
         setLineData(
           shifted.map((d: any) => ({
             x: d.x,
-            y: d.c
+            y: d.c,
           }))
         );
         setData(shifted);
         const last = shifted[shifted.length - 1];
-        if (last) setPrice(last.y || last.c);
+        if (last && newQuote?.regularMarketPrice == null) {
+          setPrice(last.y || last.c);
+        }
         setLoading(false);
       }
-      if (quote) setQuote(quote);
+      if (newQuote) {
+        setQuote(newQuote);
+        if (newQuote.regularMarketPrice != null) setPrice(newQuote.regularMarketPrice);
+        if (newQuote.regularMarketChange != null) setChange(newQuote.regularMarketChange);
+        if (newQuote.regularMarketChangePercent != null) setPercent(newQuote.regularMarketChangePercent);
+      }
     }
   }, [lastMessage, symbol]);
 

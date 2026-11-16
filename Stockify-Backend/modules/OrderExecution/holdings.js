@@ -476,7 +476,7 @@ router.get("/orders", requireAuth, async (req, res) => {
        FROM orders o
        JOIN stocks s ON o.stock_id = s.id
        LEFT JOIN trades t ON o.id = t.order_id
-       WHERE o.user_id = $1 AND o.status != 'PENDING'${algoCondition}
+       WHERE o.user_id = $1 AND (o.category != 'STOPLOSS' OR o.status != 'PENDING')${algoCondition}
        ORDER BY o.created_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, limit, offset]

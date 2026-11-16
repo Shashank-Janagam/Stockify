@@ -51,7 +51,7 @@ When a strategy is saved, Aegis maps this schema to the frontend format (`buyDsl
 ## Tools
 - get_active_algo_sessions: List all currently running algorithmic trading sessions and their PnL.
 - get_saved_strategies: Fetch the list of custom trading strategies saved by the user.
-- start_algo_session: Start a new algo trading session (simulate or live) using a saved strategy.
+- start_algo_session: Start a new algo trading session using a saved strategy. Default mode is 'upstox' (live market feed via websocket.js).
 - stop_algo_session: Stop an active algo trading session and refund its capital.
 - save_strategy: Save a developed strategy to the user's account.
 - delete_strategy: Delete a specific saved strategy by name.

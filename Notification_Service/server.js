@@ -5,6 +5,18 @@ const emailjs = require('@emailjs/nodejs');
 const fs = require('fs');
 const path = require('path');
 
+// ─── Kafka Library Loader ─────────────────────────────────
+let kafkaLib = null;
+try {
+  kafkaLib = require('../Kafka-communication/index.cjs');
+} catch (e1) {
+  try {
+    kafkaLib = require('./Kafka-communication/index.cjs');
+  } catch (e2) {
+    console.warn('[Notification Service] Kafka-communication library not found locally or in parent directory.');
+  }
+}
+
 // ─── Twilio ─────────────────────────────────────────────
 let twilioClient = null;
 if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
@@ -15,16 +27,24 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
 async function processNotification(job) {
   const body = job.data;
 
-  if (!body || !body.mobile) {
-    console.warn(`[Job ${job.id}] Skipping — no mobile number in payload.`);
+  if (!body || (!body.mobile && !body.email && !body.telegram_chat_id && !process.env.TELEGRAM_CHAT_ID)) {
+    console.warn(`[Job ${job.id}] Skipping — no contact destinations (mobile, email, or telegram) in payload.`);
     return;
   }
 
-  console.log(`[Job ${job.id}] Processing notification for ${body.name} (${body.symbol})`);
+  console.log(`[Job ${job.id}] Processing notification for ${body.name} (${body.symbol}) [Category: ${body.category || 'REGULAR'}]`);
 
   // ── Generate AI Insight ──────────────────────────────
   let aiMessage = "Good luck with your paper trading journey! 🚀";
-  if (process.env.GROQ_API_KEY) {
+  if (body.category === 'STOPLOSS') {
+    aiMessage = "Protective stop-loss executed to preserve capital.";
+  } else if (body.category === 'AEGIS') {
+    aiMessage = "Aegis AI successfully executed your algorithmic trade.";
+  } else if (body.status === 'FAILED') {
+    aiMessage = `Order could not be filled: ${body.message || body.error || 'Please check wallet balance'}.`;
+  }
+
+  if (process.env.GROQ_API_KEY && body.status !== 'FAILED') {
     try {
       console.log(`[Job ${job.id}] Generating AI insight via Groq...`);
       const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -43,7 +63,7 @@ async function processNotification(job) {
             },
             {
               role: 'user',
-              content: `${body.side} ${body.quantity} shares of ${body.symbol} at ₹${body.PricePerShare}`
+              content: `${body.category || 'Order'}: ${body.side} ${body.quantity} shares of ${body.symbol} at ₹${body.PricePerShare}`
             }
           ]
         })
@@ -225,3 +245,70 @@ console.log('🚀 PaperBull Notification Worker starting...');
 console.log('   Redis:', process.env.REDIS_URL ? process.env.REDIS_URL.replace(/:\/\/[^@]+@/, '://***@') : 'NOT SET');
 console.log('   Channels: WhatsApp | Telegram | Email');
 console.log('   Retries: 3x with exponential backoff (5s → 10s → 20s)');
+
+// ─── Kafka orders.executed & orders.failed Consumer ────────
+async function startNotificationKafkaConsumer() {
+  if (!kafkaLib) {
+    console.warn('[Notification Service] ⚠️ Skipping Kafka consumer initialization (library not loaded).');
+    return;
+  }
+
+  const { TOPICS, createKafkaConsumer } = kafkaLib;
+
+  try {
+    console.log(`[Notification Service] 🚀 Connecting Kafka consumer for topics: ${TOPICS.ORDERS_EXECUTED}, ${TOPICS.ORDERS_FAILED} (1 partition)`);
+    await createKafkaConsumer({
+      groupId: 'notification-service-group',
+      topics: [TOPICS.ORDERS_EXECUTED, TOPICS.ORDERS_FAILED],
+      fromBeginning: false,
+      onMessage: async ({ topic, partition, key, payload }) => {
+        if (!payload) return;
+
+        const isFailed = topic === TOPICS.ORDERS_FAILED || payload.status === 'FAILED';
+        const isStoploss = payload.category === 'STOPLOSS' || payload.isStoploss;
+        const isAegis = payload.category === 'AEGIS';
+
+        console.log(`\n📥 [Notification Service] Kafka event: ${payload.side || 'ORDER'} ${isFailed ? 'FAILED' : 'EXECUTED'} for ${payload.symbol} (Category: ${payload.category || (isStoploss ? 'STOPLOSS' : isAegis ? 'AEGIS' : 'REGULAR')})`);
+
+        let subject = 'PaperBull Order Execution';
+        if (isFailed) {
+          subject = `PaperBull Order Failed: ${payload.symbol || 'Stock'}`;
+        } else if (isStoploss) {
+          subject = `PaperBull Stoploss Executed: ${payload.symbol || 'Stock'}`;
+        } else if (isAegis) {
+          subject = `PaperBull Aegis AI Trade: ${payload.symbol || 'Stock'}`;
+        }
+
+        const jobLike = {
+          id: `kafka-${payload.orderId || payload.tradeId || Date.now()}`,
+          data: {
+            ...payload,
+            name: payload.name || payload.userContact?.name || 'Trader',
+            mobile: payload.mobile || payload.userContact?.mobile,
+            email: payload.email || payload.userContact?.email,
+            telegram_chat_id: payload.telegram_chat_id || payload.userContact?.telegramChatId,
+            PricePerShare: payload.PricePerShare || payload.executionPrice || payload.price,
+            totalValue: payload.totalValue || (payload.executionPrice && payload.quantity ? Number(payload.executionPrice) * Number(payload.quantity) : 0),
+            walletBalance: payload.walletBalance || payload.walletBalanceAfter,
+            order_type: payload.order_type || payload.productType || 'MARKET',
+            status: isFailed ? 'FAILED' : (payload.status || 'EXECUTED'),
+            category: payload.category || (isStoploss ? 'STOPLOSS' : isAegis ? 'AEGIS' : 'REGULAR'),
+            stockName: payload.stockName || payload.symbol,
+            notify_email: payload.notify_email,
+            notify_whatsapp: payload.notify_whatsapp,
+            notify_telegram: payload.notify_telegram,
+            subject: payload.subject || subject,
+          },
+        };
+
+        await processNotification(jobLike);
+      },
+    });
+
+    console.log(`[Notification Service] ✅ Kafka consumer active on topics "${TOPICS.ORDERS_EXECUTED}", "${TOPICS.ORDERS_FAILED}".`);
+  } catch (err) {
+    console.error(`[Notification Service] ❌ Failed to start Kafka consumer:`, err.message);
+  }
+}
+
+startNotificationKafkaConsumer();

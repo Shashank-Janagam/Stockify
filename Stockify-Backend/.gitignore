@@ -1,4 +1,16 @@
-# Firebase service account
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Node dependencies
+node_modules/
+npm-debug.log*
+
+# Firebase service account & credentials
 firebaseServiceKey.json
 config/firebaseServiceKey.json
 **/firebaseServiceKey.json
+*serviceAccount*.json
+*.pem
+*.key

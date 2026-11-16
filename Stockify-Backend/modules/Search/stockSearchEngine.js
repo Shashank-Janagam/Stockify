@@ -10,6 +10,13 @@ const __dirname = path.dirname(__filename);
 let memoryStocks = [];
 let symbolIndex = new Map(); // uppercase symbol -> stock object
 
+// Common corporate suffixes ignored when isolating the core company/brand name
+const CORPORATE_STOPWORDS = new Set([
+  "ltd", "limited", "corp", "corporation", "co", "company",
+  "inc", "incorporated", "llp", "plc", "india", "ind",
+  "holdings", "holding", "enterprise", "enterprises", "services", "industries"
+]);
+
 /**
  * Fast Levenshtein edit distance with Damerau-Levenshtein transposition
  * and early exit when distance exceeds maxAllowed.
@@ -83,14 +90,14 @@ function classifyCategory(item) {
  */
 function getSubscriptionsPath() {
   const potentialPaths = [
-    path.resolve(__dirname, "../../data/subscriptions.json"),
     path.resolve(__dirname, "../../subscriptions.json"),
-    path.resolve(process.cwd(), "data/subscriptions.json"),
     path.resolve(process.cwd(), "subscriptions.json"),
     path.resolve(__dirname, "../../../Upstox-Backend/subscriptions.json"),
     path.resolve(process.cwd(), "../Upstox-Backend/subscriptions.json"),
-    "/app/data/subscriptions.json",
-    "/app/subscriptions.json"
+    path.resolve(__dirname, "../../data/subscriptions.json"),
+    path.resolve(process.cwd(), "data/subscriptions.json"),
+    "/app/subscriptions.json",
+    "/app/data/subscriptions.json"
   ];
 
   for (const p of potentialPaths) {
@@ -112,6 +119,14 @@ function loadSubscriptionsData() {
   }
 
   try {
+    // Keep data/subscriptions.json in sync with the primary subscriptions file
+    try {
+      const dataCopyPath = path.resolve(__dirname, "../../data/subscriptions.json");
+      if (subPath !== dataCopyPath && fs.existsSync(subPath)) {
+        fs.copyFileSync(subPath, dataCopyPath);
+      }
+    } catch (_) {}
+
     const raw = fs.readFileSync(subPath, "utf-8");
     const parsed = JSON.parse(raw);
     const list = Array.isArray(parsed) ? parsed : (parsed.instruments || parsed.stocks || []);
@@ -130,20 +145,35 @@ function loadSubscriptionsData() {
 }
 
 /**
- * Helper to generate acronyms from company name (e.g. "Tata Consultancy Services" -> "TCS")
+ * Generalized helper to generate acronyms & abbreviation variations from company name.
+ * E.g. "State Bank of India" -> ["sbi", "sb"]
+ * "Larsen & Toubro" -> ["lt"]
+ * "Jio Platforms Limited" -> ["jpl", "jp"]
  */
-function getAcronym(name) {
-  return (name || "")
+function getAcronyms(name) {
+  const allTokens = (name || "")
+    .toLowerCase()
     .split(/[\s&,-]+/)
-    .filter(Boolean)
-    .map(w => w[0])
-    .join("")
-    .toLowerCase();
+    .filter(Boolean);
+
+  if (allTokens.length === 0) return [];
+
+  const fullAcronym = allTokens.map(w => w[0]).join("");
+  const sigTokens = allTokens.filter(t => !CORPORATE_STOPWORDS.has(t));
+  const sigAcronym = sigTokens.map(w => w[0]).join("");
+
+  const results = new Set();
+  if (fullAcronym.length >= 2) results.add(fullAcronym);
+  if (sigAcronym.length >= 2) results.add(sigAcronym);
+  return Array.from(results);
 }
 
 function formatStockForMemory(doc) {
   const sym = (doc.symbol || "").toUpperCase();
   const name = doc.name || sym;
+  const rawTokens = name.toLowerCase().split(/[\s&,.-]+/).filter(Boolean);
+  const significantTokens = rawTokens.filter(t => !CORPORATE_STOPWORDS.has(t));
+
   return {
     symbol: sym,
     name: name,
@@ -153,8 +183,9 @@ function formatStockForMemory(doc) {
     popularity: doc.popularity || 0,
     _cleanSymbol: sym.toLowerCase().replace(/[^a-z0-9]/g, ""),
     _cleanName: name.toLowerCase().replace(/[^a-z0-9\s]/g, ""),
-    _nameTokens: name.toLowerCase().split(/[\s,.-]+/).filter(Boolean),
-    _acronym: getAcronym(name)
+    _nameTokens: rawTokens,
+    _significantTokens: significantTokens.length > 0 ? significantTokens : rawTokens,
+    _acronyms: getAcronyms(name)
   };
 }
 
@@ -229,6 +260,16 @@ export async function initStockSearchEngine() {
       symbolIndex.set(s.symbol, s);
     }
 
+    // Flush any stale search caches in Redis
+    try {
+      const redis = (await import("../../cache/redisClient.js")).default;
+      const keys = await redis.keys("search:*");
+      if (keys && keys.length > 0) {
+        await redis.del(...keys);
+        console.log(`🧹 Flushed ${keys.length} cached search queries from Redis`);
+      }
+    } catch (_) {}
+
     console.log(`⚡ Stock Search Engine ready with ${memoryStocks.length} stocks indexed in memory`);
   } catch (err) {
     console.error("❌ Failed to initialize stock search engine:", err);
@@ -276,46 +317,63 @@ export function searchStocks(query = "", options = {}) {
     const sym = stock.symbol;
     const cleanSym = stock._cleanSymbol;
     const cleanName = stock._cleanName;
+    const sigTokens = stock._significantTokens || stock._nameTokens;
+    const firstSigToken = sigTokens[0] || "";
 
-    // 1️⃣ EXACT SYMBOL MATCH (Maximum score)
+    // 1️⃣ EXACT SYMBOL MATCH (Maximum priority)
     if (sym === rawQ || cleanSym === queryNoSpace) {
       score = 1000 + (stock.popularity || 0);
       matchType = "exact_symbol";
     }
-    // 2️⃣ SYMBOL STARTS WITH (Very High)
+    // 2️⃣ PRIMARY BRAND EXACT MATCH (1st significant word of company name matches query, e.g. "JIO" -> Jio Platforms / JPL, "TATA" -> Tata Motors)
+    else if (firstSigToken === queryNoSpace) {
+      score = 950 + (stock.popularity || 0);
+      matchType = "primary_brand_exact";
+    }
+    // 3️⃣ SYMBOL STARTS WITH QUERY (e.g. "JIO" -> JIOFIN, "TATA" -> TATAMOTORS)
     else if (cleanSym.startsWith(queryNoSpace)) {
-      score = 800 - (cleanSym.length - queryNoSpace.length) * 5 + (stock.popularity || 0);
+      score = 900 - (cleanSym.length - queryNoSpace.length) * 4 + (stock.popularity || 0);
       matchType = "prefix_symbol";
     }
-    // 3️⃣ ACRONYM MATCH (e.g. "TCS" -> "Tata Consultancy Services")
-    else if (stock._acronym === queryNoSpace) {
-      score = 750 + (stock.popularity || 0);
+    // 4️⃣ PRIMARY BRAND STARTS WITH QUERY OR FULL NAME STARTS WITH QUERY
+    else if (firstSigToken.startsWith(queryNoSpace)) {
+      score = 860 - (firstSigToken.length - queryNoSpace.length) * 3 + (stock.popularity || 0);
+      matchType = "primary_brand_prefix";
+    }
+    else if (cleanName.startsWith(queryNoSpace)) {
+      score = 830 - (cleanName.length - queryNoSpace.length) + (stock.popularity || 0);
+      matchType = "prefix_name";
+    }
+    // 5️⃣ ACRONYMS / INITIALS VARIATIONS (e.g. "SBI" -> State Bank of India, "L&T" -> Larsen & Toubro, "JPL" -> Jio Platforms Ltd)
+    else if (stock._acronyms && stock._acronyms.includes(queryNoSpace)) {
+      score = 800 + (stock.popularity || 0);
       matchType = "acronym";
     }
-    // 4️⃣ EXACT NAME WORD MATCH OR PREFIX OF ANY TOKEN IN NAME
-    else if (stock._nameTokens.some(t => t === queryNoSpace)) {
-      score = 700 + (stock.popularity || 0);
-      matchType = "exact_name_token";
+    // 6️⃣ SECONDARY SIGNIFICANT BRAND TOKEN EXACT MATCH (e.g. "MOTORS" -> Tata Motors)
+    else if (sigTokens.slice(1).some(t => t === queryNoSpace)) {
+      score = 750 + (stock.popularity || 0);
+      matchType = "secondary_brand_exact";
     }
-    else if (stock._nameTokens.some(t => t.startsWith(queryNoSpace))) {
-      score = 600 - (cleanName.length - queryNoSpace.length) + (stock.popularity || 0);
-      matchType = "prefix_name_token";
-    }
-    // 5️⃣ SUBSTRING IN SYMBOL OR NAME
+    // 7️⃣ SUBSTRING IN SYMBOL OR PREFIX OF SECONDARY TOKEN
     else if (cleanSym.includes(queryNoSpace)) {
-      score = 500 - cleanSym.indexOf(queryNoSpace) * 10 + (stock.popularity || 0);
+      score = 650 - cleanSym.indexOf(queryNoSpace) * 10 + (stock.popularity || 0);
       matchType = "sub_symbol";
     }
+    else if (sigTokens.slice(1).some(t => t.startsWith(queryNoSpace))) {
+      score = 620 + (stock.popularity || 0);
+      matchType = "secondary_brand_prefix";
+    }
+    // 8️⃣ MULTI-TOKEN ALL MATCH (e.g. "tata motor")
+    else if (queryTokens.length > 1 && queryTokens.every(qT => cleanName.includes(qT) || cleanSym.includes(qT))) {
+      score = 500 + (stock.popularity || 0);
+      matchType = "multi_token";
+    }
+    // 9️⃣ ANYWHERE IN FULL NAME
     else if (cleanName.includes(queryNoSpace)) {
       score = 400 - cleanName.indexOf(queryNoSpace) * 2 + (stock.popularity || 0);
       matchType = "sub_name";
     }
-    // 6️⃣ MULTI-TOKEN ALL MATCH (e.g. "tata motor")
-    else if (queryTokens.length > 1 && queryTokens.every(qT => cleanName.includes(qT) || cleanSym.includes(qT))) {
-      score = 350 + (stock.popularity || 0);
-      matchType = "multi_token";
-    }
-    // 7️⃣ TYPO CORRECTION / FUZZY MATCHING (Fast Damerau-Levenshtein Distance)
+    // 🔟 TYPO CORRECTION / FUZZY MATCHING (Fast Damerau-Levenshtein Distance)
     else if (queryNoSpace.length >= 3) {
       const maxAllowedDist = queryNoSpace.length <= 4 ? 1 : 2;
 
