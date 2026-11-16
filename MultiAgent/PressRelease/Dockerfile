@@ -17,11 +17,13 @@ COPY . .
 
 # Set up the cron job configuration
 COPY crontab /etc/cron.d/pressrelease-cron
-RUN chmod 0644 /etc/cron.d/pressrelease-cron && crontab /etc/cron.d/pressrelease-cron
+RUN sed -i 's/\r$//' /etc/cron.d/pressrelease-cron && \
+    chmod 0644 /etc/cron.d/pressrelease-cron && \
+    crontab /etc/cron.d/pressrelease-cron
 
 # Copy and set executable permissions for entrypoint script
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Use entrypoint script to boot
 ENTRYPOINT ["/entrypoint.sh"]

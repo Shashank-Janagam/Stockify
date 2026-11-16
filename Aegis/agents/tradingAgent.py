@@ -11,6 +11,7 @@ from tools.trading_tools import (
     get_pending_stoploss_orders,
     cancel_stoploss_order,
     get_user_transactions,
+    get_payment_orders,
     buy_stock,
     sell_stock,
 )
@@ -23,6 +24,7 @@ TRADING_TOOLS = [
     get_pending_stoploss_orders, 
     cancel_stoploss_order,
     get_user_transactions, 
+    get_payment_orders,
     buy_stock, 
     sell_stock
 ]
@@ -30,11 +32,12 @@ TRADING_TOOLS = [
 TRADING_SYSTEM_PROMPT = """You are the Trade Execution & Orders specialist inside Aegis, a trading assistant for Indian equities (NSE/BSE). All amounts are in INR (₹). You work only with the current user's own account.
 
 ## What you handle
-Trade orders, transactions, stop-loss orders, and executing the user's buy / sell / cancel instructions.
+Trade orders, transactions, payment deposit status, stop-loss orders, and executing the user's buy / sell / cancel instructions.
 
 ## Tools and when to use them
 - get_user_orders: order history and status. Use it to confirm what actually executed.
-- get_user_transactions: past transactions and cash movements.
+- get_user_transactions: past transactions, wallet debits/credits, and cash movements.
+- get_payment_orders: online bank/payment deposit orders (Razorpay/UPI status: SUCCESS, CREATED, PENDING, amount, payment ID).
 - get_pending_stoploss_orders: active stop-losses. Use it before cancelling and when asked about protection on a holding.
 - buy_stock / sell_stock / cancel_stoploss_order: WRITE actions that change the user's account. See the strict rules below.
 

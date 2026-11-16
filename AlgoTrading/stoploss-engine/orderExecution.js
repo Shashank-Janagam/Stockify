@@ -197,7 +197,7 @@ export async function executeBuy({ orderId, userId, stockId, symbol, quantity, p
 
     // Check wallet balance
     const walletRes = await client.query(
-      `SELECT available_balance FROM wallet_accounts WHERE user_id=$1 FOR UPDATE`,
+      `SELECT available_balance FROM wallet_accounts WHERE user_id=$1 AND (account_type = 'LIVE' OR account_type IS NULL) FOR UPDATE`,
       [userId]
     );
     const balance = Number(walletRes.rows[0]?.available_balance ?? 0);
@@ -217,7 +217,7 @@ export async function executeBuy({ orderId, userId, stockId, symbol, quantity, p
     const newBalance = balance - totalPrice;
     await client.query(
       `UPDATE wallet_accounts SET available_balance=$1,
-       updated_at=NOW() AT TIME ZONE 'Asia/Kolkata' WHERE user_id=$2`,
+       updated_at=NOW() AT TIME ZONE 'Asia/Kolkata' WHERE user_id=$2 AND (account_type = 'LIVE' OR account_type IS NULL)`,
       [newBalance, userId]
     );
 
@@ -242,9 +242,9 @@ export async function executeBuy({ orderId, userId, stockId, symbol, quantity, p
     await client.query(
       `INSERT INTO positions
        (user_id, stock_id, position_type, entry_price, total_quantity,
-        remaining_quantity, stop_loss, status, stoploss_enabled, sell_type, created_at)
-       VALUES ($1, $2, 'LONG', $3, $4, $5, NULL, 'OPEN', false, $6,
-               NOW() AT TIME ZONE 'Asia/Kolkata')`,
+        remaining_quantity, status, stoploss_enabled, sell_type, created_at, updated_at)
+       VALUES ($1, $2, 'LONG', $3, $4, $5, 'OPEN', false, $6,
+               NOW() AT TIME ZONE 'Asia/Kolkata', NOW() AT TIME ZONE 'Asia/Kolkata')`,
       [userId, stockId, executionPrice, quantity, quantity, product_type]
     );
 
@@ -282,7 +282,7 @@ export async function executeBuy({ orderId, userId, stockId, symbol, quantity, p
       walletBalance: newBalance,
       userId,
       orderId,
-      tradeId: null,
+      tradeId,
       uid: userRow.uid,
       email: userRow.Email || userRow.email,
       name: userRow.Name || userRow.name || null,

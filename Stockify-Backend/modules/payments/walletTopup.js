@@ -274,7 +274,7 @@ async function runLlmEngine(context, amount) {
   const apiKey = process.env.GROK_API_KEY;
   const baseUrl = process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1";
   // LLM_MODEL may be set to an OpenAI model — always use a valid Groq model here
-  const modelName = "llama-3.3-70b-versatile";
+  const modelName = process.env.LLM_MODEL;
 
   if (!apiKey) {
     console.warn("⚠️ LLM API key not configured — defaulting to ALLOW");

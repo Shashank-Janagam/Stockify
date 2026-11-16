@@ -11,8 +11,8 @@ RUN npm install
 # Copy application source code including proto and json files
 COPY . .
 
-# Expose the WebSocket port
+# Expose HTTP REST and feed control port
 EXPOSE 4141
 
-# Run the websocket.js server
-CMD ["node", "websocket.js"]
+# Run the Upstox Redis Feed microservice
+CMD ["node", "services/upstox-feed/index.js"]

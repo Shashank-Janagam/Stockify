@@ -1,0 +1,19 @@
+{
+  "name": "kafka-communication",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    "import": "./index.js",
+    "require": "./index.cjs"
+  },
+  "description": "Centralized Kafka communication manager for Stockify platform",
+  "scripts": {
+    "test": "node index.js",
+    "init": "node init.js"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "dotenv": "^17.3.1"
+  }
+}

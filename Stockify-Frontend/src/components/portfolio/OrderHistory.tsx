@@ -108,6 +108,33 @@ function OrdersTab() {
     return () => { mounted = false; };
   }, [user, page]);
 
+  // Auto-refresh when any order is in PENDING status until it transitions to EXECUTED
+  useEffect(() => {
+    const hasPending = orders.some(o => o.status === "PENDING");
+    if (!hasPending || !user) return;
+
+    const interval = setInterval(() => {
+      fetch(`${HOST}/api/holdings/orders?page=1&limit=20&is_algo=false`, { credentials: "include" })
+        .then(r => r.json())
+        .then((data: Order[]) => {
+          if (Array.isArray(data)) {
+            setOrders(prev => {
+              const updated = [...prev];
+              data.forEach(freshOrder => {
+                const idx = updated.findIndex(o => o.id === freshOrder.id);
+                if (idx !== -1) updated[idx] = freshOrder;
+                else updated.unshift(freshOrder);
+              });
+              return updated;
+            });
+          }
+        })
+        .catch(() => {});
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [orders, user]);
+
   if (error) return <p className="oh-empty">{error}</p>;
   if (!loading && orders.length === 0) return (
     <div className="oh-empty-state">
@@ -253,6 +280,33 @@ function AlgoOrdersTab() {
 
     return () => { mounted = false; };
   }, [user, page]);
+
+  // Auto-refresh when any order is in PENDING status until it transitions to EXECUTED
+  useEffect(() => {
+    const hasPending = orders.some(o => o.status === "PENDING");
+    if (!hasPending || !user) return;
+
+    const interval = setInterval(() => {
+      fetch(`${HOST}/api/holdings/orders?page=1&limit=20&is_algo=true`, { credentials: "include" })
+        .then(r => r.json())
+        .then((data: Order[]) => {
+          if (Array.isArray(data)) {
+            setOrders(prev => {
+              const updated = [...prev];
+              data.forEach(freshOrder => {
+                const idx = updated.findIndex(o => o.id === freshOrder.id);
+                if (idx !== -1) updated[idx] = freshOrder;
+                else updated.unshift(freshOrder);
+              });
+              return updated;
+            });
+          }
+        })
+        .catch(() => {});
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [orders, user]);
 
   if (error) return <p className="oh-empty">{error}</p>;
   if (!loading && orders.length === 0) return (

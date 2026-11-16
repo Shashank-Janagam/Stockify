@@ -47,11 +47,27 @@ export  class WebSocketManager {
       this.redisSub.on("message", (channel, message) => {
         if (channel === "ORDER_EXECUTED") {
           try {
-            const { userId, symbol } = JSON.parse(message);
+            const data = JSON.parse(message);
+            const { userId, symbol, stockName, category, isStoploss, side, quantity, price, orderId, tradeId, orderType } = data;
+            const stoplossTriggered = isStoploss === true || (category && String(category).toUpperCase() === "STOPLOSS");
+
             this.clients.forEach((client, ws) => {
               if (String(client.sqlUserId) === String(userId) || String(client.userId) === String(userId)) {
                 if (ws.readyState === ws.OPEN) {
-                  ws.send(JSON.stringify({ type: "ORDER_EXECUTED", symbol }));
+                  ws.send(JSON.stringify({
+                    type: "ORDER_EXECUTED",
+                    symbol,
+                    stockName: stockName || data.name || symbol,
+                    category: category || "REGULAR",
+                    isStoploss: !!stoplossTriggered,
+                    side,
+                    quantity,
+                    price,
+                    orderId,
+                    tradeId,
+                    orderType: orderType || "Market",
+                    status: "EXECUTED"
+                  }));
                 }
               }
             });
@@ -272,90 +288,117 @@ export  class WebSocketManager {
   startStockLive(ws, symbol, customInterval = null) {
     upstoxFeedService.subscribe([symbol]);
 
-    // Cache the full Yahoo quote (fundamentals) — refresh every 1 minute
+    // ── Cached state ──────────────────────────────────────────────────────────
     let cachedYahooQuote = null;
-    let lastYahooFetch = 0;
-    const YAHOO_TTL_MS = 1 * 1000*120; // 1 minute
+    let cachedCandles    = null;
+    let lastYahooFetch   = 0;
+    let lastCandleFetch  = 0;
+    let heavyReady       = false;
+    const YAHOO_TTL_MS   = 120_000; // 2 minutes
+    const CANDLE_TTL_MS  = 60_000;  // 1 minute — candles don't change per-tick
 
-    const fetchYahooQuote = async () => {
+    // ── Heavy fetch: Yahoo quote + candles (rate-limited, NOT per-tick) ───────
+    const fetchHeavy = async () => {
       const now = Date.now();
+      const promises = [];
+
       if (!cachedYahooQuote || now - lastYahooFetch > YAHOO_TTL_MS) {
-        try {
-          cachedYahooQuote = await getYahooIndiaQuote(symbol);
-          lastYahooFetch = now;
-        } catch (err) {
-          // Keep stale cache on error
-          console.error("WS Yahoo quote fetch error:", err.message);
-        }
+        promises.push(
+          getYahooIndiaQuote(symbol)
+            .then((q) => { cachedYahooQuote = q; lastYahooFetch = Date.now(); })
+            .catch(() => {})
+        );
       }
-      return cachedYahooQuote;
+
+      if (!cachedCandles || now - lastCandleFetch > CANDLE_TTL_MS) {
+        promises.push(
+          getYahooIndiaHistory(symbol, 1, customInterval)
+            .then((c) => { cachedCandles = c.map(d => ({ x: d.x, o: d.o, h: d.h, l: d.l, c: d.c })); lastCandleFetch = Date.now(); })
+            .catch(() => {})
+        );
+      }
+
+      if (promises.length > 0) await Promise.all(promises);
+      heavyReady = true;
     };
 
-    const sendUpdate = async () => {
+    // ── TICK_PRICE: price-only, tiny payload, fires on every Upstox tick ────────
+    // Does NOT send candles — avoids serializing hundreds of candles per second.
+    const sendTickUpdate = () => {
+      if (ws.readyState !== 1) return; // 1 = WebSocket.OPEN
       try {
-        const [candlesRaw, yahooQuote] = await Promise.all([
-          getYahooIndiaHistory(symbol, 1, customInterval),
-          fetchYahooQuote()
-        ]);
-        const candles = candlesRaw.map(d => ({ x: d.x, o: d.o, h: d.h, l: d.l, c: d.c }));
-
         const upstoxTick = upstoxFeedService.getTick(symbol);
-        let quote;
-
-        if (upstoxTick) {
-          // Merge: start with full Yahoo quote for fundamentals,
-          // then overlay live Upstox price fields so fundamentals are never missing
-          quote = {
-            ...(yahooQuote || {}),
-            symbol: symbol.endsWith(".NS") ? symbol : `${symbol}.NS`,
-            shortName: upstoxTick.name || yahooQuote?.shortName,
-            longName: upstoxTick.name || yahooQuote?.longName,
-            regularMarketPrice: upstoxTick.price || yahooQuote?.regularMarketPrice,
-            regularMarketChange: upstoxTick.change || yahooQuote?.regularMarketChange,
-            regularMarketChangePercent: upstoxTick.percent || yahooQuote?.regularMarketChangePercent,
-            regularMarketPreviousClose: upstoxTick.prev_close || yahooQuote?.regularMarketPreviousClose,
-            regularMarketOpen: upstoxTick.open || yahooQuote?.regularMarketOpen,
-            regularMarketDayHigh: upstoxTick.high || yahooQuote?.regularMarketDayHigh,
-            regularMarketDayLow: upstoxTick.low || yahooQuote?.regularMarketDayLow,
-            marketState: "REGULAR"
-          };
-        } else {
-          // Upstox not available — use Yahoo quote directly
-          quote = yahooQuote;
-        }
-
-        if (ws.readyState === ws.OPEN) {
-          ws.send(JSON.stringify({
-            type: "STOCK_UPDATE",
-            symbol,
-            data: { candles, quote }
-          }));
-        }
+        if (!upstoxTick || upstoxTick.price == null) return;
+        ws.send(JSON.stringify({
+          type: "TICK_PRICE",
+          symbol,
+          data: {
+            price:      upstoxTick.price,
+            change:     upstoxTick.change,
+            percent:    upstoxTick.percent,
+            high:       upstoxTick.high,
+            low:        upstoxTick.low,
+            open:       upstoxTick.open,
+            prev_close: upstoxTick.prev_close,
+          },
+        }));
       } catch (err) {
-        console.error("WS Stock Update Error:", err);
+        console.error("WS TICK_PRICE Error:", err);
       }
     };
 
-    sendUpdate();
+    // ── STOCK_UPDATE: full candles + merged quote — fires on connect + 60s ─────
+    const sendFullUpdate = async () => {
+      await fetchHeavy();
+      if (ws.readyState !== 1) return;
+      try {
+        const upstoxTick = upstoxFeedService.getTick(symbol);
+        const quote = upstoxTick ? {
+          ...(cachedYahooQuote || {}),
+          symbol: symbol.endsWith(".NS") ? symbol : `${symbol}.NS`,
+          shortName: upstoxTick.name || cachedYahooQuote?.shortName,
+          longName:  upstoxTick.name || cachedYahooQuote?.longName,
+          regularMarketPrice:         upstoxTick.price      ?? cachedYahooQuote?.regularMarketPrice,
+          regularMarketChange:        upstoxTick.change     ?? cachedYahooQuote?.regularMarketChange,
+          regularMarketChangePercent: upstoxTick.percent    ?? cachedYahooQuote?.regularMarketChangePercent,
+          regularMarketPreviousClose: upstoxTick.prev_close ?? cachedYahooQuote?.regularMarketPreviousClose,
+          regularMarketOpen:          upstoxTick.open       ?? cachedYahooQuote?.regularMarketOpen,
+          regularMarketDayHigh:       upstoxTick.high       ?? cachedYahooQuote?.regularMarketDayHigh,
+          regularMarketDayLow:        upstoxTick.low        ?? cachedYahooQuote?.regularMarketDayLow,
+          marketState: "REGULAR",
+        } : cachedYahooQuote;
+        ws.send(JSON.stringify({
+          type: "STOCK_UPDATE",
+          symbol,
+          data: { candles: cachedCandles || [], quote },
+        }));
+      } catch (err) {
+        console.error("WS STOCK_UPDATE Error:", err);
+      }
+    };
 
-    // Event-driven: push to frontend on every Upstox tick for this symbol
+    // Initial full load
+    sendFullUpdate();
+
+    // Candle/quote refresh every 60 s (not per tick)
+    const refreshInterval = setInterval(sendFullUpdate, 60_000);
+
+    // ── Event-driven: on every live tick just push the price — no remote fetch ─
     const cleanSym = symbol.replace(/\.NS$/, "").toUpperCase();
     const removeListener = upstoxFeedService.onTick((tick) => {
-      if (tick.symbol === cleanSym && ws.readyState === ws.OPEN) {
-        sendUpdate();
-      }
+      if (tick.symbol === cleanSym) sendTickUpdate();
     });
 
     // Fallback polling if Upstox is offline
     let fallbackInterval = null;
     if (!upstoxFeedService.isConnected) {
-      fallbackInterval = setInterval(sendUpdate, 1500);
+      fallbackInterval = setInterval(sendFullUpdate, 1500);
     }
 
     return () => {
       removeListener();
+      clearInterval(refreshInterval);
       if (fallbackInterval) clearInterval(fallbackInterval);
-      // Release the Upstox subscription when this client leaves
       upstoxFeedService.unsubscribe([symbol]);
     };
   }
@@ -435,7 +478,7 @@ export  class WebSocketManager {
       }
     };
 
-    this.exploreInterval = setInterval(sendUpdate, 2000);
+    this.exploreInterval = setInterval(sendUpdate, 1000);
     sendUpdate();
   }
 
@@ -517,7 +560,7 @@ export  class WebSocketManager {
       }
     };
 
-    this.indicesInterval = setInterval(sendUpdate, 4000);
+    this.indicesInterval = setInterval(sendUpdate, 1000);
     sendUpdate();
   }
 
@@ -601,7 +644,7 @@ export  class WebSocketManager {
       }
     };
 
-    timerId = setInterval(sendUpdate, 2500);
+    timerId = setInterval(sendUpdate, 1000);
     sendUpdate();
 
     // Cleanup function: release Upstox subscriptions when this client disconnects
@@ -644,7 +687,7 @@ export  class WebSocketManager {
       }
     };
 
-    timerId = setInterval(sendUpdate, 4000);
+    timerId = setInterval(sendUpdate, 1500);
     sendUpdate();
     return timerId;
   }
@@ -679,7 +722,7 @@ export  class WebSocketManager {
       }
     };
 
-    timerId = setInterval(sendUpdate, 4000);
+    timerId = setInterval(sendUpdate, 1500);
     sendUpdate();
     return timerId;
   }

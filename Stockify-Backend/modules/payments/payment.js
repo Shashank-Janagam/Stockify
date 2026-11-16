@@ -4,6 +4,7 @@ import { razorpay } from "./razorpay.js";
 import requireAuth from "../../Middleware/requireAuth.js";
 import { createOrderRecord } from "./orders.js";
 import { getUserId } from "../dbUtils.js"; // Import helper
+import { db } from "../../db/sql.js";
 
 const router = express.Router();
 
@@ -73,6 +74,31 @@ router.post("/verify", requireAuth, async (req, res) => {
   } catch (err) {
     console.error("Payment verify error:", err);
     return res.status(500).json({ success: false });
+  }
+});
+
+/**
+ * GET /api/payments/orders
+ * Returns recent payment / deposit orders (Razorpay, UPI, etc.) for the logged-in user
+ */
+router.get("/orders", requireAuth, async (req, res) => {
+  try {
+    const { uid, name, email } = req.user;
+    const userId = await getUserId(uid, name, email);
+
+    const ordersRes = await db.query(
+      `SELECT order_id, amount, status, payment_id, created_at, updated_at
+       FROM payment_orders
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [userId]
+    );
+
+    return res.json(ordersRes.rows);
+  } catch (error) {
+    console.error("Fetch Payment Orders Error:", error);
+    res.status(500).json({ error: "Failed to fetch payment orders" });
   }
 });
 

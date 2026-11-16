@@ -2,10 +2,14 @@ FROM node:22
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
+# Copy Kafka-communication
+COPY Kafka-communication ./Kafka-communication
+RUN cd Kafka-communication && npm install --omit=dev
 
-COPY . .
+# Copy Stockify-Backend
+COPY Stockify-Backend ./Stockify-Backend
+WORKDIR /app/Stockify-Backend
+RUN npm install
 
 EXPOSE 4000
 

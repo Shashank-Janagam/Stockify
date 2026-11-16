@@ -237,20 +237,28 @@ const LOGO_MEMORY_CACHE = new Map<string, string>();
  */
 export function getCachedLogo(symbol: string): string | null {
   if (!symbol) return null;
-  const clean = symbol.replace(/\.(NS|BO)$/, "").replace(/^NSE_EQ\|/, "").trim().toUpperCase();
-  
+  const clean = symbol
+    .replace(/\.(NS|BO)$/i, "")
+    .replace(/^(NSE_EQ\||BSE_EQ\|)/i, "")
+    .trim()
+    .toUpperCase();
+
   if (LOGO_MEMORY_CACHE.has(clean)) {
     const memUrl = LOGO_MEMORY_CACHE.get(clean)!;
-    if (memUrl.startsWith(AZURE_BLOB_BASE)) return memUrl;
+    if (memUrl.startsWith(AZURE_BLOB_BASE) || memUrl.includes("gstatic.com") || memUrl.includes("clearbit.com")) {
+      return memUrl;
+    }
   }
-  
+
   try {
     const stored = localStorage.getItem(`pb_logo_${clean}`);
-    if (stored && stored.startsWith(AZURE_BLOB_BASE)) {
+    if (
+      stored &&
+      (stored.startsWith(AZURE_BLOB_BASE) || stored.includes("gstatic.com") || stored.includes("clearbit.com"))
+    ) {
       LOGO_MEMORY_CACHE.set(clean, stored);
       return stored;
     } else if (stored) {
-      // Invalidate old localhost/google cached URLs
       localStorage.removeItem(`pb_logo_${clean}`);
     }
   } catch (_) {}
@@ -262,7 +270,11 @@ export function getCachedLogo(symbol: string): string | null {
  */
 export function setCachedLogo(symbol: string, url: string): void {
   if (!symbol || !url) return;
-  const clean = symbol.replace(/\.(NS|BO)$/, "").replace(/^NSE_EQ\|/, "").trim().toUpperCase();
+  const clean = symbol
+    .replace(/\.(NS|BO)$/i, "")
+    .replace(/^(NSE_EQ\||BSE_EQ\|)/i, "")
+    .trim()
+    .toUpperCase();
   LOGO_MEMORY_CACHE.set(clean, url);
   try {
     localStorage.setItem(`pb_logo_${clean}`, url);
@@ -270,53 +282,123 @@ export function setCachedLogo(symbol: string, url: string): void {
 }
 
 /**
- * Returns prioritized fast candidate logo URLs.
- * Order of resolution:
- * 1. Bundled Local Assets (Instant 0ms from src/assets/)
- * 2. Cached working URL from localStorage
- * 3. Verified Azure Blob Asset
- * 4. "Go Out": Verified High-Resolution Google Favicon (128px) via Curated Domains
- * 5. Dynamic Website Domain (if provided from profile)
- * 6. Azure Blob general fallback
+ * Invalidate cached logo if it failed to load
  */
-export function getStockLogoCandidates(symbol: string): string[] {
+export function removeCachedLogo(symbol: string): void {
+  if (!symbol) return;
+  const clean = symbol
+    .replace(/\.(NS|BO)$/i, "")
+    .replace(/^(NSE_EQ\||BSE_EQ\|)/i, "")
+    .trim()
+    .toUpperCase();
+  LOGO_MEMORY_CACHE.delete(clean);
+  try {
+    localStorage.removeItem(`pb_logo_${clean}`);
+  } catch (_) {}
+}
+
+/**
+ * Supported image extensions on Azure Blob and asset servers
+ */
+const SUPPORTED_EXTENSIONS = ["webp", "png", "svg", "jpeg", "jpg"];
+
+/**
+ * Index ticker to alias mapping for comprehensive resolution
+ */
+const INDEX_ALIASES: Record<string, string[]> = {
+  "^NSEI": ["%5ENSEI", "NIFTY", "NIFTY50"],
+  NIFTY: ["%5ENSEI", "NIFTY", "NIFTY50"],
+  NIFTY50: ["%5ENSEI", "NIFTY", "NIFTY50"],
+  "^BSESN": ["%5EBSESN", "SENSEX"],
+  SENSEX: ["%5EBSESN", "SENSEX"],
+  "^NSEBANK": ["%5ENSEBANK", "BANKNIFTY", "NIFTYBANK"],
+  BANKNIFTY: ["%5ENSEBANK", "BANKNIFTY", "NIFTYBANK"],
+  NIFTYBANK: ["%5ENSEBANK", "BANKNIFTY", "NIFTYBANK"],
+  "^CNXFIN": ["%5ECNXFIN", "FINNIFTY"],
+  FINNIFTY: ["%5ECNXFIN", "FINNIFTY"],
+  "^CNXIT": ["%5ECNXIT", "CNXIT"],
+  CNXIT: ["%5ECNXIT", "CNXIT"],
+};
+
+/**
+ * Returns prioritized candidate logo URLs.
+ * If a format (e.g. .webp or .png) is not available, it automatically tests
+ * all other formats (.png, .webp, .svg, .jpeg, .jpg) followed by verified corporate favicons.
+ */
+export function getStockLogoCandidates(symbol: string, domain?: string): string[] {
   if (!symbol) return [];
   const clean = symbol
-    .replace(".NS", "")
-    .replace(".BO", "")
-    .replace(/^NSE_EQ\|/, "")
-    .replace(/^BSE_EQ\|/, "")
+    .replace(/\.(NS|BO)$/i, "")
+    .replace(/^(NSE_EQ\||BSE_EQ\|)/i, "")
     .trim()
     .toUpperCase();
 
   const candidates: string[] = [];
 
-  // Local assets check removed.
+  const addCandidate = (url: string | null | undefined) => {
+    if (url && !candidates.includes(url)) {
+      candidates.push(url);
+    }
+  };
 
-  // 2. Cached working URL (From previous successful renders)
+  // 1. Cached working URL from memory or localStorage
   const cached = getCachedLogo(clean);
-  if (cached && !candidates.includes(cached)) {
-    candidates.push(cached);
-  }
+  addCandidate(cached);
 
-  // 3. Known Verified Azure Blob Logo
-  if (KNOWN_AZURE_LOGOS[clean] || KNOWN_AZURE_LOGOS[symbol]) {
-    const azureUrl = KNOWN_AZURE_LOGOS[clean] || KNOWN_AZURE_LOGOS[symbol];
-    if (!candidates.includes(azureUrl)) {
-      candidates.push(azureUrl);
+  // 2. Known Verified Azure Blob Logo
+  const known = KNOWN_AZURE_LOGOS[clean] || KNOWN_AZURE_LOGOS[symbol];
+  if (known) {
+    addCandidate(known);
+
+    // If the known logo has a specific extension (e.g. .webp),
+    // immediately add all other formats for that base URL as fallbacks
+    const extMatch = known.match(/\.(webp|png|svg|jpeg|jpg)$/i);
+    const knownExt = extMatch ? extMatch[1].toLowerCase() : null;
+    const baseKnownUrl = known.replace(/\.(webp|png|svg|jpeg|jpg)$/i, "");
+
+    for (const ext of SUPPORTED_EXTENSIONS) {
+      if (ext !== knownExt) {
+        addCandidate(`${baseKnownUrl}.${ext}`);
+      }
     }
   }
 
-  // Removed Google favicon and dynamic domain fallbacks per user request.
-
-  // 6. Azure Blob general fallback check (.png then .webp)
-  const defaultAzurePng = `${AZURE_BLOB_BASE}/${encodeURIComponent(clean)}.png`;
-  if (!candidates.includes(defaultAzurePng)) {
-    candidates.push(defaultAzurePng);
+  // 3. Index & Alias Resolution
+  const aliases: string[] = [clean];
+  if (INDEX_ALIASES[clean]) {
+    INDEX_ALIASES[clean].forEach((a) => {
+      if (!aliases.includes(a)) aliases.push(a);
+    });
   }
-  const defaultAzureWebp = `${AZURE_BLOB_BASE}/${encodeURIComponent(clean)}.webp`;
-  if (!candidates.includes(defaultAzureWebp)) {
-    candidates.push(defaultAzureWebp);
+  if (clean.startsWith("^") && !aliases.includes(encodeURIComponent(clean))) {
+    aliases.push(encodeURIComponent(clean));
+  }
+
+  // 4. Generate all format variants on Azure Blob for each alias
+  for (const alias of aliases) {
+    const encoded = encodeURIComponent(alias);
+    for (const ext of SUPPORTED_EXTENSIONS) {
+      addCandidate(`${AZURE_BLOB_BASE}/${encoded}.${ext}`);
+    }
+    if (encoded !== alias) {
+      for (const ext of SUPPORTED_EXTENSIONS) {
+        addCandidate(`${AZURE_BLOB_BASE}/${alias}.${ext}`);
+      }
+    }
+  }
+
+  // 5. High-Resolution Google Favicon (128px) fallback via verified domain
+  const targetDomain = domain || COMPANY_DOMAINS[clean];
+  if (targetDomain) {
+    const cleanDomain = targetDomain.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    addCandidate(
+      `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(
+        targetDomain
+      )}&size=128`
+    );
+    if (cleanDomain && !cleanDomain.includes("google")) {
+      addCandidate(`https://logo.clearbit.com/${cleanDomain}`);
+    }
   }
 
   return candidates;

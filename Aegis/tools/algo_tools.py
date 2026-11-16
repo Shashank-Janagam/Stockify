@@ -55,14 +55,14 @@ def get_saved_strategies(config: RunnableConfig) -> str:
         return json.dumps({"error": str(e)})
 
 @tool
-def start_algo_session(config: RunnableConfig, strategy: str, symbol: str = None, capital: float = None, mode: str = "simulate") -> str:
+def start_algo_session(config: RunnableConfig, strategy: str, symbol: str = None, capital: float = None, mode: str = "upstox") -> str:
     """
     Start a new algorithmic trading session for a given strategy.
     Args:
         strategy: The name of the saved PaperBull strategy to run.
         symbol: The stock symbol (e.g. 'RELIANCE'). If not provided, it will be automatically inferred from the strategy's saved tickers.
         capital: The amount of money to allocate to this bot. If not provided, it will be automatically inferred from the strategy's saved capital.
-        mode: 'simulate' (paper trading) or 'upstox' (live market). Default is 'simulate'.
+        mode: 'upstox' (live market feed, default) or 'simulate' (paper trading on port 8765). Default is 'upstox'.
     """
     uid = _uid_from_config(config)
     if not uid:
@@ -79,6 +79,8 @@ def start_algo_session(config: RunnableConfig, strategy: str, symbol: str = None
                 if strat:
                     if not symbol and strat.get('tickers') and len(strat['tickers']) > 0:
                         symbol = strat['tickers'][0]
+                    if not capital and strat.get('capital'):
+                        capital = float(strat['capital'])
         except Exception:
             pass
             
@@ -152,14 +154,30 @@ def stop_algo_session(config: RunnableConfig, session_id: str) -> str:
 
         stats = py_data.get("stats", {})
         
+        # Calculate full equity to return: remaining cash + market value of any open shares
+        shares_held = float(stats.get("shares_held", 0) or 0)
+        last_price = float(stats.get("last_price", 0) or 0)
+        current_capital = float(stats.get("current_capital", 0) or 0)
+        allocated_capital = float(stats.get("allocated_capital", 0) or 0)
+        live_pnl = float(stats.get("live_pnl", 0) or 0)
+
+        total_returned = stats.get("total_returned_capital")
+        if total_returned is None:
+            if shares_held > 0 and last_price > 0:
+                total_returned = current_capital + (shares_held * last_price)
+            elif allocated_capital > 0 and "live_pnl" in stats:
+                total_returned = allocated_capital + live_pnl
+            else:
+                total_returned = current_capital
+
         # 2. Refund capital to the wallet via Node backend
         node_res = requests.post(
             f"{NODE_BACKEND_URL}/api/algo/session/stop",
             json={
-                "returnedCapital": stats.get("current_capital", 0),
+                "returnedCapital": total_returned,
                 "symbol": stats.get("symbol", ""),
                 "strategyName": stats.get("strategy_name", ""),
-                "pnl": stats.get("live_pnl", 0),
+                "pnl": live_pnl,
                 "trades": stats.get("trades", []),
                 "sessionId": session_id
             },
@@ -170,7 +188,7 @@ def stop_algo_session(config: RunnableConfig, session_id: str) -> str:
         if node_res.status_code != 200:
             return json.dumps({"error": f"Algo stopped, but wallet refund failed: {node_res.text}"})
 
-        return json.dumps({"success": True, "message": f"Successfully stopped session {session_id} and refunded capital.", "final_stats": stats})
+        return json.dumps({"success": True, "message": f"Successfully stopped session {session_id} and refunded ₹{total_returned:.2f} to wallet.", "final_stats": stats, "returned_capital": total_returned})
     except Exception as e:
         return json.dumps({"error": str(e)})
 

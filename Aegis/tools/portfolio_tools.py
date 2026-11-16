@@ -106,3 +106,45 @@ def get_portfolio_allocation(strategy: str = "equal-weight", config: RunnableCon
         return json.dumps({"error": str(e)})
 
 
+@tool
+def get_user_transactions(config: RunnableConfig) -> str:
+    """
+    Retrieve the user's wallet transaction history including deposits, credits, debits, trades, and fund transfers.
+    Use this when the user asks about money movements, wallet history, recent deposits, or fund activity.
+    """
+    uid = _uid_from_config(config)
+    if not uid:
+        return json.dumps({"error": "User UID not found."})
+    try:
+        res = requests.get(
+            f"{NODE_BACKEND_URL}/api/transactions",
+            headers=_get_headers(uid),
+            timeout=10,
+        )
+        return res.text if res.status_code == 200 else json.dumps({"error": res.text})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def get_payment_orders(config: RunnableConfig) -> str:
+    """
+    Retrieve the user's online bank/payment deposit orders and gateway transactions (Razorpay, bank UPI, card).
+    Shows deposit status (SUCCESS, CREATED, PENDING), payment ID, amount, and timestamps.
+    Use this when the user asks about deposit status, funds added, why funds are missing or pending, or bank/payment gateway transactions.
+    """
+    uid = _uid_from_config(config)
+    if not uid:
+        return json.dumps({"error": "User UID not found."})
+    try:
+        res = requests.get(
+            f"{NODE_BACKEND_URL}/api/payments/orders",
+            headers=_get_headers(uid),
+            timeout=10,
+        )
+        return res.text if res.status_code == 200 else json.dumps({"error": res.text})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+
