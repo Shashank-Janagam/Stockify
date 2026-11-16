@@ -3,7 +3,6 @@ name: Deploy to EC2 VM
 on:
   push:
     branches:
-      - ec2
       - main
     paths-ignore:
       - 'README.md'
