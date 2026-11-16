@@ -213,7 +213,7 @@ services:
     container_name: stockify-order-execution
     restart: unless-stopped
     env_file:
-      - ./OrderExecution/.env
+      - ./Stockify-Backend/.env
     environment:
       - KAFKA_BROKERS=kafka:29092
       - FEED_API_URL=http://upstox-backend:4141

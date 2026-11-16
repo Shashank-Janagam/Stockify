@@ -1,0 +1,134 @@
+name: Deploy to EC2 VM
+
+on:
+  push:
+    branches:
+      - ec2
+      - main
+    paths-ignore:
+      - 'README.md'
+      - '.gitignore'
+
+jobs:
+  deploy:
+    name: Deploy All Services to VM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH to VM
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
+          FRONTEND_ENV: ${{ secrets.FRONTEND_ENV }}
+          ORDER_EXECUTION_ENV: ${{ secrets.ORDER_EXECUTION_ENV }}
+          NOTIFICATION_ENV: ${{ secrets.NOTIFICATION_ENV }}
+          UPSTOX_ENV: ${{ secrets.UPSTOX_ENV }}
+          AEGIS_ENV: ${{ secrets.AEGIS_ENV }}
+          AUTOTRADING_ENV: ${{ secrets.AUTOTRADING_ENV }}
+          MCP_ENV: ${{ secrets.MCP_ENV }}
+          PRESSRELEASE_ENV: ${{ secrets.PRESSRELEASE_ENV }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script_stop: true
+          envs: BACKEND_ENV,FRONTEND_ENV,ORDER_EXECUTION_ENV,NOTIFICATION_ENV,UPSTOX_ENV,AEGIS_ENV,AUTOTRADING_ENV,MCP_ENV,PRESSRELEASE_ENV
+          script: |
+            echo "🚀 Starting Deployment on VM..."
+            
+            # 1. Locate repository directory
+            if [ -d "$HOME/Stockify" ]; then
+              cd "$HOME/Stockify"
+            elif [ -d "/home/ubuntu/Stockify" ]; then
+              cd "/home/ubuntu/Stockify"
+            else
+              echo "Error: Stockify directory not found on VM."
+              exit 1
+            fi
+            
+            # 2. Pull latest code from current branch
+            echo "📥 Pulling latest code..."
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            
+            # 3. Inject .env files for each service
+            echo "🔑 Injecting .env files for all microservices..."
+
+            # Backend
+            if [ -n "$BACKEND_ENV" ]; then
+              echo "$BACKEND_ENV" > Stockify-Backend/.env
+            fi
+
+            # Frontend
+            if [ -n "$FRONTEND_ENV" ]; then
+              echo "$FRONTEND_ENV" > Stockify-Frontend/.env
+            fi
+
+            # OrderExecution (uses dedicated secret if set, else falls back to Backend env)
+            if [ -n "$ORDER_EXECUTION_ENV" ]; then
+              echo "$ORDER_EXECUTION_ENV" > OrderExecution/.env
+            elif [ -f Stockify-Backend/.env ]; then
+              cp Stockify-Backend/.env OrderExecution/.env
+            fi
+
+            # Notification Service
+            if [ -n "$NOTIFICATION_ENV" ]; then
+              echo "$NOTIFICATION_ENV" > Notification_Service/.env
+            elif [ -f Stockify-Backend/.env ]; then
+              cp Stockify-Backend/.env Notification_Service/.env
+            fi
+
+            # Upstox Backend
+            mkdir -p Upstox-Backend
+            if [ -n "$UPSTOX_ENV" ]; then
+              echo "$UPSTOX_ENV" > Upstox-Backend/.env
+            else
+              touch Upstox-Backend/.env
+            fi
+
+            # Aegis
+            mkdir -p Aegis
+            if [ -n "$AEGIS_ENV" ]; then
+              echo "$AEGIS_ENV" > Aegis/.env
+            elif [ -f Stockify-Backend/.env ]; then
+              cp Stockify-Backend/.env Aegis/.env
+            fi
+
+            # AutoTrading
+            mkdir -p AutoTrading
+            if [ -n "$AUTOTRADING_ENV" ]; then
+              echo "$AUTOTRADING_ENV" > AutoTrading/.env
+            elif [ -f Stockify-Backend/.env ]; then
+              cp Stockify-Backend/.env AutoTrading/.env
+            fi
+
+            # MCP
+            mkdir -p mcp
+            if [ -n "$MCP_ENV" ]; then
+              echo "$MCP_ENV" > mcp/.env
+            else
+              touch mcp/.env
+            fi
+
+            # PressRelease Cron
+            mkdir -p MultiAgent/PressRelease
+            if [ -n "$PRESSRELEASE_ENV" ]; then
+              echo "$PRESSRELEASE_ENV" > MultiAgent/PressRelease/.env
+            else
+              touch MultiAgent/PressRelease/.env
+            fi
+
+            echo "✅ All .env files verified and written."
+
+            # 4. Rebuild and launch containers
+            echo "📦 Rebuilding and starting Docker services..."
+            docker compose up --build -d
+
+            # 5. Prune dangling images to conserve disk space
+            docker image prune -f
+
+            echo "🎉 Deployment successfully finished!"
