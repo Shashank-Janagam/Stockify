@@ -90,7 +90,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
 app.use(cookieParser()); // ⭐ THIS FIXES YOUR ERROR
 
 app.use(express.json());
@@ -99,7 +98,7 @@ app.use("/api/login", login);
 app.use("/api/stocks", indiaLiveRoutes);
 app.use("/api/search", searchResults);
 app.use("/api/searchUpdates", searchUpdates);
-app.use("/api/getBalance", getBalance);
+app.use("/api/getBalance", getBalance); 
 app.use("/api/payments", payments);
 app.use("/api/payments", walletTopup);
 app.use("/api/transactions", transactions);

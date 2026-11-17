@@ -110,8 +110,23 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
   const symUpper = symbol.toUpperCase();
   const isIndex =
-    ["^NSEI", "^BSESN", "^NSEBANK", "^CNXIT", "^CNXFIN", "^CRSMID", "^CNXMIDCAP", "NIFTY_FIN_SERVICE.NS", "NIFTY_MIDCAP_100.NS"].includes(symUpper) ||
-    symUpper.startsWith("^");
+    [
+      "^NSEI",
+      "^BSESN",
+      "^NSEBANK",
+      "^CNXIT",
+      "^CNXFIN",
+      "^CRSMID",
+      "^CNXMIDCAP",
+      "NIFTY_FIN_SERVICE.NS",
+      "NIFTY_MIDCAP_100.NS",
+      "NSE",
+      "NIFTY",
+      "NIFTY50",
+      "NIFTY 50",
+      "SENSEX",
+      "BANKNIFTY"
+    ].includes(symUpper) || symUpper.startsWith("^");
 
   const isFund =
     !isIndex &&
@@ -413,7 +428,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
       return;
     }
 
-    fetch(`${HOST}/api/stocks/${symbol}/quote`)
+    fetch(`${HOST}/api/stocks/${encodeURIComponent(symbol)}/quote`)
       .then(res => {
         if (!res.ok) throw new Error("No quote available");
         return res.json();
@@ -503,7 +518,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     setLoading(true);
 
     // 1. Immediately fetch the 1D chart candles via HTTP so graph loads instantly without waiting
-    fetch(`${HOST}/api/stocks/${symbol}/history?days=1&interval=${candleInterval}`)
+    fetch(`${HOST}/api/stocks/${encodeURIComponent(symbol)}/history?days=1&interval=${candleInterval}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch 1D history");
         return res.json();
@@ -535,18 +550,14 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
         if (!isCancelled) setLoading(false);
       });
 
-    // 2. If market is open or state pending, subscribe to WebSocket for real-time tick updates
-    if (marketState === "REGULAR" || !marketState) {
-      subscribe("STOCK_LIVE", { symbol, interval: candleInterval });
-    }
+    // 2. Subscribe to WebSocket for real-time live tick updates
+    subscribe("STOCK_LIVE", { symbol, interval: candleInterval });
 
     return () => {
       isCancelled = true;
-      if (marketState === "REGULAR" || !marketState) {
-        unsubscribe("STOCK_LIVE", { symbol, interval: candleInterval });
-      }
+      unsubscribe("STOCK_LIVE", { symbol, interval: candleInterval });
     };
-  }, [symbol, timeframe, candleInterval, simActive, marketState]);
+  }, [symbol, timeframe, candleInterval, simActive]);
 
   useEffect(() => {
     if (!lastMessage) return;

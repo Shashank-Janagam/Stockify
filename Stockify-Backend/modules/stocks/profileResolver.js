@@ -123,6 +123,73 @@ async function generateSummaryWithLLM(companyName, sector) {
 export async function resolveStockProfile(symbol) {
   if (!symbol) return null;
   const cleanSymbol = symbol.toUpperCase().trim();
+
+  // Dedicated Index Profiles — avoid querying equity company profiles for market indices
+  const INDEX_PROFILES = {
+    "^NSEI": {
+      symbol: "^NSEI",
+      company_name: "NIFTY 50",
+      sector: "Index",
+      industry: "Broad Market Index",
+      website: "https://www.nseindia.com",
+      summary_text: "The NIFTY 50 is the benchmark Indian stock market index representing the weighted average of 50 of the largest Indian companies listed on the National Stock Exchange."
+    },
+    "^BSESN": {
+      symbol: "^BSESN",
+      company_name: "BSE SENSEX",
+      sector: "Index",
+      industry: "Broad Market Index",
+      website: "https://www.bseindia.com",
+      summary_text: "The S&P BSE SENSEX is the benchmark index of the Bombay Stock Exchange (BSE), comprising 30 prominent and financially sound companies representing key sectors."
+    },
+    "^NSEBANK": {
+      symbol: "^NSEBANK",
+      company_name: "NIFTY BANK",
+      sector: "Banking",
+      industry: "Banking Sector Index",
+      website: "https://www.nseindia.com",
+      summary_text: "The NIFTY Bank Index comprises the most liquid and large Indian banking stocks from both private and public sectors listed on the NSE."
+    },
+    "^CNXIT": {
+      symbol: "^CNXIT",
+      company_name: "NIFTY IT",
+      sector: "IT",
+      industry: "Information Technology Index",
+      website: "https://www.nseindia.com",
+      summary_text: "The NIFTY IT Index captures the performance of leading Indian IT companies providing software, consulting, and technology services."
+    },
+    "^CNXFIN": {
+      symbol: "^CNXFIN",
+      company_name: "NIFTY FINANCIAL SERVICES",
+      sector: "Banking",
+      industry: "Financial Services Index",
+      website: "https://www.nseindia.com",
+      summary_text: "The NIFTY Financial Services Index tracks the performance of banks, financial institutions, housing finance, insurance, and NBFC companies."
+    }
+  };
+
+  INDEX_PROFILES["NSE"] = INDEX_PROFILES["^NSEI"];
+  INDEX_PROFILES["NIFTY"] = INDEX_PROFILES["^NSEI"];
+  INDEX_PROFILES["NIFTY50"] = INDEX_PROFILES["^NSEI"];
+  INDEX_PROFILES["NIFTY 50"] = INDEX_PROFILES["^NSEI"];
+  INDEX_PROFILES["BANKNIFTY"] = INDEX_PROFILES["^NSEBANK"];
+  INDEX_PROFILES["SENSEX"] = INDEX_PROFILES["^BSESN"];
+
+  if (INDEX_PROFILES[cleanSymbol]) {
+    return INDEX_PROFILES[cleanSymbol];
+  }
+
+  if (cleanSymbol.startsWith("^")) {
+    return {
+      symbol: cleanSymbol,
+      company_name: cleanSymbol,
+      sector: "Index",
+      industry: "Market Index",
+      website: "https://www.nseindia.com",
+      summary_text: "Market index tracking performance of constituent Indian securities."
+    };
+  }
+
   const rawSymbol = cleanSymbol.endsWith(".NS") || cleanSymbol.endsWith(".BO") ? cleanSymbol : `${cleanSymbol}.NS`;
 
   try {
@@ -213,6 +280,19 @@ export async function resolveStockProfile(symbol) {
 export async function getSimilarStocks(symbol, sector) {
   try {
     const cleanSymbol = symbol.toUpperCase().trim();
+
+    // If it's an index, return other major market indices
+    if (cleanSymbol.startsWith("^") || sector === "Index") {
+      const indexList = [
+        { symbol: "^NSEI", company_name: "NIFTY 50" },
+        { symbol: "^BSESN", company_name: "BSE SENSEX" },
+        { symbol: "^NSEBANK", company_name: "NIFTY BANK" },
+        { symbol: "^CNXIT", company_name: "NIFTY IT" },
+        { symbol: "^CNXFIN", company_name: "NIFTY FINANCIAL SERVICES" },
+      ];
+      return indexList.filter(idx => idx.symbol !== cleanSymbol).slice(0, 4);
+    }
+
     const db = getDb();
     const collection = db.collection("stock_profiles");
 
