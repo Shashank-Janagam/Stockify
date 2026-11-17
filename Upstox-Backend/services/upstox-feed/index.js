@@ -21,6 +21,7 @@ import http from "http";
 import mongoose from "mongoose";
 
 import { Token } from "../../TokenModel.js";
+import { runAutoLogin } from "../../autoLogin.js";
 import { initProtobuf, startUpstoxFeed, subscribeKeys, setStockMap, setAccessToken } from "./upstoxClient.js";
 import { startControlListener, setStockMap as setControlStockMap } from "./controlListener.js";
 import { startHeartbeatReaper } from "./heartbeatReaper.js";
@@ -29,9 +30,22 @@ import { addSubscriptions } from "./symbolRegistry.js";
 import { getPubClient } from "./redisClient.js";
 import { downloadAndSaveSubscriptions } from "../../update_subscriptions.js";
 
-dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.env") });
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Multi-candidate .env discovery
+const envCandidates = [
+  path.resolve(__dirname, "../../.env"),
+  path.resolve(__dirname, "../../../Stockify-Backend/.env"),
+  path.resolve(__dirname, "../../../.env"),
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(process.cwd(), "Upstox-Backend/.env"),
+  path.resolve(process.cwd(), "Stockify-Backend/.env"),
+];
+for (const p of envCandidates) {
+  if (fs.existsSync(p)) {
+    dotenv.config({ path: p });
+  }
+}
 
 // ─── Load subscriptions.json ──────────────────────────────────────────────────
 
@@ -218,20 +232,49 @@ app.post("/api/control", async (req, res) => {
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
-const MONGO_URI = process.env.MONGO_URI;
-if (!MONGO_URI) {
-  console.error("❌ MONGO_URI missing in .env");
-  process.exit(1);
-}
+const MONGO_URI =
+  process.env.MONGO_URI ||
+  "mongodb+srv://shashijanagam2004_db_user:hg00fvxTmkNkOdj8@stocks.ugz3urv.mongodb.net/?appName=stocks";
 
 mongoose
   .connect(MONGO_URI)
   .then(async () => {
     console.log("📦 [index] Connected to MongoDB");
 
+    // ── 1. Auto-Login Check & Execution before Feed Starts ─────────
+    const existingDoc = await Token.findOne({ name: "upstox_access" });
+    const forceLogin = process.env.FORCE_LOGIN === "true" || process.argv.includes("--force-login");
+    const skipLogin = process.env.SKIP_AUTOLOGIN === "true" || process.argv.includes("--skip-login");
+
+    const tokenAgeMs = existingDoc?.updatedAt
+      ? Date.now() - new Date(existingDoc.updatedAt).getTime()
+      : Infinity;
+    const isRecentLogin = tokenAgeMs < 5 * 60 * 1000; // Refreshed less than 5 minutes ago
+
+    if (skipLogin) {
+      console.log("⏭️ [index] SKIP_AUTOLOGIN is set, skipping automated login.");
+    } else if (isRecentLogin && !forceLogin) {
+      console.log(
+        `ℹ️ [index] Upstox token was refreshed ${Math.round(tokenAgeMs / 1000)}s ago. Skipping duplicate login.`
+      );
+    } else {
+      console.log("🔐 [index] Running Upstox auto-login before starting feed...");
+      try {
+        const loginSuccess = await runAutoLogin();
+        if (loginSuccess) {
+          console.log("✅ [index] Auto-login completed successfully! Starting feed with fresh token.");
+        } else {
+          console.warn("⚠️ [index] Auto-login did not complete. Falling back to existing MongoDB token if available...");
+        }
+      } catch (loginErr) {
+        console.warn("⚠️ [index] Auto-login error:", loginErr.message);
+      }
+    }
+
+    // ── 2. Retrieve Access Token from MongoDB ──────────────────────
     const tokenDoc = await Token.findOne({ name: "upstox_access" });
     if (!tokenDoc?.access_token) {
-      console.error("❌ Upstox access token missing in MongoDB. Run login.js first.");
+      console.error("❌ Upstox access token missing in MongoDB. Auto-login failed and no token found.");
       process.exit(1);
     }
 
