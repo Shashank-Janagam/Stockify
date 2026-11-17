@@ -10,13 +10,13 @@ export async function getYahooIndiaQuote(symbol) {
   let s_up = symbol.toUpperCase().replace(".NS", "").replace(".BO", "");
   let finalSymbol = symbol;
   
-  if (s_up === "NIFTY 50" || s_up === "NIFTY50" || s_up === "NIFTY" || s_up === "NIFTY_50") {
+  if (s_up === "NIFTY 50" || s_up === "NIFTY50" || s_up === "NIFTY" || s_up === "NIFTY_50" || s_up === "NSE" || s_up === "^NSEI") {
     finalSymbol = "^NSEI";
-  } else if (s_up === "BANKNIFTY" || s_up === "NIFTY BANK" || s_up === "NIFTYBANK") {
+  } else if (s_up === "BANKNIFTY" || s_up === "NIFTY BANK" || s_up === "NIFTYBANK" || s_up === "^NSEBANK") {
     finalSymbol = "^NSEBANK";
-  } else if (s_up === "SENSEX" || s_up === "BSE SENSEX" || s_up === "BSESN") {
+  } else if (s_up === "SENSEX" || s_up === "BSE SENSEX" || s_up === "BSESN" || s_up === "^BSESN") {
     finalSymbol = "^BSESN";
-  } else if (s_up === "FINNIFTY" || s_up === "NIFTY FIN SERVICE") {
+  } else if (s_up === "FINNIFTY" || s_up === "NIFTY FIN SERVICE" || s_up === "^CNXFIN") {
     finalSymbol = "^CNXFIN";
   } else if (!finalSymbol.endsWith(".NS") && !finalSymbol.endsWith(".BO") && !finalSymbol.startsWith("^")) {
     finalSymbol = `${finalSymbol}.NS`;

@@ -355,7 +355,7 @@ export  class WebSocketManager {
         const upstoxTick = upstoxFeedService.getTick(symbol);
         const quote = upstoxTick ? {
           ...(cachedYahooQuote || {}),
-          symbol: symbol.endsWith(".NS") ? symbol : `${symbol}.NS`,
+          symbol: symbol.startsWith("^") ? symbol : (symbol.endsWith(".NS") ? symbol : `${symbol}.NS`),
           shortName: upstoxTick.name || cachedYahooQuote?.shortName,
           longName:  upstoxTick.name || cachedYahooQuote?.longName,
           regularMarketPrice:         upstoxTick.price      ?? cachedYahooQuote?.regularMarketPrice,

@@ -53,13 +53,13 @@ export async function getYahooIndiaHistory(symbol, days, customInterval = null) 
   let targetSymbol = symbol.trim();
   let s_up = targetSymbol.toUpperCase().replace(".NS", "").replace(".BO", "");
   
-  if (s_up === "NIFTY 50" || s_up === "NIFTY50" || s_up === "NIFTY" || s_up === "NIFTY_50") {
+  if (s_up === "NIFTY 50" || s_up === "NIFTY50" || s_up === "NIFTY" || s_up === "NIFTY_50" || s_up === "NSE" || s_up === "^NSEI") {
     targetSymbol = "^NSEI";
-  } else if (s_up === "BANKNIFTY" || s_up === "NIFTY BANK" || s_up === "NIFTYBANK") {
+  } else if (s_up === "BANKNIFTY" || s_up === "NIFTY BANK" || s_up === "NIFTYBANK" || s_up === "^NSEBANK") {
     targetSymbol = "^NSEBANK";
-  } else if (s_up === "SENSEX" || s_up === "BSE SENSEX" || s_up === "BSESN") {
+  } else if (s_up === "SENSEX" || s_up === "BSE SENSEX" || s_up === "BSESN" || s_up === "^BSESN") {
     targetSymbol = "^BSESN";
-  } else if (s_up === "FINNIFTY" || s_up === "NIFTY FIN SERVICE") {
+  } else if (s_up === "FINNIFTY" || s_up === "NIFTY FIN SERVICE" || s_up === "^CNXFIN") {
     targetSymbol = "^CNXFIN";
   } else if (!targetSymbol.startsWith("^") && !targetSymbol.endsWith(".NS") && !targetSymbol.endsWith(".BO")) {
     targetSymbol = `${targetSymbol}.NS`;
