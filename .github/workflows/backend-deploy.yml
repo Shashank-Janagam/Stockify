@@ -15,10 +15,20 @@ jobs:
     steps:
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
+          UPSTOX_ENV: ${{ secrets.UPSTOX_ENV }}
+          AEGIS_ENV: ${{ secrets.AEGIS_ENV }}
+          AUTOTRADING_ENV: ${{ secrets.AUTOTRADING_ENV }}
+          MCP_ENV: ${{ secrets.MCP_ENV }}
+          PRESSRELEASE_ENV: ${{ secrets.PRESSRELEASE_ENV }}
+          NOTIFICATION_ENV: ${{ secrets.NOTIFICATION_ENV }}
+          ORDER_EXECUTION_ENV: ${{ secrets.ORDER_EXECUTION_ENV }}
         with:
           host: ${{ secrets.AZURE_VM_IP }}
           username: ${{ secrets.AZURE_VM_USER }}
           key: ${{ secrets.AZURE_SSH_KEY }}
+          envs: BACKEND_ENV,UPSTOX_ENV,AEGIS_ENV,AUTOTRADING_ENV,MCP_ENV,PRESSRELEASE_ENV,NOTIFICATION_ENV,ORDER_EXECUTION_ENV
           script: |
             set -e
             echo "Connected to Azure VM"
@@ -79,6 +89,23 @@ jobs:
               mkdir -p "./$dir"
               touch "./$dir/.env"
             done
+
+            # ── Inject GitHub secrets if present ────────────────────────────
+            echo "Injecting updated GitHub secrets..."
+            [ -n "$BACKEND_ENV" ] && echo "$BACKEND_ENV" > "$REPO_DIR/Stockify-Backend/.env"
+            [ -n "$UPSTOX_ENV" ] && echo "$UPSTOX_ENV" > "$REPO_DIR/Upstox-Backend/.env"
+            [ -n "$AEGIS_ENV" ] && echo "$AEGIS_ENV" > "$REPO_DIR/Aegis/.env"
+            [ -n "$AUTOTRADING_ENV" ] && echo "$AUTOTRADING_ENV" > "$REPO_DIR/AutoTrading/.env"
+            [ -n "$NOTIFICATION_ENV" ] && echo "$NOTIFICATION_ENV" > "$REPO_DIR/Notification_Service/.env"
+            [ -n "$MCP_ENV" ] && echo "$MCP_ENV" > "$REPO_DIR/mcp/.env"
+            [ -n "$PRESSRELEASE_ENV" ] && echo "$PRESSRELEASE_ENV" > "$REPO_DIR/MultiAgent/PressRelease/.env"
+            [ -n "$ORDER_EXECUTION_ENV" ] && echo "$ORDER_EXECUTION_ENV" > "$REPO_DIR/OrderExecution/.env"
+
+            # If Upstox-Backend/.env is empty but Stockify-Backend/.env exists, copy base keys
+            if [ ! -s "$REPO_DIR/Upstox-Backend/.env" ] && [ -s "$REPO_DIR/Stockify-Backend/.env" ]; then
+              echo "Notice: Upstox-Backend/.env is empty, populating from Stockify-Backend/.env"
+              cp "$REPO_DIR/Stockify-Backend/.env" "$REPO_DIR/Upstox-Backend/.env"
+            fi
 
             # ── Build and start Docker services ─────────────────────────────
             echo "Rebuilding and starting services..."

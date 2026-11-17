@@ -240,6 +240,13 @@ mongoose
   .connect(MONGO_URI)
   .then(async () => {
     console.log("📦 [index] Connected to MongoDB");
+    console.log("🔍 [index] Environment Configuration Check:");
+    console.log(`   MONGO_URI:        ${Boolean(process.env.MONGO_URI)}`);
+    console.log(`   REDIS_URL:        ${Boolean(process.env.REDIS_URL)}`);
+    console.log(`   UPSTOX_CLIENT_ID: ${process.env.UPSTOX_CLIENT_ID ? process.env.UPSTOX_CLIENT_ID.substring(0, 8) + "..." : "❌ MISSING"}`);
+    console.log(`   UPSTOX_MOBILE:    ${process.env.UPSTOX_MOBILE ? "✅ Configured" : "❌ MISSING"}`);
+    console.log(`   UPSTOX_PIN:       ${process.env.UPSTOX_PIN ? "✅ Configured" : "❌ MISSING"}`);
+    console.log(`   UPSTOX_TOTP_KEY:  ${process.env.UPSTOX_TOTP_KEY ? "✅ Configured" : "❌ MISSING"}`);
 
     // ── 1. Auto-Login Check & Execution before Feed Starts ─────────
     const existingDoc = await Token.findOne({ name: "upstox_access" });

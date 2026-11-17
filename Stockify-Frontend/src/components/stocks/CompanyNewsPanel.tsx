@@ -110,47 +110,53 @@ export default function CompanyNewsPanel({ symbol }: CompanyNewsPanelProps) {
         <span className="panel-count">{announcements.length} recent</span>
       </div>
 
-      {announcements.map((ann) => (
-        <div key={ann._id || ann.bse_id} className="company-news-mini-card">
-          <div className="mini-top">
-            <span className={`category-badge ${ann.category}`}>
-              {CATEGORY_LABELS[ann.category] || ann.category}
-            </span>
-            <span className={`sentiment-chip ${ann.sentiment}`}>
-              {ann.sentiment.charAt(0).toUpperCase() + ann.sentiment.slice(1)}
-            </span>
-          </div>
+      {announcements.map((ann) => {
+        const sentimentStr = ann.sentiment ? String(ann.sentiment).toLowerCase() : "neutral";
+        const sentimentLabel = sentimentStr.charAt(0).toUpperCase() + sentimentStr.slice(1);
+        const categoryLabel = CATEGORY_LABELS[ann.category] || ann.category || "Update";
 
-          <div className="mini-headline">{ann.headline}</div>
+        return (
+          <div key={ann._id || ann.bse_id} className="company-news-mini-card">
+            <div className="mini-top">
+              <span className={`category-badge ${ann.category || "other"}`}>
+                {categoryLabel}
+              </span>
+              <span className={`sentiment-chip ${sentimentStr}`}>
+                {sentimentLabel}
+              </span>
+            </div>
 
-          {ann.summary && ann.summary !== ann.headline && (
-            <div className="mini-summary">{ann.summary}</div>
-          )}
+            <div className="mini-headline">{ann.headline}</div>
 
-          <div className="mini-footer">
-            <span>{formatDate(ann.announced_at)}</span>
-            {ann.pdf_url && (
-              <>
-                <span>·</span>
-                <a
-                  href={ann.pdf_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="card-action"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  View PDF
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <line x1="10" y1="14" x2="21" y2="3" />
-                  </svg>
-                </a>
-              </>
+            {ann.summary && ann.summary !== ann.headline && (
+              <div className="mini-summary">{ann.summary}</div>
             )}
+
+            <div className="mini-footer">
+              <span>{formatDate(ann.announced_at)}</span>
+              {ann.pdf_url && (
+                <>
+                  <span>·</span>
+                  <a
+                    href={ann.pdf_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="card-action"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    View PDF
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                      <polyline points="15 3 21 3 21 9" />
+                      <line x1="10" y1="14" x2="21" y2="3" />
+                    </svg>
+                  </a>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

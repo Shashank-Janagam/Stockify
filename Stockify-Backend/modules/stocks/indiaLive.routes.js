@@ -91,8 +91,8 @@ router.get("/:symbol/quote", async (req, res) => {
     const data = await getYahooIndiaQuote(symbol);
     // 🚨 Guard against empty Yahoo response
     if (!data) {
-      console.log("no data")
-      return res.status(204).json({ error: "NO_DATA" });
+      console.log(`[Quote] No quote data returned for ${symbol}`);
+      return res.status(404).json({ error: "NO_DATA", quote: null });
     }
 
     res.json(data);
