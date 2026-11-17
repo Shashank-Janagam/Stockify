@@ -31,7 +31,7 @@ jobs:
           PRESSRELEASE_ENV: ${{ secrets.PRESSRELEASE_ENV }}
         with:
           host: ${{ secrets.EC2_HOST || secrets.HOST || secrets.SERVER_HOST || secrets.VM_HOST || secrets.SSH_HOST || secrets.EC2_IP }}
-          username: ${{ secrets.EC2_USER || secrets.USERNAME || secrets.USER || secrets.SSH_USER || 'ubuntu' }}
+          username: ${{ secrets.EC2_USER || secrets.USERNAME || secrets.USER || secrets.SSH_USER || 'azureuser' || 'ubuntu' }}
           key: ${{ secrets.EC2_SSH_KEY || secrets.SSH_KEY || secrets.SSH_PRIVATE_KEY || secrets.KEY || secrets.PRIVATE_KEY }}
           port: 22
           script_stop: true
@@ -85,8 +85,8 @@ jobs:
             mkdir -p Upstox-Backend
             if [ -n "$UPSTOX_ENV" ]; then
               echo "$UPSTOX_ENV" > Upstox-Backend/.env
-            else
-              touch Upstox-Backend/.env
+            elif [ -f Stockify-Backend/.env ]; then
+              cp Stockify-Backend/.env Upstox-Backend/.env
             fi
 
             # Aegis
