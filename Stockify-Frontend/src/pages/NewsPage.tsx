@@ -377,12 +377,14 @@ export default function NewsPage() {
           {announcements.map((ann) => (
             <div key={ann._id || ann.bse_id} className="news-card" id={`news-card-${ann.bse_id}`}>
               <div className="news-card-top">
-                <span className={`category-badge ${ann.category}`}>
-                  {CATEGORY_LABELS[ann.category] || ann.category}
+                <span className={`category-badge ${ann.category || "other"}`}>
+                  {CATEGORY_LABELS[ann.category] || ann.category || "Update"}
                 </span>
-                <span className={`sentiment-chip ${ann.sentiment}`}>
-                  {ann.sentiment.charAt(0).toUpperCase() +
-                    ann.sentiment.slice(1)}
+                <span className={`sentiment-chip ${ann.sentiment ? String(ann.sentiment).toLowerCase() : "neutral"}`}>
+                  {ann.sentiment
+                    ? ann.sentiment.charAt(0).toUpperCase() +
+                      ann.sentiment.slice(1)
+                    : "Neutral"}
                 </span>
                 <div className="news-card-company">
                   <span className="company-symbol">

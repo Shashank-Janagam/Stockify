@@ -30,9 +30,9 @@ jobs:
           MCP_ENV: ${{ secrets.MCP_ENV }}
           PRESSRELEASE_ENV: ${{ secrets.PRESSRELEASE_ENV }}
         with:
-          host: ${{ secrets.EC2_HOST || secrets.HOST || secrets.SERVER_HOST || secrets.VM_HOST || secrets.SSH_HOST || secrets.EC2_IP }}
-          username: ${{ secrets.EC2_USER || secrets.USERNAME || secrets.USER || secrets.SSH_USER || 'azureuser' || 'ubuntu' }}
-          key: ${{ secrets.EC2_SSH_KEY || secrets.SSH_KEY || secrets.SSH_PRIVATE_KEY || secrets.KEY || secrets.PRIVATE_KEY }}
+          host: ${{ secrets.EC2_HOST || secrets.HOST || secrets.SERVER_HOST || secrets.VM_HOST || secrets.SSH_HOST || secrets.EC2_IP || secrets.AZURE_VM_IP }}
+          username: ${{ secrets.EC2_USER || secrets.USERNAME || secrets.USER || secrets.SSH_USER || secrets.AZURE_VM_USER || 'azureuser' || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY || secrets.SSH_KEY || secrets.SSH_PRIVATE_KEY || secrets.KEY || secrets.PRIVATE_KEY || secrets.AZURE_SSH_KEY }}
           port: 22
           script_stop: true
           envs: BACKEND_ENV,FRONTEND_ENV,ORDER_EXECUTION_ENV,NOTIFICATION_ENV,UPSTOX_ENV,AEGIS_ENV,AUTOTRADING_ENV,MCP_ENV,PRESSRELEASE_ENV

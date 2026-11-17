@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite --host",
     "start": "vite --host",
+    "start:prod": "vite --host --mode production",
     "build": "tsc -b && vite build",
+    "build:prod": "tsc -b && vite build --mode production",
+    "build:local": "tsc -b && vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview"
   },

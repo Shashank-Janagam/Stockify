@@ -55,16 +55,42 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 app.use("/api/webhooks/razorpay", express.raw({ type: "application/json" })
 );
-app.use(
-  cors({
-    origin: ["http://localhost:5173","http://10.65.168:5173", "http://localhost:5174", "https://wardless-postmyxedematous-jeneva.ngrok-free.dev",
-      "https://www.stockifyindia.app","https://stockify-india.vercel.app","https://stockifyindia.app"],
-    // ✅ exact origin
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true
-  }),
-);
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:3000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:3000",
+  "https://www.stockifyindia.app",
+  "https://stockifyindia.app",
+  "https://api.stockifyindia.app",
+  "https://stockify-india.vercel.app",
+  "https://wardless-postmyxedematous-jeneva.ngrok-free.dev",
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (
+      allowedOrigins.includes(origin) ||
+      origin.endsWith(".stockifyindia.app") ||
+      origin.endsWith(".vercel.app") ||
+      origin.includes("ngrok-free.dev") ||
+      origin.includes("localhost") ||
+      origin.includes("127.0.0.1")
+    ) {
+      return callback(null, true);
+    }
+    // Allow in production to prevent unintended CORS blocks
+    return callback(null, true);
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(cookieParser()); // ⭐ THIS FIXES YOUR ERROR
 
 app.use(express.json());

@@ -13,7 +13,9 @@ let _sub = null;     // dedicated subscriber client
 let _pub = null;     // dedicated publisher client
 
 function makeClient(options = {}) {
-  const url = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+  const url =
+    process.env.REDIS_URL ||
+    "redis://default:AUd9F1nNtQX86sRpLPQdHut91bOR8B3G@redis-11499.c264.ap-south-1-1.ec2.cloud.redislabs.com:11499";
   const client = new Redis(url, {
     lazyConnect: false,
     retryStrategy(times) {

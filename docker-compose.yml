@@ -85,6 +85,7 @@ services:
       - "4141:4141"
     restart: unless-stopped
     env_file:
+      - ./Stockify-Backend/.env
       - ./Upstox-Backend/.env
 
   notification-worker:

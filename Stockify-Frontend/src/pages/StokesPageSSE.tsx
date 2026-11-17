@@ -414,8 +414,12 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     }
 
     fetch(`${HOST}/api/stocks/${symbol}/quote`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("No quote available");
+        return res.json();
+      })
       .then((q: YahooQuote) => {
+        if (!q || typeof q.regularMarketPrice !== "number") return;
         setMarketState(q.marketState ?? null);
         setQuote(q);
         setCompanyName(q.longName ?? q.shortName ?? q.symbol ?? symbol);
@@ -423,6 +427,9 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
         setBaseline(q.regularMarketPreviousClose ?? null);
         setChange(q.regularMarketChange ?? 0);
         setPercent(q.regularMarketChangePercent ?? 0);
+      })
+      .catch((err) => {
+        console.warn(`[StockPageSSE] Could not load quote for ${symbol}:`, err.message);
       });
 
     // Also fetch profile for Sector/Industry
@@ -483,44 +490,63 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
 
   useEffect(() => {
     if (timeframe !== "1D") return;
-    if (!marketState) return;
 
-    // 🔥 RESET DATA WHEN SYMBOL CHANGES
+    // Reset data when symbol changes
     setLineData([]);
 
-    // 🟢 MARKET OPEN / REPLAY → WS
     if (simActive) {
       // In simulation mode, do not connect to live websocket or fetch static data
       return;
-    } else if (marketState === "REGULAR") {
-      subscribe("STOCK_LIVE", { symbol, interval: candleInterval });
     }
-    // 🔴 MARKET CLOSED → STATIC
-    else {
-      fetch(`${HOST}/api/stocks/${symbol}/history?days=1&interval=${candleInterval}`)
-        .then(res => res.json())
-        .then((candles: Candle2[]) => {
-          const shifted = candles.map(d => ({
+
+    let isCancelled = false;
+    setLoading(true);
+
+    // 1. Immediately fetch the 1D chart candles via HTTP so graph loads instantly without waiting
+    fetch(`${HOST}/api/stocks/${symbol}/history?days=1&interval=${candleInterval}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch 1D history");
+        return res.json();
+      })
+      .then((candles: Candle2[]) => {
+        if (isCancelled) return;
+        if (Array.isArray(candles) && candles.length > 0) {
+          const shifted = candles.map((d) => ({
             ...d,
-            x: d.x + 5.5 * 3600 * 1000
+            x: d.x + 5.5 * 3600 * 1000,
           }));
           setLineData(
-            shifted.map(d => ({
+            shifted.map((d) => ({
               x: d.x,
-              y: d.c
+              y: d.c,
             }))
           );
           setData(shifted);
-          setLoading(false);
-        });
+          const last = shifted[shifted.length - 1];
+          if (last) {
+            setPrice((prev) => prev ?? last.c);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn(`[StockPageSSE] 1D history fetch:`, err.message);
+      })
+      .finally(() => {
+        if (!isCancelled) setLoading(false);
+      });
+
+    // 2. If market is open or state pending, subscribe to WebSocket for real-time tick updates
+    if (marketState === "REGULAR" || !marketState) {
+      subscribe("STOCK_LIVE", { symbol, interval: candleInterval });
     }
 
     return () => {
-      if (marketState === "REGULAR") {
+      isCancelled = true;
+      if (marketState === "REGULAR" || !marketState) {
         unsubscribe("STOCK_LIVE", { symbol, interval: candleInterval });
       }
     };
-  }, [symbol, timeframe, marketState, candleInterval]);
+  }, [symbol, timeframe, candleInterval, simActive, marketState]);
 
   useEffect(() => {
     if (!lastMessage) return;
@@ -532,6 +558,7 @@ export default function StockPageSSE({ onLoginClick }: { onLoginClick: () => voi
     if (lastMessage.type === "TICK_PRICE") {
       const { price: newPrice, change: newChange, percent: newPercent, high, low, open } = lastMessage.data || {};
       if (newPrice != null) {
+        setLoading(false);
         setPrice(newPrice);
         setLineData((prev) => {
           if (!prev || prev.length === 0) return prev;
